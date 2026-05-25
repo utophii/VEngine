@@ -1,0 +1,8 @@
+name: VEngine
+author: utophii
+main: com.utophii.VEngine
+description: VEngine is an engine of visual effects
+version: 01-a
+prefix: vengine
+api-version: 1.20
+load: STARTUP
