@@ -2,7 +2,34 @@ name: VEngine
 author: utophii
 main: com.utophii.VEngine
 description: VEngine is an engine of visual effects
-version: 01-a
+version: ${version}
 prefix: vengine
 api-version: 1.20
 load: STARTUP
+
+commands:
+  vengine:
+    description: VEngine root command
+    usage: /vengine <subcommand>
+    aliases: [ve]
+    permission: vengine.use
+
+permissions:
+  vengine.use:
+    description: Allows using /vengine commands
+    default: op
+  vengine.effect.spawn:
+    description: Allows spawning particle effects
+    default: op
+    children:
+      vengine.use: true
+  vengine.reload:
+    description: Allows reloading VEngine config and effects
+    default: op
+    children:
+      vengine.use: true
+  vengine.list:
+    description: Allows listing registered effects
+    default: op
+    children:
+      vengine.use: true

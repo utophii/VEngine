@@ -35,6 +35,9 @@ object FXEngine {
     // returns an effect by registry name
     fun effect(name: String): ParticleEffect? = effects[name.lowercase()]
 
+    // returns a sorted snapshot of all registered effect names
+    fun effectNames(): List<String> = effects.keys.sorted()
+
     // plays a registered effect by name
     fun play(name: String, center: Location, options: EffectOptions = EffectOptions()) {
         effect(name)?.play(center, options)
