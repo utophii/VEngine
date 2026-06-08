@@ -13,30 +13,47 @@ import org.bukkit.plugin.java.JavaPlugin
 
 // Central VEngine effect registry and scheduling facade
 object FXEngine {
-    private val effects = linkedMapOf<String, ParticleEffect>()
+    private val primitiveEffects = linkedMapOf<String, ParticleEffect>()
+    private val scriptedEffects = linkedMapOf<String, ParticleEffect>()
     private var scheduler: EffectScheduler? = null
 
-    // initializes the engine and registers bundled effects
+    // initializes the engine and registers bundled primitive effects
     fun initialize(plugin: JavaPlugin) {
         scheduler = EffectScheduler(plugin)
-        register(HelixEffect())
-        register(SphereEffect())
-        register(TorusEffect())
-        register(LissajousEffect())
-        register(BeamEffect())
-        register(RosetteEffect())
+        registerPrimitive(HelixEffect())
+        registerPrimitive(SphereEffect())
+        registerPrimitive(TorusEffect())
+        registerPrimitive(LissajousEffect())
+        registerPrimitive(BeamEffect())
+        registerPrimitive(RosetteEffect())
     }
 
-    // registers or replaces an effect by its stable name
-    fun register(effect: ParticleEffect) {
-        effects[effect.name.lowercase()] = effect
+    // registers or replaces a primitive effect used as an engine building block
+    fun registerPrimitive(effect: ParticleEffect) {
+        primitiveEffects[effect.name.lowercase()] = effect
     }
 
-    // returns an effect by registry name
-    fun effect(name: String): ParticleEffect? = effects[name.lowercase()]
+    // registers or replaces a scripted effect loaded from configuration
+    fun registerScripted(effect: ParticleEffect) {
+        scriptedEffects[effect.name.lowercase()] = effect
+    }
+
+    // clears all dynamically loaded scripted effects
+    fun clearScripted() {
+        scriptedEffects.clear()
+    }
+
+    // returns a primitive effect by registry name
+    fun primitiveEffect(name: String): ParticleEffect? = primitiveEffects[name.lowercase()]
+
+    // returns any effect by registry name; scripted effects override primitive names
+    fun effect(name: String): ParticleEffect? {
+        val key = name.lowercase()
+        return scriptedEffects[key] ?: primitiveEffects[key]
+    }
 
     // returns a sorted snapshot of all registered effect names
-    fun effectNames(): List<String> = effects.keys.sorted()
+    fun effectNames(): List<String> = (primitiveEffects.keys + scriptedEffects.keys).distinct().sorted()
 
     // plays a registered effect by name
     fun play(name: String, center: Location, options: EffectOptions = EffectOptions()) {
@@ -50,6 +67,7 @@ object FXEngine {
     fun shutdown() {
         scheduler?.cancelAll()
         scheduler = null
-        effects.clear()
+        clearScripted()
+        primitiveEffects.clear()
     }
 }

@@ -13,15 +13,15 @@ class VEngine : JavaPlugin() {
         yamlEffectLoader = YamlEffectLoader(this)
         yamlEffectLoader.ensureDirectories()
         saveBundledEffectExamples()
-        yamlEffectLoader.loadAll()
+        val loaded = yamlEffectLoader.loadAll()
 
         val cmd = getCommand("vengine")
             ?: error("Command 'vengine' missing from plugin.yml")
-        val handler = VEngineCommand(this, yamlEffectLoader)
+        val handler = VEngineCommand(this)
         cmd.setExecutor(handler)
         cmd.tabCompleter = handler
 
-        logger.info("VEngine enabled with built-in parametric particle effects.")
+        logger.info("VEngine enabled with ${loaded.size} scripted effects and ${FXEngine.effectNames().size} total registry entries.")
     }
 
     override fun onDisable() {
@@ -29,14 +29,19 @@ class VEngine : JavaPlugin() {
     }
 
     fun reload() {
-        yamlEffectLoader.loadAll()
-        logger.info("VEngine effects reloaded.")
+        val loaded = yamlEffectLoader.loadAll()
+        logger.info("VEngine effects reloaded: ${loaded.size} scripted effects available.")
     }
 
     private fun saveBundledEffectExamples() {
-        val sample = dataFolder.resolve("effects/torus.yml")
-        if (!sample.exists()) {
-            saveResource("effects/torus.yml", false)
+        saveIfMissing("effects/torus.yml")
+        saveIfMissing("effects/cosmic_gate.yml")
+    }
+
+    private fun saveIfMissing(path: String) {
+        val target = dataFolder.resolve(path)
+        if (!target.exists()) {
+            saveResource(path, false)
         }
     }
 }

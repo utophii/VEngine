@@ -14,7 +14,7 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
         FXEngine.scheduler().scheduleFrames(
             durationTicks = opts.duration.coerceAtLeast(MIN_DURATION_TICKS),
             calculate = { time -> calculate(stableCenter, opts, time) },
-            render = { positions -> render(positions, opts) },
+            render = { _, positions -> render(positions, opts) },
         )
     }
 

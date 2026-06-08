@@ -2,7 +2,6 @@ package com.utophii.commands
 
 import com.utophii.VEngine
 import com.utophii.api.EffectOptions
-import com.utophii.config.YamlEffectLoader
 import com.utophii.engine.FXEngine
 import net.kyori.adventure.text.minimessage.MiniMessage
 import org.bukkit.command.Command
@@ -13,7 +12,6 @@ import org.bukkit.entity.Player
 
 class VEngineCommand(
     private val plugin: VEngine,
-    private val loader: YamlEffectLoader,
 ) : CommandExecutor, TabCompleter {
 
     private val mm = MiniMessage.miniMessage()

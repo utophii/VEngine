@@ -2,6 +2,7 @@ package com.utophii.engine
 
 import org.bukkit.Location
 import org.bukkit.Particle
+import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.scheduler.BukkitTask
 
@@ -9,19 +10,12 @@ import org.bukkit.scheduler.BukkitTask
 class EffectScheduler(private val plugin: JavaPlugin) {
     private val tasks = mutableSetOf<BukkitTask>()
 
-    /**
-     * calculates positions asynchronously and renders them synchronously once per tick
-     *
-     * @param durationTicks total animation duration in ticks
-     * @param calculate heavy position calculation callback
-     * @param render sync particle rendering callback
-     * @return outer repeating Bukkit task
-     * @implNote Bukkit particle spawning must happen only from [render]
-     */
-    fun scheduleFrames(
+    // calculates frames asynchronously and renders them synchronously once per tick
+    fun <T> scheduleFrames(
+        initialDelayTicks: Long = INITIAL_DELAY_TICKS,
         durationTicks: Long,
-        calculate: (Double) -> List<Location>,
-        render: (List<Location>) -> Unit,
+        calculate: (Double) -> T,
+        render: (Double, T) -> Unit,
     ): BukkitTask {
         var tick = 0L
         lateinit var task: BukkitTask
@@ -34,27 +28,47 @@ class EffectScheduler(private val plugin: JavaPlugin) {
 
             val currentTime = tick.toDouble()
             plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
-                val positions = calculate(currentTime)
+                val frame = calculate(currentTime)
                 plugin.server.scheduler.runTask(plugin, Runnable {
-                    render(positions)
+                    if (!task.isCancelled && task in tasks) {
+                        render(currentTime, frame)
+                    }
                 })
             })
             tick++
-        }, INITIAL_DELAY_TICKS, FRAME_PERIOD_TICKS)
+        }, initialDelayTicks, FRAME_PERIOD_TICKS)
         tasks.add(task)
         return task
     }
 
     // spawns one particle to either explicit receivers or the world
-    fun spawnParticle(location: Location, particle: Particle, data: Any?, receivers: Iterable<org.bukkit.entity.Player>) {
+    fun spawnParticle(location: Location, particle: Particle, data: Any?, receivers: Iterable<Player>) {
         val explicitReceivers = receivers.toList()
         if (explicitReceivers.isEmpty()) {
-            location.world?.spawnParticle(particle, location, PARTICLE_COUNT, PARTICLE_OFFSET, PARTICLE_OFFSET, PARTICLE_OFFSET, PARTICLE_SPEED, data)
+            location.world?.spawnParticle(
+                particle,
+                location,
+                PARTICLE_COUNT,
+                PARTICLE_OFFSET,
+                PARTICLE_OFFSET,
+                PARTICLE_OFFSET,
+                PARTICLE_SPEED,
+                data,
+            )
             return
         }
 
         explicitReceivers.forEach { player ->
-            player.spawnParticle(particle, location, PARTICLE_COUNT, PARTICLE_OFFSET, PARTICLE_OFFSET, PARTICLE_OFFSET, PARTICLE_SPEED, data)
+            player.spawnParticle(
+                particle,
+                location,
+                PARTICLE_COUNT,
+                PARTICLE_OFFSET,
+                PARTICLE_OFFSET,
+                PARTICLE_OFFSET,
+                PARTICLE_SPEED,
+                data,
+            )
         }
     }
 

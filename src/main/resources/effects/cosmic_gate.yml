@@ -1,0 +1,101 @@
+id: cosmic_gate
+duration: 120
+layers:
+  - effect: torus
+    start: 0
+    duration: 120
+    particle: DUST
+    color:
+      r: 120
+      g: 210
+      b: 255
+    scale: 1.0
+    tiltAxis:
+      x: 1.0
+      y: 0.0
+      z: 0.0
+    tiltAngle: 0.30
+    parameters:
+      majorRadius: 1.35
+      minorRadius: 0.40
+      thetaSteps: 52
+      phiSteps: 18
+      gravityDensity: 1.8
+      angularSpeed: 0.00
+    animation:
+      loop: true
+      tracks:
+        - target: rotationYaw
+          keyframes:
+            - tick: 0
+              value: 0.0
+            - tick: 120
+              value: 6.283185307179586
+        - target: parameters.gravityDensity
+          keyframes:
+            - tick: 0
+              value: 0.6
+            - tick: 60
+              value: 2.0
+            - tick: 120
+              value: 0.6
+  - effect: sphere
+    start: 10
+    duration: 100
+    particle: DUST
+    color:
+      r: 255
+      g: 180
+      b: 90
+    scale: 1.0
+    parameters:
+      radius: 1.1
+      points: 120
+      angularSpeed: 0.02
+    animation:
+      loop: true
+      tracks:
+        - target: scale
+          keyframes:
+            - tick: 0
+              value: 0.35
+            - tick: 50
+              value: 1.0
+            - tick: 100
+              value: 0.35
+        - target: color.g
+          keyframes:
+            - tick: 0
+              value: 100
+            - tick: 50
+              value: 230
+            - tick: 100
+              value: 100
+  - effect: helix
+    start: 0
+    duration: 120
+    particle: FLAME
+    scale: 0.8
+    rotationYaw: 1.5707963267948966
+    parameters:
+      radius: 0.45
+      height: 2.8
+      turns: 2.5
+      points: 64
+      angularSpeed: 0.18
+    modifiers:
+      - type: turbulence
+        strength: 0.05
+        frequency: 0.55
+        octaves: 3
+    animation:
+      loop: true
+      tracks:
+        - target: parameters.radius
+          keyframes:
+            - tick: 0
+              value: 0.20
+            - tick: 60
+              value: 0.60
+            - tick: 120
+              value: 0.20
