@@ -15,10 +15,16 @@ object MathUtils {
     const val TAU = PI * 2.0
     const val HALF = 0.5
     const val GOLDEN_ANGLE = PI * (3.0 - 2.23606797749979)
+    const val MIN_CURL_EPSILON = 1.0E-4
+    const val MIN_CURL_FREQUENCY = 0.0
     private const val HASH_SCALE = 43758.5453123
     private const val HASH_X = 127.1
     private const val HASH_Y = 311.7
     private const val HASH_Z = 74.7
+    private const val CURL_TIME_SPEED = 0.07
+    private const val CURL_POTENTIAL_X_OFFSET = 19.19
+    private const val CURL_POTENTIAL_Y_OFFSET = 37.37
+    private const val CURL_POTENTIAL_Z_OFFSET = 53.53
 
     // calculates a helix point
     // https://en.wikipedia.org/wiki/Helix x = r cos(t), y = h t, z = r sin(t)
@@ -145,6 +151,52 @@ object MathUtils {
         return value
     }
 
+    // calculates linear drag acceleration from velocity
+    fun linearDrag(velocity: Vector, coefficient: Double): Vector {
+        // a_drag = -c * v: opposes current velocity with a force proportional to speed
+        return velocity.clone().multiply(-coefficient)
+    }
+
+    // calculates a divergence-free curl-noise vector from an fBm vector potential
+    // formula: `curl(F) = (dFz/dy - dFy/dz, dFx/dz - dFz/dx, dFy/dx - dFx/dy)
+    fun curlNoise(x: Double, y: Double, z: Double, time: Double, frequency: Double, octaves: Int, epsilon: Double): Vector {
+        // safeFrequency = max(frequency, minFrequency): prevents mirrored or invalid negative noise scaling
+        val safeFrequency = max(frequency, MIN_CURL_FREQUENCY)
+        // px = x * frequency: scales world X into noise-space X
+        val px = x * safeFrequency
+        // py = y * frequency: scales world Y into noise-space Y
+        val py = y * safeFrequency
+        // pz = z * frequency: scales world Z into noise-space Z
+        val pz = z * safeFrequency
+        // e = max(epsilon, minEpsilon): keeps finite differences numerically stable
+        val e = max(epsilon, MIN_CURL_EPSILON)
+        // inv2e = 1 / (2e): central-difference normalization factor
+        val inv2e = 1.0 / (2.0 * e)
+
+        // dFz/dy = (Fz(y + e) - Fz(y - e)) / (2e): central derivative of vector potential Z by Y
+        val dFzDy = (potentialZ(px, py + e, pz, time, octaves) - potentialZ(px, py - e, pz, time, octaves)) * inv2e
+        // dFy/dz = (Fy(z + e) - Fy(z - e)) / (2e): central derivative of vector potential Y by Z
+        val dFyDz = (potentialY(px, py, pz + e, time, octaves) - potentialY(px, py, pz - e, time, octaves)) * inv2e
+        // dFx/dz = (Fx(z + e) - Fx(z - e)) / (2e): central derivative of vector potential X by Z
+        val dFxDz = (potentialX(px, py, pz + e, time, octaves) - potentialX(px, py, pz - e, time, octaves)) * inv2e
+        // dFz/dx = (Fz(x + e) - Fz(x - e)) / (2e): central derivative of vector potential Z by X
+        val dFzDx = (potentialZ(px + e, py, pz, time, octaves) - potentialZ(px - e, py, pz, time, octaves)) * inv2e
+        // dFy/dx = (Fy(x + e) - Fy(x - e)) / (2e): central derivative of vector potential Y by X
+        val dFyDx = (potentialY(px + e, py, pz, time, octaves) - potentialY(px - e, py, pz, time, octaves)) * inv2e
+        // dFx/dy = (Fx(y + e) - Fx(y - e)) / (2e): central derivative of vector potential X by Y
+        val dFxDy = (potentialX(px, py + e, pz, time, octaves) - potentialX(px, py - e, pz, time, octaves)) * inv2e
+
+        // worldDerivativeScale = frequency: converts noise-space derivatives back to world-space derivatives by the chain rule
+        val worldDerivativeScale = safeFrequency
+        // curlX = (dFz/dy - dFy/dz) * frequency: X component of ∇ × F in world-space
+        val curlX = (dFzDy - dFyDz) * worldDerivativeScale
+        // curlY = (dFx/dz - dFz/dx) * frequency: Y component of ∇ × F in world-space
+        val curlY = (dFxDz - dFzDx) * worldDerivativeScale
+        // curlZ = (dFy/dx - dFx/dy) * frequency: Z component of ∇ × F in world-space
+        val curlZ = (dFyDx - dFxDy) * worldDerivativeScale
+        return Vector(curlX, curlY, curlZ)
+    }
+
     // applies scale, Y rotation, arbitrary tilt, and center translation
     fun transform(local: Vector, center: Location, scale: Double, rotationYaw: Double, tiltAxis: Vector?, tiltAngle: Double): Location {
         val transformed = local.clone().multiply(scale)
@@ -194,6 +246,27 @@ object MathUtils {
         val y0 = lerp(x00, x10, v)
         val y1 = lerp(x01, x11, v)
         return lerp(y0, y1, w)
+    }
+
+    private fun potentialX(x: Double, y: Double, z: Double, time: Double, octaves: Int): Double {
+        // animatedZ = z + time * speed: advects the X potential slowly through noise-space
+        val animatedZ = z + time * CURL_TIME_SPEED
+        // Fx = fbm(x + offsetX, y, animatedZ): decorrelates the X component of the vector potential
+        return fbm(x + CURL_POTENTIAL_X_OFFSET, y, animatedZ, octaves)
+    }
+
+    private fun potentialY(x: Double, y: Double, z: Double, time: Double, octaves: Int): Double {
+        // animatedX = x + time * speed: advects the Y potential slowly through noise-space
+        val animatedX = x + time * CURL_TIME_SPEED
+        // Fy = fbm(animatedX, y + offsetY, z): decorrelates the Y component of the vector potential
+        return fbm(animatedX, y + CURL_POTENTIAL_Y_OFFSET, z, octaves)
+    }
+
+    private fun potentialZ(x: Double, y: Double, z: Double, time: Double, octaves: Int): Double {
+        // animatedY = y + time * speed: advects the Z potential slowly through noise-space
+        val animatedY = y + time * CURL_TIME_SPEED
+        // Fz = fbm(x, animatedY, z + offsetZ): decorrelates the Z component of the vector potential
+        return fbm(x, animatedY, z + CURL_POTENTIAL_Z_OFFSET, octaves)
     }
 
     private fun smoothstep(t: Double): Double = t * t * (3.0 - 2.0 * t)

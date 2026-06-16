@@ -5,6 +5,7 @@ import com.utophii.api.ParticleEffect
 import com.utophii.effects.BeamEffect
 import com.utophii.effects.HelixEffect
 import com.utophii.effects.LissajousEffect
+import com.utophii.effects.RK4TrajectoryEffect
 import com.utophii.effects.RosetteEffect
 import com.utophii.effects.SphereEffect
 import com.utophii.effects.TorusEffect
@@ -26,6 +27,7 @@ object FXEngine {
         registerPrimitive(LissajousEffect())
         registerPrimitive(BeamEffect())
         registerPrimitive(RosetteEffect())
+        registerPrimitive(RK4TrajectoryEffect())
     }
 
     // registers or replaces a primitive effect used as an engine building block

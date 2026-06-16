@@ -36,6 +36,7 @@ class VEngine : JavaPlugin() {
     private fun saveBundledEffectExamples() {
         saveIfMissing("effects/torus.yml")
         saveIfMissing("effects/cosmic_gate.yml")
+        saveIfMissing("effects/rk4_comet.yml")
     }
 
     private fun saveIfMissing(path: String) {
