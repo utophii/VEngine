@@ -1,5 +1,6 @@
 package com.utophii.effects
 
+import com.utophii.api.ContextualEffectModifier
 import com.utophii.api.EffectOptions
 import com.utophii.api.ParticleEffect
 import com.utophii.engine.FXEngine
@@ -19,8 +20,13 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
     }
 
     // applies modifiers in registration order
-    protected fun applyModifiers(location: Location, options: EffectOptions, time: Double): Location {
-        return options.modifiers.fold(location) { current, modifier -> modifier.modify(current, time) }
+    protected fun applyModifiers(location: Location, options: EffectOptions, time: Double, center: Location = location): Location {
+        return options.modifiers.fold(location) { current, modifier ->
+            when (modifier) {
+                is ContextualEffectModifier -> modifier.modify(current, center, time)
+                else -> modifier.modify(current, time)
+            }
+        }
     }
 
     // reads a double option parameter or returns a default value

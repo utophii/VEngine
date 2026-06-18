@@ -8,6 +8,7 @@ import com.utophii.effects.NumericTrack
 import com.utophii.effects.ScriptedEffect
 import com.utophii.effects.ScriptedLayer
 import com.utophii.engine.FXEngine
+import com.utophii.modifiers.RotationModifier
 import com.utophii.modifiers.TurbulenceModifier
 import org.bukkit.Color
 import org.bukkit.Particle
@@ -132,6 +133,14 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
                     frequency = node[FREQUENCY_KEY].number() ?: DEFAULT_TURBULENCE_FREQUENCY,
                     octaves = node[OCTAVES_KEY].number()?.toInt() ?: DEFAULT_TURBULENCE_OCTAVES,
                 )
+                ROTATION_MODIFIER -> RotationModifier(
+                    axis = parseVector(node[AXIS_KEY]) ?: DEFAULT_ROTATION_AXIS.clone(),
+                    angularVelocity = node[ANGULAR_VELOCITY_KEY].number()
+                        ?: node[ANGULAR_SPEED_KEY].number()
+                        ?: DEFAULT_ROTATION_ANGULAR_VELOCITY,
+                    initialAngle = node[INITIAL_ANGLE_KEY].number() ?: DEFAULT_ROTATION_INITIAL_ANGLE,
+                    pivotOffset = parseVector(node[PIVOT_OFFSET_KEY]) ?: DEFAULT_ROTATION_PIVOT_OFFSET.clone(),
+                )
                 else -> null
             }
         }
@@ -250,10 +259,20 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private const val STRENGTH_KEY = "strength"
         private const val FREQUENCY_KEY = "frequency"
         private const val OCTAVES_KEY = "octaves"
+        private const val AXIS_KEY = "axis"
+        private const val ANGULAR_VELOCITY_KEY = "angularVelocity"
+        private const val ANGULAR_SPEED_KEY = "angularSpeed"
+        private const val INITIAL_ANGLE_KEY = "initialAngle"
+        private const val PIVOT_OFFSET_KEY = "pivotOffset"
 
         private const val TURBULENCE_MODIFIER = "turbulence"
+        private const val ROTATION_MODIFIER = "rotation"
         private const val DEFAULT_TURBULENCE_STRENGTH = 0.12
         private const val DEFAULT_TURBULENCE_FREQUENCY = 0.35
         private const val DEFAULT_TURBULENCE_OCTAVES = 4
+        private const val DEFAULT_ROTATION_ANGULAR_VELOCITY = 0.05
+        private const val DEFAULT_ROTATION_INITIAL_ANGLE = 0.0
+        private val DEFAULT_ROTATION_AXIS = Vector(0.0, 1.0, 0.0)
+        private val DEFAULT_ROTATION_PIVOT_OFFSET = Vector(0.0, 0.0, 0.0)
     }
 }
