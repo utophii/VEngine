@@ -2,13 +2,7 @@ package com.utophii.engine
 
 import com.utophii.api.EffectOptions
 import com.utophii.api.ParticleEffect
-import com.utophii.effects.BeamEffect
-import com.utophii.effects.HelixEffect
-import com.utophii.effects.LissajousEffect
-import com.utophii.effects.RK4TrajectoryEffect
-import com.utophii.effects.RosetteEffect
-import com.utophii.effects.SphereEffect
-import com.utophii.effects.TorusEffect
+import com.utophii.effects.*
 import org.bukkit.Location
 import org.bukkit.plugin.java.JavaPlugin
 
@@ -28,6 +22,7 @@ object FXEngine {
         registerPrimitive(BeamEffect())
         registerPrimitive(RosetteEffect())
         registerPrimitive(RK4TrajectoryEffect())
+        registerPrimitive(TorusKnotEffect())
     }
 
     // registers or replaces a primitive effect used as an engine building block

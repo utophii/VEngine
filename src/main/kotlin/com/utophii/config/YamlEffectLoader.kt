@@ -10,6 +10,7 @@ import com.utophii.effects.ScriptedLayer
 import com.utophii.engine.FXEngine
 import com.utophii.modifiers.RotationModifier
 import com.utophii.modifiers.TurbulenceModifier
+import com.utophii.modifiers.VortexModifier
 import org.bukkit.Color
 import org.bukkit.Particle
 import org.bukkit.plugin.java.JavaPlugin
@@ -122,9 +123,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
     }
 
     private fun parseModifiers(raw: Any?): List<EffectModifier> {
-        if (raw !is List<*>) {
-            return emptyList()
-        }
+        if (raw !is List<*>) return emptyList()
         return raw.mapNotNull { modifierNode ->
             val node = modifierNode as? Map<*, *> ?: return@mapNotNull null
             when (node[TYPE_KEY]?.toString()?.lowercase()) {
@@ -140,6 +139,11 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
                         ?: DEFAULT_ROTATION_ANGULAR_VELOCITY,
                     initialAngle = node[INITIAL_ANGLE_KEY].number() ?: DEFAULT_ROTATION_INITIAL_ANGLE,
                     pivotOffset = parseVector(node[PIVOT_OFFSET_KEY]) ?: DEFAULT_ROTATION_PIVOT_OFFSET.clone(),
+                )
+                VORTEX_MODIFIER -> VortexModifier(
+                    axis = parseVector(node[AXIS_KEY]) ?: DEFAULT_VORTEX_AXIS.clone(),
+                    coreRadius = node[CORE_RADIUS_KEY].number() ?: DEFAULT_VORTEX_CORE_RADIUS,
+                    vortexStrength = node[STRENGTH_KEY].number() ?: DEFAULT_VORTEX_STRENGTH,
                 )
                 else -> null
             }
@@ -274,5 +278,10 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private const val DEFAULT_ROTATION_INITIAL_ANGLE = 0.0
         private val DEFAULT_ROTATION_AXIS = Vector(0.0, 1.0, 0.0)
         private val DEFAULT_ROTATION_PIVOT_OFFSET = Vector(0.0, 0.0, 0.0)
+        private const val VORTEX_MODIFIER = "vortex"
+        private const val CORE_RADIUS_KEY = "coreRadius"
+        private const val DEFAULT_VORTEX_CORE_RADIUS = 1.2
+        private const val DEFAULT_VORTEX_STRENGTH = 0.15
+        private val DEFAULT_VORTEX_AXIS = Vector(0.0, 1.0, 0.0)
     }
 }
