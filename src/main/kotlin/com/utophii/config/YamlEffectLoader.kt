@@ -8,6 +8,7 @@ import com.utophii.effects.NumericTrack
 import com.utophii.effects.ScriptedEffect
 import com.utophii.effects.ScriptedLayer
 import com.utophii.engine.FXEngine
+import com.utophii.math.EasingType
 import com.utophii.modifiers.RotationModifier
 import com.utophii.modifiers.TurbulenceModifier
 import com.utophii.modifiers.VortexModifier
@@ -155,25 +156,32 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             return NumericAnimation.EMPTY
         }
         val inheritedLoop = raw[LOOP_KEY] as? Boolean ?: false
+        val inheritedEasing = EasingType.fromString(raw[EASING_KEY]?.toString())
         val tracks = (raw[TRACKS_KEY] as? List<*>)
-            ?.mapNotNull { trackNode -> parseTrack(trackNode, inheritedLoop) }
+            ?.mapNotNull { trackNode -> parseTrack(trackNode, inheritedLoop, inheritedEasing) }
             ?: emptyList()
         return NumericAnimation(tracks)
     }
 
-    private fun parseTrack(raw: Any?, inheritedLoop: Boolean): NumericTrack? {
+    private fun parseTrack(raw: Any?, inheritedLoop: Boolean, inheritedEasing: EasingType): NumericTrack? {
         if (raw !is Map<*, *>) {
             return null
         }
         val target = raw[TARGET_KEY]?.toString()?.takeIf(String::isNotBlank) ?: return null
         val loop = raw[LOOP_KEY] as? Boolean ?: inheritedLoop
+        val trackEasing = raw[EASING_KEY]?.toString()?.let(EasingType::fromString) ?: inheritedEasing
         val keyframes = (raw[KEYFRAMES_KEY] as? List<*>)
             ?.mapNotNull(::parseKeyframe)
             ?: emptyList()
         if (keyframes.isEmpty()) {
             return null
         }
-        return NumericTrack(target = target, keyframes = keyframes, loop = loop)
+        return NumericTrack(
+            target = target,
+            keyframes = keyframes,
+            loop = loop,
+            easing = trackEasing,
+        )
     }
 
     private fun parseKeyframe(raw: Any?): NumericKeyframe? {
@@ -182,7 +190,12 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         }
         val tick = raw[TICK_KEY].number() ?: return null
         val value = raw[VALUE_KEY].number() ?: return null
-        return NumericKeyframe(tick, value)
+        val easing = raw[EASING_KEY]?.toString()?.let(EasingType::fromString)
+        return NumericKeyframe(
+            tick = tick,
+            value = value,
+            easing = easing,
+        )
     }
 
     private fun parseColor(value: Any?): Color? {
@@ -268,6 +281,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private const val ANGULAR_SPEED_KEY = "angularSpeed"
         private const val INITIAL_ANGLE_KEY = "initialAngle"
         private const val PIVOT_OFFSET_KEY = "pivotOffset"
+        private const val EASING_KEY = "easing"
 
         private const val TURBULENCE_MODIFIER = "turbulence"
         private const val ROTATION_MODIFIER = "rotation"

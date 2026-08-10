@@ -3,6 +3,7 @@ package com.utophii.effects
 import com.utophii.api.EffectOptions
 import com.utophii.api.ParticleEffect
 import com.utophii.engine.FXEngine
+import com.utophii.math.EasingType
 import org.bukkit.Color
 import org.bukkit.Location
 import org.bukkit.Particle
@@ -241,16 +242,16 @@ data class NumericAnimation(
     }
 }
 
-// one animated numeric track with linearly interpolated keyframes
+// one animated numeric track with keyframes and configurable easing curve
 data class NumericTrack(
     val target: String,
     val keyframes: List<NumericKeyframe>,
     val loop: Boolean = false,
+    val easing: EasingType = EasingType.LINEAR,
 ) {
     private val sortedKeyframes = keyframes.sortedBy(NumericKeyframe::tick)
 
-    // resolves the track value at the supplied tick
-    // linear interpolation uses the equation `a + (b - a) * t` between the two surrounding keyframes
+    // resolves the track value at the supplied tick using the configured easing curve
     fun valueAt(time: Double): Double {
         if (sortedKeyframes.isEmpty()) {
             return 0.0
@@ -275,15 +276,23 @@ data class NumericTrack(
             return upper.value
         }
 
-        // alpha = (time - lowerTick) / (upperTick - lowerTick): normalizes the current time inside the keyframe segment
-        val alpha = (resolvedTime - lower.tick) / (upper.tick - lower.tick)
-        // value = lower + (upper - lower) * alpha: performs linear interpolation between the surrounding keyframes
-        return lower.value + (upper.value - lower.value) * alpha
+        // linearAlpha = (time - lowerTick) / (upperTick - lowerTick): normalized progress inside the segment
+        val linearAlpha = (resolvedTime - lower.tick) / (upper.tick - lower.tick)
+
+        // effectiveEasing = keyframeEasing ?: trackEasing: per-keyframe easing overrides track default
+        val effectiveEasing = lower.easing ?: easing
+
+        // easedAlpha = easing.apply(linearAlpha): applies the non-linear easing function
+        val easedAlpha = effectiveEasing.apply(linearAlpha)
+
+        // value = lower + (upper - lower) * easedAlpha: interpolates the scalar value
+        return lower.value + (upper.value - lower.value) * easedAlpha
     }
 }
 
-// one scalar keyframe inside a [NumericTrack]
+// one scalar keyframe inside a [NumericTrack] with optional local easing
 data class NumericKeyframe(
     val tick: Double,
     val value: Double,
+    val easing: EasingType? = null,
 )

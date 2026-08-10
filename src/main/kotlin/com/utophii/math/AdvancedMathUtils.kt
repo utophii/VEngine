@@ -19,6 +19,7 @@ object AdvancedMathUtils {
     const val ELASTIC_PERIOD_DIVISOR = 3.0
     const val ELASTIC_PERIOD_FACTOR = (PI * 2.0) / ELASTIC_PERIOD_DIVISOR
     const val ELASTIC_EXPONENT_SCALE = 10.0
+    const val ELASTIC_PHASE_OFFSET = 0.75
     const val BOUNCE_N1 = 7.5625
     const val BOUNCE_D1 = 2.75
     const val BOUNCE_T1 = 1.0 / BOUNCE_D1
@@ -30,6 +31,8 @@ object AdvancedMathUtils {
     const val BOUNCE_SCALER2 = 0.75
     const val BOUNCE_SCALER3 = 0.9375
     const val BOUNCE_SCALER4 = 0.984375
+    const val HALF = 0.5
+    const val DOUBLE_SCALE = 2.0
 
     // calculates the toroidal node point T(p, q)
     // https://en.wikipedia.org/wiki/Torus_knot
@@ -103,27 +106,149 @@ object AdvancedMathUtils {
         return sum.pow(-1.0 / n1)
     }
 
-    // calculates the cubic Ease-In-Out smoothing function
-    fun easeInOutCubic(t: Double): Double {
+    // calculates quadratic Ease-In
+    fun easeInQuad(t: Double): Double {
         val clampedT = t.coerceIn(0.0, 1.0)
-        return if (clampedT < EASE_IN_OUT_CUBIC_THRESHOLD) {
-            // f(t) = 4 * t^3 при t < 0.5
-            EASE_IN_OUT_CUBIC_COEFFICIENT * clampedT * clampedT * clampedT
+        // f(t) = t^2: accelerates from zero velocity
+        return clampedT * clampedT
+    }
+
+    // calculates quadratic Ease-Out
+    fun easeOutQuad(t: Double): Double {
+        val clampedT = t.coerceIn(0.0, 1.0)
+        val u = 1.0 - clampedT
+        // f(t) = 1 - (1 - t)^2: decelerates to zero velocity
+        return 1.0 - u * u
+    }
+
+    // calculates quadratic Ease-In-Out
+    fun easeInOutQuad(t: Double): Double {
+        val clampedT = t.coerceIn(0.0, 1.0)
+        return if (clampedT < HALF) {
+            // f(t) = 2 * t^2: accelerates on the first half
+            DOUBLE_SCALE * clampedT * clampedT
         } else {
-            // f(t) = 1 - (-2*t + 2)^3 / 2 при t >= 0.5
             val factor = EASE_IN_OUT_CUBIC_SCALER * clampedT + EASE_IN_OUT_CUBIC_OFFSET
-            1.0 - (factor * factor * factor) * 0.5
+            // f(t) = 1 - (-2*t + 2)^2 / 2: decelerates on the second half
+            1.0 - (factor * factor) * HALF
         }
     }
 
-    // calculates the Ease-Out-Elastic smoothing function
+    // calculates cubic Ease-In
+    fun easeInCubic(t: Double): Double {
+        val clampedT = t.coerceIn(0.0, 1.0)
+        // f(t) = t^3: cubic acceleration from zero velocity
+        return clampedT * clampedT * clampedT
+    }
+
+    // calculates cubic Ease-Out
+    fun easeOutCubic(t: Double): Double {
+        val clampedT = t.coerceIn(0.0, 1.0)
+        val u = 1.0 - clampedT
+        // f(t) = 1 - (1 - t)^3: cubic deceleration to zero velocity
+        return 1.0 - u * u * u
+    }
+
+    // calculates cubic Ease-In-Out
+    fun easeInOutCubic(t: Double): Double {
+        val clampedT = t.coerceIn(0.0, 1.0)
+        return if (clampedT < EASE_IN_OUT_CUBIC_THRESHOLD) {
+            // f(t) = 4 * t^3: accelerates on the first half
+            EASE_IN_OUT_CUBIC_COEFFICIENT * clampedT * clampedT * clampedT
+        } else {
+            val factor = EASE_IN_OUT_CUBIC_SCALER * clampedT + EASE_IN_OUT_CUBIC_OFFSET
+            // f(t) = 1 - (-2*t + 2)^3 / 2: decelerates on the second half
+            1.0 - (factor * factor * factor) * HALF
+        }
+    }
+
+    // calculates sinusoidal Ease-In
+    fun easeInSine(t: Double): Double {
+        val clampedT = t.coerceIn(0.0, 1.0)
+        // f(t) = 1 - cos((t * pi) / 2): smooth sinusoidal acceleration
+        return 1.0 - cos((clampedT * PI) * HALF)
+    }
+
+    // calculates sinusoidal Ease-Out
+    fun easeOutSine(t: Double): Double {
+        val clampedT = t.coerceIn(0.0, 1.0)
+        // f(t) = sin((t * pi) / 2): smooth sinusoidal deceleration
+        return sin((clampedT * PI) * HALF)
+    }
+
+    // calculates sinusoidal Ease-In-Out
+    fun easeInOutSine(t: Double): Double {
+        val clampedT = t.coerceIn(0.0, 1.0)
+        // f(t) = -(cos(pi * t) - 1) / 2: symmetrical sinusoidal transition
+        return -(cos(PI * clampedT) - 1.0) * HALF
+    }
+
+    // calculates elastic Ease-In
+    fun easeInElastic(t: Double): Double {
+        val clampedT = t.coerceIn(0.0, 1.0)
+        if (clampedT == 0.0) return 0.0
+        if (clampedT == 1.0) return 1.0
+        val u = clampedT - 1.0
+        // growth = 2^(10 * (t - 1)): exponential amplitude buildup
+        val growth = 2.0.pow(ELASTIC_EXPONENT_SCALE * u)
+        // oscillation = sin((u * 10 - 0.75) * (2*pi)/3): elastic spring wave
+        val oscillation = sin((u * ELASTIC_EXPONENT_SCALE - ELASTIC_PHASE_OFFSET) * ELASTIC_PERIOD_FACTOR)
+        return -growth * oscillation
+    }
+
+    // calculates elastic Ease-Out
     fun easeOutElastic(t: Double): Double {
         val clampedT = t.coerceIn(0.0, 1.0)
         if (clampedT == 0.0) return 0.0
         if (clampedT == 1.0) return 1.0
-        // f(t) = 2^(-10*t) * sin((t * 10 - 0.75) * (2*pi)/3) + 1
+        // decay = 2^(-10 * t): exponential dampening factor
         val decay = 2.0.pow(-ELASTIC_EXPONENT_SCALE * clampedT)
-        val oscillation = sin((clampedT * ELASTIC_EXPONENT_SCALE - 0.75) * ELASTIC_PERIOD_FACTOR)
+        // oscillation = sin((t * 10 - 0.75) * (2*pi)/3): spring vibration
+        val oscillation = sin((clampedT * ELASTIC_EXPONENT_SCALE - ELASTIC_PHASE_OFFSET) * ELASTIC_PERIOD_FACTOR)
         return decay * oscillation + 1.0
+    }
+
+    // calculates bounce Ease-Out
+    fun easeOutBounce(t: Double): Double {
+        val clampedT = t.coerceIn(0.0, 1.0)
+        return when {
+            clampedT < BOUNCE_T1 -> {
+                // f(t) = 7.5625 * t^2: initial bounce
+                BOUNCE_N1 * clampedT * clampedT
+            }
+            clampedT < BOUNCE_T2 -> {
+                val tSub = clampedT - BOUNCE_OFFSET1
+                // f(t) = 7.5625 * (t - 1.5/2.75)^2 + 0.75: second bounce
+                BOUNCE_N1 * tSub * tSub + BOUNCE_SCALER2
+            }
+            clampedT < BOUNCE_T3 -> {
+                val tSub = clampedT - BOUNCE_OFFSET2
+                // f(t) = 7.5625 * (t - 2.25/2.75)^2 + 0.9375: third bounce
+                BOUNCE_N1 * tSub * tSub + BOUNCE_SCALER3
+            }
+            else -> {
+                val tSub = clampedT - BOUNCE_OFFSET3
+                // f(t) = 7.5625 * (t - 2.625/2.75)^2 + 0.984375: final settle
+                BOUNCE_N1 * tSub * tSub + BOUNCE_SCALER4
+            }
+        }
+    }
+
+    // calculates bounce Ease-In
+    fun easeInBounce(t: Double): Double {
+        // f(t) = 1 - easeOutBounce(1 - t): inverse bounce curve
+        return 1.0 - easeOutBounce(1.0 - t.coerceIn(0.0, 1.0))
+    }
+
+    // calculates bounce Ease-In-Out
+    fun easeInOutBounce(t: Double): Double {
+        val clampedT = t.coerceIn(0.0, 1.0)
+        return if (clampedT < HALF) {
+            // f(t) = (1 - easeOutBounce(1 - 2*t)) / 2: bounce-in on first half
+            (1.0 - easeOutBounce(1.0 - DOUBLE_SCALE * clampedT)) * HALF
+        } else {
+            // f(t) = (1 + easeOutBounce(2*t - 1)) / 2: bounce-out on second half
+            (1.0 + easeOutBounce(DOUBLE_SCALE * clampedT - 1.0)) * HALF
+        }
     }
 }
