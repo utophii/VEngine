@@ -23,6 +23,9 @@ object FXEngine {
         registerPrimitive(RosetteEffect())
         registerPrimitive(RK4TrajectoryEffect())
         registerPrimitive(TorusKnotEffect())
+        registerPrimitive(LorenzAttractorEffect())
+        registerPrimitive(SupershapeEffect())
+        registerPrimitive(SplineBeamEffect())
     }
 
     // registers or replaces a primitive effect used as an engine building block
