@@ -10,7 +10,6 @@ import org.bukkit.scheduler.BukkitTask
 class EffectScheduler(private val plugin: JavaPlugin) {
     private val tasks = mutableSetOf<BukkitTask>()
 
-    // calculates frames asynchronously and renders them synchronously once per tick
     fun <T> scheduleFrames(
         initialDelayTicks: Long = INITIAL_DELAY_TICKS,
         durationTicks: Long,
@@ -41,18 +40,28 @@ class EffectScheduler(private val plugin: JavaPlugin) {
         return task
     }
 
-    // spawns one particle to either explicit receivers or the world
-    fun spawnParticle(location: Location, particle: Particle, data: Any?, receivers: Iterable<Player>) {
+    // spawns particles with full support for count, offset (x/y/z), speed and special data
+    fun spawnParticle(
+        location: Location,
+        particle: Particle,
+        data: Any?,
+        receivers: Iterable<Player>,
+        count: Int = DEFAULT_PARTICLE_COUNT,
+        offsetX: Double = DEFAULT_PARTICLE_OFFSET,
+        offsetY: Double = DEFAULT_PARTICLE_OFFSET,
+        offsetZ: Double = DEFAULT_PARTICLE_OFFSET,
+        speed: Double = DEFAULT_PARTICLE_SPEED,
+    ) {
         val explicitReceivers = receivers.toList()
         if (explicitReceivers.isEmpty()) {
             location.world?.spawnParticle(
                 particle,
                 location,
-                PARTICLE_COUNT,
-                PARTICLE_OFFSET,
-                PARTICLE_OFFSET,
-                PARTICLE_OFFSET,
-                PARTICLE_SPEED,
+                count,
+                offsetX,
+                offsetY,
+                offsetZ,
+                speed,
                 data,
             )
             return
@@ -62,17 +71,16 @@ class EffectScheduler(private val plugin: JavaPlugin) {
             player.spawnParticle(
                 particle,
                 location,
-                PARTICLE_COUNT,
-                PARTICLE_OFFSET,
-                PARTICLE_OFFSET,
-                PARTICLE_OFFSET,
-                PARTICLE_SPEED,
+                count,
+                offsetX,
+                offsetY,
+                offsetZ,
+                speed,
                 data,
             )
         }
     }
 
-    // cancels all active effect tasks owned by this scheduler
     fun cancelAll() {
         tasks.toList().forEach(BukkitTask::cancel)
         tasks.clear()
@@ -81,8 +89,8 @@ class EffectScheduler(private val plugin: JavaPlugin) {
     companion object {
         private const val INITIAL_DELAY_TICKS = 0L
         private const val FRAME_PERIOD_TICKS = 1L
-        private const val PARTICLE_COUNT = 1
-        private const val PARTICLE_OFFSET = 0.0
-        private const val PARTICLE_SPEED = 0.0
+        private const val DEFAULT_PARTICLE_COUNT = 1
+        private const val DEFAULT_PARTICLE_OFFSET = 0.0
+        private const val DEFAULT_PARTICLE_SPEED = 0.0
     }
 }

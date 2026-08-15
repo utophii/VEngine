@@ -71,9 +71,19 @@ class ScriptedEffect(
     }
 
     private fun render(positions: List<Location>, opts: EffectOptions) {
-        val particleData = particleData(opts)
+        val particleData = AbstractParticleEffect.resolveParticleData(opts)
         positions.forEach { location ->
-            FXEngine.scheduler().spawnParticle(location, opts.particle, particleData, opts.receivers)
+            FXEngine.scheduler().spawnParticle(
+                location = location,
+                particle = opts.particle,
+                data = particleData,
+                receivers = opts.receivers,
+                count = opts.count,
+                offsetX = opts.offsetX,
+                offsetY = opts.offsetY,
+                offsetZ = opts.offsetZ,
+                speed = opts.speed,
+            )
         }
     }
 
@@ -112,40 +122,26 @@ data class ScriptedLayer(
         val mergedParameters = options.parameters + runtime.parameters
         val builder = options.toBuilder()
 
-        // scale = layerScale * runtimeScale: caller scale acts as a global multiplier for the whole scripted effect
+        // scale = layerScale * runtimeScale
         builder.scale(options.scale * runtime.scale)
-
-        // rotationYaw = layerYaw + runtimeYaw: caller yaw adds a global planar rotation on top of the layer rotation
         builder.rotationYaw(options.rotationYaw + runtime.rotationYaw)
 
-        // tiltAxis = runtimeAxis ?: layerAxis: caller tilt axis overrides the layer axis when explicitly supplied
         (runtime.tiltAxis ?: options.tiltAxis)?.let(builder::tiltAxis)
-
-        // tiltAngle = runtimeTilt if runtime axis is provided else layerTilt + runtimeTilt: caller tilt can globally augment the layer tilt
-        val tiltAngle = if (runtime.tiltAxis != null) {
-            runtime.tiltAngle
-        } else {
-            options.tiltAngle + runtime.tiltAngle
-        }
+        val tiltAngle = if (runtime.tiltAxis != null) runtime.tiltAngle else options.tiltAngle + runtime.tiltAngle
         builder.tiltAngle(tiltAngle)
 
-        if (runtime.receivers.isNotEmpty()) {
-            builder.receivers(runtime.receivers)
-        }
-
-        if (runtime.modifiers.isNotEmpty()) {
-            builder.modifiers(options.modifiers + runtime.modifiers)
-        }
-
+        if (runtime.receivers.isNotEmpty()) builder.receivers(runtime.receivers)
+        if (runtime.modifiers.isNotEmpty()) builder.modifiers(options.modifiers + runtime.modifiers)
         builder.parameters(mergedParameters)
 
-        // runtimeColor ?: layerColor: caller color overrides the YAML layer color when explicitly supplied
         runtime.color?.let(builder::color)
+        runtime.toColor?.let(builder::toColor)
+        runtime.material?.let(builder::material)
 
-        // runtimeParticle when non-default else layerParticle: preserves YAML particles while still allowing explicit API overrides
-        if (runtime.particle != DEFAULT_PARTICLE) {
-            builder.particle(runtime.particle)
-        }
+        if (runtime.count != EffectOptions.DEFAULT_PARTICLE_COUNT) builder.count(runtime.count)
+        if (runtime.speed != EffectOptions.DEFAULT_PARTICLE_SPEED) builder.speed(runtime.speed)
+        if (runtime.dustSize != EffectOptions.DEFAULT_DUST_SIZE) builder.dustSize(runtime.dustSize)
+        if (runtime.particle != DEFAULT_PARTICLE) builder.particle(runtime.particle)
 
         val animated = animation.apply(builder.build(), time)
         return animated.toBuilder()

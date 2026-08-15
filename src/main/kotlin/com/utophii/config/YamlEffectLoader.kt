@@ -13,6 +13,7 @@ import com.utophii.modifiers.RotationModifier
 import com.utophii.modifiers.TurbulenceModifier
 import com.utophii.modifiers.VortexModifier
 import org.bukkit.Color
+import org.bukkit.Material
 import org.bukkit.Particle
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.util.Vector
@@ -98,9 +99,20 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         raw[SCALE_KEY]?.number()?.let(builder::scale)
         raw[ROTATION_YAW_KEY]?.number()?.let(builder::rotationYaw)
         raw[DURATION_KEY]?.number()?.toLong()?.let(builder::duration)
+
         parseColor(raw[COLOR_KEY])?.let(builder::color)
+        parseColor(raw[TO_COLOR_KEY] ?: raw[TRANSITION_COLOR_KEY])?.let(builder::toColor)
+        raw[DUST_SIZE_KEY]?.number()?.toFloat()?.let(builder::dustSize)
+
+        parseMaterial(raw[MATERIAL_KEY])?.let(builder::material)
+    
+        raw[COUNT_KEY]?.number()?.toInt()?.let(builder::count)
+        raw[SPEED_KEY]?.number()?.let(builder::speed)
+        parseOffset(raw[OFFSET_KEY])?.let { (x, y, z) -> builder.offset(x, y, z) }
+
         parseVector(raw[TILT_AXIS_KEY])?.let(builder::tiltAxis)
         raw[TILT_ANGLE_KEY]?.number()?.let(builder::tiltAngle)
+
         val parameters = parseParameters(raw[PARAMETERS_KEY])
         if (parameters.isNotEmpty()) {
             builder.parameters(parameters)
@@ -110,6 +122,26 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             builder.modifiers(modifiers)
         }
         return builder.build()
+    }
+
+    private fun parseMaterial(value: Any?): Material? {
+        val name = value?.toString()?.uppercase() ?: return null
+        return Material.matchMaterial(name) ?: runCatching { Material.valueOf(name) }.getOrNull()
+    }
+
+    private fun parseOffset(value: Any?): Triple<Double, Double, Double>? {
+        if (value == null) return null
+        if (value is Number) {
+            val uniform = value.toDouble()
+            return Triple(uniform, uniform, uniform)
+        }
+        if (value is Map<*, *>) {
+            val x = value[X_KEY].number() ?: 0.0
+            val y = value[Y_KEY].number() ?: 0.0
+            val z = value[Z_KEY].number() ?: 0.0
+            return Triple(x, y, z)
+        }
+        return null
     }
 
     private fun parseParameters(raw: Any?): Map<String, Double> {
@@ -282,6 +314,13 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private const val INITIAL_ANGLE_KEY = "initialAngle"
         private const val PIVOT_OFFSET_KEY = "pivotOffset"
         private const val EASING_KEY = "easing"
+        private const val TO_COLOR_KEY = "toColor"
+        private const val TRANSITION_COLOR_KEY = "transitionColor"
+        private const val DUST_SIZE_KEY = "dustSize"
+        private const val MATERIAL_KEY = "material"
+        private const val COUNT_KEY = "count"
+        private const val OFFSET_KEY = "offset"
+        private const val SPEED_KEY = "speed"
 
         private const val TURBULENCE_MODIFIER = "turbulence"
         private const val ROTATION_MODIFIER = "rotation"
