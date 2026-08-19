@@ -5,11 +5,16 @@ import org.bukkit.Particle
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.scheduler.BukkitTask
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
-// owns Bukkit task scheduling for VEngine effects
+// owns Bukkit task scheduling and frame synchronization for VEngine effects
 class EffectScheduler(private val plugin: JavaPlugin) {
-    private val tasks = mutableSetOf<BukkitTask>()
 
+    // thread-safe registry of active running Bukkit tasks
+    private val tasks: MutableSet<BukkitTask> = ConcurrentHashMap.newKeySet()
+
+    // schedules frame calculation asynchronously while rendering strictly monotonically on the main thread
     fun <T> scheduleFrames(
         initialDelayTicks: Long = INITIAL_DELAY_TICKS,
         durationTicks: Long,
@@ -17,6 +22,7 @@ class EffectScheduler(private val plugin: JavaPlugin) {
         render: (Double, T) -> Unit,
     ): BukkitTask {
         var tick = 0L
+        val lastDeliveredFrame = AtomicLong(UNINITIALIZED_FRAME_INDEX)
         lateinit var task: BukkitTask
         task = plugin.server.scheduler.runTaskTimer(plugin, Runnable {
             if (tick >= durationTicks) {
@@ -25,16 +31,32 @@ class EffectScheduler(private val plugin: JavaPlugin) {
                 return@Runnable
             }
 
-            val currentTime = tick.toDouble()
+            val currentFrameIndex = tick
+            val currentTime = currentFrameIndex.toDouble()
+            tick++
+
+            // asynchronous execution of heavy mathematical calculations
             plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
-                val frame = calculate(currentTime)
+                if (task.isCancelled || task !in tasks) {
+                    return@Runnable
+                }
+
+                val frameResult = calculate(currentTime)
+
+                // synchronous delivery back to the Bukkit main thread
                 plugin.server.scheduler.runTask(plugin, Runnable {
-                    if (!task.isCancelled && task in tasks) {
-                        render(currentTime, frame)
+                    if (task.isCancelled || task !in tasks) {
+                        return@Runnable
+                    }
+
+                    // frame synchronization: drops stale lagging frames that completed out-of-order
+                    val previousDelivered = lastDeliveredFrame.get()
+                    if (currentFrameIndex > previousDelivered) {
+                        lastDeliveredFrame.set(currentFrameIndex)
+                        render(currentTime, frameResult)
                     }
                 })
             })
-            tick++
         }, initialDelayTicks, FRAME_PERIOD_TICKS)
         tasks.add(task)
         return task
@@ -82,13 +104,14 @@ class EffectScheduler(private val plugin: JavaPlugin) {
     }
 
     fun cancelAll() {
-        tasks.toList().forEach(BukkitTask::cancel)
+        tasks.forEach(BukkitTask::cancel)
         tasks.clear()
     }
 
     companion object {
         private const val INITIAL_DELAY_TICKS = 0L
         private const val FRAME_PERIOD_TICKS = 1L
+        private const val UNINITIALIZED_FRAME_INDEX = -1L
         private const val DEFAULT_PARTICLE_COUNT = 1
         private const val DEFAULT_PARTICLE_OFFSET = 0.0
         private const val DEFAULT_PARTICLE_SPEED = 0.0
