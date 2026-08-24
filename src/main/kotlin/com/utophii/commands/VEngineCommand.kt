@@ -31,6 +31,7 @@ class VEngineCommand(
             "help"   -> { sendHelp(sender); true }
             "list"   -> cmdList(sender)
             "play"   -> cmdPlay(sender, args)
+            "stop"   -> cmdStop(sender, args)
             "reload" -> cmdReload(sender)
             else     -> {
                 sender.sendMessage(mm.deserialize(
@@ -50,6 +51,7 @@ class VEngineCommand(
             <gold>/ve help</gold> <gray>— show this message</gray>
             <gold>/ve list</gold> <gray>— list all registered effects</gray>
             <gold>/ve play <effect> [scale] [duration]</gold> <gray>— spawn effect at your position</gray>
+            <gold>/ve stop [all|<id>]</gold> <gray>— stop active running effect(s)</gray>
             <gold>/ve reload</gold> <gray>— reload effect YAML files</gray>
             """.trimIndent()
         ))
@@ -72,6 +74,16 @@ class VEngineCommand(
         names.forEach { name ->
             sender.sendMessage(mm.deserialize("  <aqua>• $name</aqua>"))
         }
+
+        val active = FXEngine.activeHandles()
+        if (active.isNotEmpty()) {
+            sender.sendMessage(mm.deserialize(
+                "<gradient:#FF5E62:#FF9966><bold>Active Running Effects (${active.size})</bold></gradient>"
+            ))
+            active.forEach { handle ->
+                sender.sendMessage(mm.deserialize("  <yellow>• ${handle.id}</yellow> <gray>(${handle.effectName})</gray>"))
+            }
+        }
         return true
     }
 
@@ -92,7 +104,6 @@ class VEngineCommand(
 
         val effectName = args[1].lowercase()
 
-        // validate effect exists
         if (FXEngine.effect(effectName) == null) {
             sender.sendMessage(mm.deserialize(
                 "<red>Unknown effect <gold>'$effectName'</gold>. " +
@@ -101,17 +112,13 @@ class VEngineCommand(
             return true
         }
 
-        // parse optional scale - default 1.0
-        val scale = args.getOrNull(2)?.toDoubleOrNull()
-            ?: DEFAULT_SCALE
+        val scale = args.getOrNull(2)?.toDoubleOrNull() ?: DEFAULT_SCALE
         if (scale <= 0.0) {
             sender.sendMessage(mm.deserialize("<red>Scale must be > 0.</red>"))
             return true
         }
 
-        // parse optional duration in ticks - default 60 (3 s)
-        val duration = args.getOrNull(3)?.toLongOrNull()
-            ?: DEFAULT_DURATION_TICKS
+        val duration = args.getOrNull(3)?.toLongOrNull() ?: DEFAULT_DURATION_TICKS
         if (duration <= 0L) {
             sender.sendMessage(mm.deserialize("<red>Duration must be > 0 ticks.</red>"))
             return true
@@ -122,13 +129,40 @@ class VEngineCommand(
             .duration(duration)
             .build()
 
-        // dispatch to FXEngine - heavy math runs async, spawnParticle runs sync
-        FXEngine.play(effectName, sender.location, opts)
+        val handle = FXEngine.play(effectName, sender.location, opts)
 
         sender.sendMessage(mm.deserialize(
             "<green>Playing effect <gold>'$effectName'</gold> " +
+            "<gray>(ID: <yellow>${handle?.id ?: "unknown"}</yellow>)</gray> " +
             "for <aqua>${duration}</aqua> ticks at scale <aqua>$scale</aqua>.</green>"
         ))
+        return true
+    }
+
+    private fun cmdStop(sender: CommandSender, args: Array<out String>): Boolean {
+        if (!sender.hasPermission(PERM_STOP)) {
+            noPermission(sender); return true
+        }
+
+        if (args.size < 2 || args[1].equals("all", ignoreCase = true)) {
+            val stoppedCount = FXEngine.stopAll()
+            sender.sendMessage(mm.deserialize(
+                "<green>Stopped <gold>$stoppedCount</gold> active effect(s).</green>"
+            ))
+            return true
+        }
+
+        val targetId = args[1]
+        val stopped = FXEngine.stop(targetId)
+        if (stopped) {
+            sender.sendMessage(mm.deserialize(
+                "<green>Successfully stopped effect <gold>'$targetId'</gold>.</green>"
+            ))
+        } else {
+            sender.sendMessage(mm.deserialize(
+                "<red>No active effect found matching ID <gold>'$targetId'</gold>.</red>"
+            ))
+        }
         return true
     }
 
@@ -150,20 +184,22 @@ class VEngineCommand(
         args: Array<out String>,
     ): List<String> {
         return when {
-            // first arg: subcommand
             args.size == 1 -> SUBCOMMANDS
                 .filter { it.startsWith(args[0].lowercase()) }
 
-            // second arg (only for 'play'): effect name
             args.size == 2 && args[0].equals("play", ignoreCase = true) ->
                 FXEngine.effectNames()
                     .filter { it.startsWith(args[1].lowercase()) }
 
-            // third arg (play): scale hint
+            args.size == 2 && args[0].equals("stop", ignoreCase = true) -> {
+                val suggestions = mutableListOf("all")
+                suggestions.addAll(FXEngine.activeHandles().map { it.id })
+                suggestions.filter { it.startsWith(args[1], ignoreCase = true) }
+            }
+
             args.size == 3 && args[0].equals("play", ignoreCase = true) ->
                 SCALE_HINTS.filter { it.startsWith(args[2]) }
 
-            // fourth arg (play): duration hint
             args.size == 4 && args[0].equals("play", ignoreCase = true) ->
                 DURATION_HINTS.filter { it.startsWith(args[3]) }
 
@@ -179,16 +215,14 @@ class VEngineCommand(
 
     companion object {
         private const val PERM_SPAWN  = "vengine.effect.spawn"
+        private const val PERM_STOP   = "vengine.effect.stop"
         private const val PERM_RELOAD = "vengine.reload"
         private const val PERM_LIST   = "vengine.list"
 
-        // uniform scale applied when none is provided by the caller
-        private const val DEFAULT_SCALE          = 1.0
-
-        // default animation duration: 3 seconds at 20 ticks/s
+        private const val DEFAULT_SCALE = 1.0
         private const val DEFAULT_DURATION_TICKS = 60L
 
-        private val SUBCOMMANDS    = listOf("help", "list", "play", "reload")
+        private val SUBCOMMANDS    = listOf("help", "list", "play", "stop", "reload")
         private val SCALE_HINTS    = listOf("0.5", "1.0", "1.5", "2.0", "3.0")
         private val DURATION_HINTS = listOf("20", "40", "60", "100", "200", "400")
     }

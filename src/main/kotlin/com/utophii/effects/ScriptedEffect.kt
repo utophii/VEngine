@@ -1,5 +1,7 @@
 package com.utophii.effects
 
+import com.utophii.api.CompositeEffectHandle
+import com.utophii.api.EffectHandle
 import com.utophii.api.EffectOptions
 import com.utophii.api.ParticleEffect
 import com.utophii.engine.FXEngine
@@ -18,9 +20,11 @@ class ScriptedEffect(
 
     // plays every active layer with async calculation and sync rendering
     // each layer uses its own particle/material options, which is why this class owns rendering instead of delegating to [AbstractParticleEffect]
-    override fun play(center: Location, opts: EffectOptions) {
+    override fun play(center: Location, opts: EffectOptions): EffectHandle {
         val stableCenter = center.clone()
         val totalDuration = totalDuration(opts)
+        val childHandles = mutableListOf<EffectHandle>()
+
         layers.forEach { layer ->
             val primitive = FXEngine.primitiveEffect(layer.effect) ?: return@forEach
             val startTick = layer.startTick.coerceAtLeast(MIN_START_TICKS)
@@ -28,12 +32,12 @@ class ScriptedEffect(
                 return@forEach
             }
 
-            // remainingDuration = totalDuration - startTick: clamps the layer inside the parent effect duration
             val remainingDuration = (totalDuration - startTick).coerceAtLeast(MIN_DURATION_TICKS)
             val layerDuration = layer.durationTicks?.coerceAtLeast(MIN_DURATION_TICKS) ?: remainingDuration
             val clampedDuration = layerDuration.coerceAtMost(remainingDuration)
 
-            FXEngine.scheduler().scheduleFrames(
+            val handle = FXEngine.scheduler().scheduleFrames(
+                effectName = "${name}_${layer.effect}",
                 initialDelayTicks = startTick,
                 durationTicks = clampedDuration,
                 calculate = { time ->
@@ -45,7 +49,13 @@ class ScriptedEffect(
                 },
                 render = { _, frame -> render(frame.positions, frame.options) },
             )
+            childHandles.add(handle)
         }
+
+        val compositeId = "$name#${FXEngine.nextScriptedId()}"
+        val composite = CompositeEffectHandle(compositeId, name, childHandles)
+        FXEngine.scheduler().registerHandle(composite)
+        return composite
     }
 
     // calculates all active layer positions for the supplied frame time

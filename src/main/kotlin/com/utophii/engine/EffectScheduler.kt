@@ -1,33 +1,45 @@
 package com.utophii.engine
 
+import com.utophii.api.EffectHandle
+import com.utophii.api.SimpleEffectHandle
 import org.bukkit.Location
 import org.bukkit.Particle
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.scheduler.BukkitTask
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
-// owns Bukkit task scheduling and frame synchronization for VEngine effects
+// owns Bukkit task scheduling, active handles and frame synchronization for VEngine effects
 class EffectScheduler(private val plugin: JavaPlugin) {
 
-    // thread-safe registry of active running Bukkit tasks
     private val tasks: MutableSet<BukkitTask> = ConcurrentHashMap.newKeySet()
+    private val activeHandles = ConcurrentHashMap<String, EffectHandle>()
+    private val idCounter = AtomicInteger(1)
 
     // schedules frame calculation asynchronously while rendering strictly monotonically on the main thread
     fun <T> scheduleFrames(
+        effectName: String,
         initialDelayTicks: Long = INITIAL_DELAY_TICKS,
         durationTicks: Long,
         calculate: (Double) -> T,
         render: (Double, T) -> Unit,
-    ): BukkitTask {
+    ): EffectHandle {
+        val handleId = "$effectName#${idCounter.getAndIncrement()}"
         var tick = 0L
         val lastDeliveredFrame = AtomicLong(UNINITIALIZED_FRAME_INDEX)
         lateinit var task: BukkitTask
+
+        val handle = SimpleEffectHandle(handleId, effectName) {
+            task.cancel()
+            tasks.remove(task)
+            activeHandles.remove(handleId)
+        }
+
         task = plugin.server.scheduler.runTaskTimer(plugin, Runnable {
-            if (tick >= durationTicks) {
-                task.cancel()
-                tasks.remove(task)
+            if (tick >= durationTicks || handle.isCancelled) {
+                handle.cancel()
                 return@Runnable
             }
 
@@ -35,21 +47,18 @@ class EffectScheduler(private val plugin: JavaPlugin) {
             val currentTime = currentFrameIndex.toDouble()
             tick++
 
-            // asynchronous execution of heavy mathematical calculations
             plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
-                if (task.isCancelled || task !in tasks) {
+                if (handle.isCancelled || task.isCancelled || task !in tasks) {
                     return@Runnable
                 }
 
                 val frameResult = calculate(currentTime)
 
-                // synchronous delivery back to the Bukkit main thread
                 plugin.server.scheduler.runTask(plugin, Runnable {
-                    if (task.isCancelled || task !in tasks) {
+                    if (handle.isCancelled || task.isCancelled || task !in tasks) {
                         return@Runnable
                     }
 
-                    // frame synchronization: drops stale lagging frames that completed out-of-order
                     val previousDelivered = lastDeliveredFrame.get()
                     if (currentFrameIndex > previousDelivered) {
                         lastDeliveredFrame.set(currentFrameIndex)
@@ -58,11 +67,41 @@ class EffectScheduler(private val plugin: JavaPlugin) {
                 })
             })
         }, initialDelayTicks, FRAME_PERIOD_TICKS)
+
         tasks.add(task)
-        return task
+        activeHandles[handleId] = handle
+        return handle
     }
 
-    // spawns particles with full support for count, offset (x/y/z), speed and special data
+    // registers a composite or custom handle in the active handle registry
+    fun registerHandle(handle: EffectHandle) {
+        activeHandles[handle.id] = handle
+    }
+
+    // stops a running effect by handle ID
+    fun stop(id: String): Boolean {
+        val handle = activeHandles[id] ?: activeHandles.entries.firstOrNull { it.key.equals(id, ignoreCase = true) }?.value
+        return if (handle != null) {
+            handle.cancel()
+            activeHandles.remove(handle.id)
+            true
+        } else {
+            false
+        }
+    }
+
+    // stops all active running effects
+    fun stopAll(): Int {
+        val count = activeHandles.size
+        activeHandles.values.toList().forEach(EffectHandle::cancel)
+        activeHandles.clear()
+        cancelAllTasks()
+        return count
+    }
+
+    // returns a snapshot of active effect handles
+    fun activeHandles(): List<EffectHandle> = activeHandles.values.toList()
+
     fun spawnParticle(
         location: Location,
         particle: Particle,
@@ -103,9 +142,13 @@ class EffectScheduler(private val plugin: JavaPlugin) {
         }
     }
 
-    fun cancelAll() {
+    private fun cancelAllTasks() {
         tasks.forEach(BukkitTask::cancel)
         tasks.clear()
+    }
+
+    fun cancelAll() {
+        stopAll()
     }
 
     companion object {

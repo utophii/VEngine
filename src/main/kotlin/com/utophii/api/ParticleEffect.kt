@@ -11,9 +11,9 @@ interface ParticleEffect {
      *
      * @param center center of the effect in world coordinates
      * @param opts runtime rendering and transform options
-     * @implNote implementations must keep Bukkit particle spawning on the sync thread
+     * @return handle to control the spawned effect instance
      */
-    fun play(center: Location, opts: EffectOptions)
+    fun play(center: Location, opts: EffectOptions): EffectHandle
 
     /**
      * calculates particle positions for a point in effect time

@@ -2,6 +2,7 @@ package com.utophii.effects
 
 import com.utophii.api.ContextualEffectModifier
 import com.utophii.api.EffectOptions
+import com.utophii.api.EffectHandle
 import com.utophii.api.ParticleEffect
 import com.utophii.engine.FXEngine
 import org.bukkit.Color
@@ -13,9 +14,10 @@ import org.bukkit.inventory.ItemStack
 // shared async calculation and sync rendering for parametric effects
 abstract class AbstractParticleEffect(final override val name: String) : ParticleEffect {
 
-    override fun play(center: Location, opts: EffectOptions) {
+    override fun play(center: Location, opts: EffectOptions): EffectHandle {
         val stableCenter = center.clone()
-        FXEngine.scheduler().scheduleFrames(
+        return FXEngine.scheduler().scheduleFrames(
+            effectName = name,
             durationTicks = opts.duration.coerceAtLeast(MIN_DURATION_TICKS),
             calculate = { time -> calculate(stableCenter, opts, time) },
             render = { _, positions -> render(positions, opts) },

@@ -23,6 +23,11 @@ permissions:
     default: op
     children:
       vengine.use: true
+  vengine.effect.stop:
+    description: Allows stopping active particle effects
+    default: op
+    children:
+      vengine.use: true
   vengine.reload:
     description: Allows reloading VEngine config and effects
     default: op
