@@ -18,6 +18,15 @@ class EffectScheduler(private val plugin: JavaPlugin) {
     private val activeHandles = ConcurrentHashMap<String, EffectHandle>()
     private val idCounter = AtomicInteger(1)
 
+    // view-distance culling radius in blocks; particles are only sent to players within this radius of the particle location
+    var viewDistance: Double = DEFAULT_VIEW_DISTANCE_BLOCKS
+        get() = field
+        set(value) { field = value.coerceAtLeast(MIN_VIEW_DISTANCE_BLOCKS) }
+
+    // squared view distance for cheap squared-distance comparisons
+    private val viewDistanceSquared: Double
+        get() = viewDistance * viewDistance
+
     // schedules frame calculation asynchronously while rendering strictly monotonically on the main thread
     fun <T> scheduleFrames(
         effectName: String,
@@ -102,6 +111,8 @@ class EffectScheduler(private val plugin: JavaPlugin) {
     // returns a snapshot of active effect handles
     fun activeHandles(): List<EffectHandle> = activeHandles.values.toList()
 
+    // spawns a particle only to players within the configured view distance of the particle location
+    // explicit receivers are filtered by distance; when none are given the particle is broadcast only to nearby online players in the same world
     fun spawnParticle(
         location: Location,
         particle: Particle,
@@ -113,22 +124,19 @@ class EffectScheduler(private val plugin: JavaPlugin) {
         offsetZ: Double = DEFAULT_PARTICLE_OFFSET,
         speed: Double = DEFAULT_PARTICLE_SPEED,
     ) {
+        val world = location.world ?: return
         val explicitReceivers = receivers.toList()
-        if (explicitReceivers.isEmpty()) {
-            location.world?.spawnParticle(
-                particle,
-                location,
-                count,
-                offsetX,
-                offsetY,
-                offsetZ,
-                speed,
-                data,
-            )
+        val candidates = if (explicitReceivers.isEmpty()) world.players.toList() else explicitReceivers
+
+        // near = online players of the same world within the view-distance radius
+        val near = candidates.filter { player ->
+            player.isOnline && player.world == world && player.location.distanceSquared(location) <= viewDistanceSquared
+        }
+        if (near.isEmpty()) {
             return
         }
 
-        explicitReceivers.forEach { player ->
+        near.forEach { player ->
             player.spawnParticle(
                 particle,
                 location,
@@ -158,5 +166,9 @@ class EffectScheduler(private val plugin: JavaPlugin) {
         private const val DEFAULT_PARTICLE_COUNT = 1
         private const val DEFAULT_PARTICLE_OFFSET = 0.0
         private const val DEFAULT_PARTICLE_SPEED = 0.0
+
+        // default view-distance culling radius in blocks
+        const val DEFAULT_VIEW_DISTANCE_BLOCKS = 64.0
+        private const val MIN_VIEW_DISTANCE_BLOCKS = 0.0
     }
 }
