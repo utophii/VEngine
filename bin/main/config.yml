@@ -1,8 +1,0 @@
-# VEngine configuration
-#
-# view-distance: view-distance culling radius in blocks.
-# Particles are only spawned to players within this radius of the
-# particle position. Players farther away receive no particle packets,
-# which cuts network traffic and rendering load. Set this to a large
-# value to effectively disable culling.
-view-distance: 64
