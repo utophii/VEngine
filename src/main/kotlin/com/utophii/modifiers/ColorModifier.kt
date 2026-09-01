@@ -30,7 +30,7 @@ class ColorModifier(
     }
 
     companion object {
-        private const val DEFAULT_PERIOD_TICKS = 40.0
+        const val DEFAULT_PERIOD_TICKS = 40.0
         private const val MIN_COLOR_CHANNEL = 0
         private const val MAX_COLOR_CHANNEL = 255
     }

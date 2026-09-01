@@ -41,9 +41,9 @@ class VortexModifier(
     }
 
     companion object {
-        private val DEFAULT_AXIS = Vector(0.0, 1.0, 0.0)
-        private const val DEFAULT_CORE_RADIUS = 1.2
-        private const val DEFAULT_STRENGTH = 0.15
+        val DEFAULT_AXIS = Vector(0.0, 1.0, 0.0)
+        const val DEFAULT_CORE_RADIUS = 1.2
+        const val DEFAULT_STRENGTH = 0.15
         private const val MIN_AXIS_SQ = 1.0E-10
     }
 }

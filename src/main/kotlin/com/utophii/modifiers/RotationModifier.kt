@@ -65,10 +65,10 @@ class RotationModifier private constructor(
     }
 
     companion object {
-        private val DEFAULT_AXIS = Vector(0.0, 1.0, 0.0)
-        private val DEFAULT_PIVOT_OFFSET = Vector(0.0, 0.0, 0.0)
-        private const val DEFAULT_ANGULAR_VELOCITY = 0.05
-        private const val DEFAULT_INITIAL_ANGLE = 0.0
+        val DEFAULT_AXIS = Vector(0.0, 1.0, 0.0)
+        val DEFAULT_PIVOT_OFFSET = Vector(0.0, 0.0, 0.0)
+        const val DEFAULT_ANGULAR_VELOCITY = 0.05
+        const val DEFAULT_INITIAL_ANGLE = 0.0
         private const val MIN_AXIS_LENGTH_SQUARED = 1.0E-12
     }
 }

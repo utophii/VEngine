@@ -28,8 +28,8 @@ class TurbulenceModifier(
     }
 
     companion object {
-        private const val DEFAULT_STRENGTH = 0.12
-        private const val DEFAULT_FREQUENCY = 0.35
-        private const val DEFAULT_OCTAVES = 4
+        const val DEFAULT_STRENGTH = 0.12
+        const val DEFAULT_FREQUENCY = 0.35
+        const val DEFAULT_OCTAVES = 4
     }
 }
