@@ -1,0 +1,22 @@
+# A rose (rhodonea) curve built entirely from formulas - no Kotlin code needed
+# r = R * cos(k * t); x = r * cos(t), z = r * sin(t) (kept in the XZ plane, y = 0).
+id: parametric_rose
+curve:
+  variables: [t]
+  samples: 180
+  angularSpeed: 0.03
+  range:
+    - { min: 0, max: 6.283185307179586 }
+  x: "R * cos(K * t) * cos(t)"
+  y: "0"
+  z: "R * cos(K * t) * sin(t)"
+  parameters:
+    R: 2.0
+    K: 3.0
+particle: DUST
+color:
+  r: 255
+  g: 100
+  b: 220
+scale: 1.0
+duration: 200

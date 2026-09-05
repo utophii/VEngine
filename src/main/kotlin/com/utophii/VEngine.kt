@@ -55,6 +55,8 @@ class VEngine : JavaPlugin() {
         saveIfMissing("effects/torus.yml")
         saveIfMissing("effects/cosmic_gate.yml")
         saveIfMissing("effects/rk4_comet.yml")
+        saveIfMissing("effects/parametric_rose.yml")
+        saveIfMissing("effects/parametric_torus.yml")
     }
 
     private fun saveIfMissing(path: String) {

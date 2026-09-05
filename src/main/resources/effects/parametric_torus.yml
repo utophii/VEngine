@@ -1,0 +1,23 @@
+# A torus built from the classic parametric surface formulas:
+# x = (R + r cos(phi)) cos(theta), y = r sin(phi), z = (R + r cos(phi)) sin(theta)
+id: parametric_torus
+surface:
+  variables: [theta, phi]
+  samples: [48, 20]
+  angularSpeed: 0.05
+  range:
+    - { min: 0, max: 6.283185307179586 }
+    - { min: 0, max: 6.283185307179586 }
+  x: "(R + r * cos(phi)) * cos(theta)"
+  y: "r * sin(phi)"
+  z: "(R + r * cos(phi)) * sin(theta)"
+  parameters:
+    R: 1.4
+    r: 0.45
+particle: DUST
+color:
+  r: 120
+  g: 210
+  b: 255
+scale: 1.0
+duration: 200

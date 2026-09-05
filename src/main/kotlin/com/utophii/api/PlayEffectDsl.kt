@@ -1,6 +1,9 @@
 package com.utophii.api
 
 import com.utophii.engine.FXEngine
+import com.utophii.effects.ParamRange
+import com.utophii.effects.ParametricEffect
+import com.utophii.math.MathUtils
 import com.utophii.modifiers.ColorModifier
 import com.utophii.modifiers.RotationModifier
 import com.utophii.modifiers.TurbulenceModifier
@@ -146,4 +149,146 @@ class ModifierConfig {
     fun add(modifier: EffectModifier) = modifiers.add(modifier)
 
     fun build(): List<EffectModifier> = modifiers.toList()
+}
+
+/**
+ * Type-safe entry point for a user-defined parametric effect expressed as math formulas.
+ *
+ * ```
+ * player.location.playParametric("ring") {
+ *     variables("t")
+ *     samples(96)
+ *     range(0.0, MathUtils.TAU)
+ *     x("R * cos(t)"); y("0"); z("R * sin(t)")
+ *     default("R", 2.0)
+ *     render { color(Color.AQUA); duration(160L); scale(1.5) }
+ * }
+ * ```
+ *
+ * @param name name used for the spawned effect handle
+ * @param config formula geometry and rendering DSL
+ * @return handle to control the spawned effect, or null if the formula is invalid
+ */
+fun Location.playParametric(name: String = "parametric", config: ParametricConfig.() -> Unit): EffectHandle? {
+    val spec = ParametricConfig().apply(config)
+    return spec.buildEffect(name).play(this, spec.options)
+}
+
+// configures a user-defined parametric formula effect (curve or surface) plus its rendering options
+@VEngineDsl
+class ParametricConfig {
+    private var variableNames = DEFAULT_VARIABLES
+    private var sampling = DEFAULT_CURVE_SAMPLES
+    private var ranges = emptyList<ParamRange>()
+    private var xFormula = DEFAULT_FORMULA
+    private var yFormula = DEFAULT_FORMULA
+    private var zFormula = DEFAULT_FORMULA
+    private var angularSpeed = DEFAULT_ANGULAR_SPEED
+    private val formulaDefaults = linkedMapOf<String, Double>()
+    private val optionsConfig = EffectConfig()
+
+    // declares the sampling variables (one for a curve, two for a surface)
+    fun variables(vararg names: String) {
+        variableNames = names.toList()
+    }
+
+    fun variables(names: List<String>) {
+        variableNames = names.toList()
+    }
+
+    // sets the sample count; a surface accepts a second (latitude) count which defaults to the first
+    fun samples(count: Int) {
+        sampling = listOf(count)
+    }
+
+    fun samples(longitude: Int, latitude: Int) {
+        sampling = listOf(longitude, latitude)
+    }
+
+    // sets the parameter range for the single curve variable
+    fun range(min: Double, max: Double) {
+        ranges = listOf(ParamRange(min, max))
+    }
+
+    // sets per-variable ranges for a surface
+    fun ranges(vararg range: ParamRange) {
+        ranges = range.toList()
+    }
+
+    fun x(formula: String) {
+        xFormula = formula
+    }
+
+    fun y(formula: String) {
+        yFormula = formula
+    }
+
+    fun z(formula: String) {
+        zFormula = formula
+    }
+
+    fun angularSpeed(value: Double) {
+        angularSpeed = value
+    }
+
+    // registers a formula variable default value
+    fun default(key: String, value: Double) {
+        formulaDefaults[key] = value
+    }
+
+    fun defaults(values: Map<String, Double>) {
+        formulaDefaults.putAll(values)
+    }
+
+    // nested DSL for the shared rendering/transform fields (particle, color, scale, modifiers, ...)
+    fun render(block: EffectConfig.() -> Unit) {
+        optionsConfig.apply(block)
+    }
+
+    val options: EffectOptions
+        get() = optionsConfig.build()
+
+    internal fun buildEffect(effectName: String = "parametric"): ParametricEffect {
+        val variableCount = variableNames.size
+        val resolvedSamples = resolveSamples(variableCount)
+        val resolvedRanges = resolveRanges(variableCount)
+        return ParametricEffect(
+            name = effectName,
+            variables = variableNames,
+            sampling = resolvedSamples,
+            ranges = resolvedRanges,
+            xFormula = xFormula,
+            yFormula = yFormula,
+            zFormula = zFormula,
+            defaults = formulaDefaults,
+            angularSpeed = angularSpeed,
+        )
+    }
+
+    private fun resolveSamples(variableCount: Int): List<Int> {
+        return when {
+            sampling.size >= variableCount -> sampling.take(variableCount)
+            sampling.size == 1 && variableCount == 2 -> listOf(sampling[0], sampling[0])
+            else -> List(variableCount) { index -> sampling.getOrElse(index) { defaultSample(index) } }
+        }
+    }
+
+    private fun resolveRanges(variableCount: Int): List<ParamRange> {
+        return if (ranges.size >= variableCount) {
+            ranges.take(variableCount)
+        } else {
+            (ranges + List(variableCount - ranges.size) { DEFAULT_RANGE }).take(variableCount)
+        }
+    }
+
+    private fun defaultSample(index: Int): Int = if (variableNames.size > 1) DEFAULT_SURFACE_LATITUDE else DEFAULT_CURVE_SAMPLES.first()
+
+    companion object {
+        private val DEFAULT_VARIABLES = listOf("t")
+        private val DEFAULT_CURVE_SAMPLES = listOf(64)
+        private const val DEFAULT_SURFACE_LATITUDE = 20
+        private const val DEFAULT_ANGULAR_SPEED = 0.05
+        private const val DEFAULT_FORMULA = "0"
+        private val DEFAULT_RANGE = ParamRange(0.0, MathUtils.TAU)
+    }
 }

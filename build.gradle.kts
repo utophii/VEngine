@@ -36,9 +36,20 @@ dependencies {
 
     // Apache Commons Lang
     implementation("org.apache.commons:commons-lang3:3.18.0")
+
+    // Safe math expression evaluator for user-defined parametric effects
+    implementation("net.objecthunter:exp4j:0.4.8")
+
+    // Tests: JUnit 5 + kotlin-test, plus Paper API on the runtime classpath for Bukkit types
+    testImplementation(kotlin("test"))
+    testImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
+    testImplementation("io.papermc.paper:paper-api:1.20.6-R0.1-SNAPSHOT")
 }
 
 tasks {
+    test {
+        useJUnitPlatform()
+    }
     processResources {
         filesMatching("plugin.yml") {
             expand(

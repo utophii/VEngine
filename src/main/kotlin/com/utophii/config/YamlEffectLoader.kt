@@ -2,13 +2,18 @@ package com.utophii.config
 
 import com.utophii.api.EffectOptions
 import com.utophii.api.EffectModifier
+import com.utophii.api.ParticleEffect
 import com.utophii.effects.NumericAnimation
 import com.utophii.effects.NumericKeyframe
 import com.utophii.effects.NumericTrack
+import com.utophii.effects.ParamRange
+import com.utophii.effects.ParametricEffect
 import com.utophii.effects.ScriptedEffect
 import com.utophii.effects.ScriptedLayer
 import com.utophii.engine.FXEngine
 import com.utophii.math.EasingType
+import com.utophii.math.ExpressionEvaluator
+import com.utophii.math.MathUtils
 import com.utophii.modifiers.RotationModifier
 import com.utophii.modifiers.TurbulenceModifier
 import com.utophii.modifiers.VortexModifier
@@ -30,7 +35,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
     }
 
     // loads and registers all YAML effects from plugins/VEngine/effects
-    fun loadAll(): List<ScriptedEffect> {
+    fun loadAll(): List<ParticleEffect> {
         ensureDirectories()
         FXEngine.clearScripted()
 
@@ -44,17 +49,112 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         return loaded
     }
 
-    // loads one YAML effect file into a runtime scripted effect
-    fun load(file: File): ScriptedEffect? {
+    // loads one YAML effect file into a runtime effect
+    fun load(file: File): ParticleEffect? {
         val raw = file.inputStream().use { stream -> yaml.load<Map<String, Any?>>(stream) } ?: return null
         val id = raw[ID_KEY]?.toString()?.takeIf(String::isNotBlank) ?: file.nameWithoutExtension
         val duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS) ?: DEFAULT_DURATION_TICKS
+        return if (isParametric(raw)) {
+            parseParametric(id, raw, file.name)
+        } else {
+            loadScripted(id, duration, raw, file.name)
+        }
+    }
+
+    // builds a parametric formula effect from a `curve`/`surface` YAML block
+    private fun parseParametric(id: String, raw: Map<String, Any?>, fileName: String): ParametricEffect? {
+        val block = (raw[curveOrSurfaceKey(raw)] as? Map<*, *>) ?: run {
+            plugin.logger.warning("Skipping parametric effect '${fileName}': missing 'curve' or 'surface' block.")
+            return null
+        }
+        val variables = parseStringList(block[VARIABLES_KEY], defaultVariables(raw))
+        val sampling = parseIntList(block[SAMPLES_KEY] ?: block[SAMPLES_X_KEY], if (variables.size > 1) DEFAULT_SURFACE_SAMPLES else DEFAULT_CURVE_SAMPLES)
+            .let { sampleList ->
+                if (variables.size > 1 && sampleList.size < 2) {
+                    listOf(sampleList.firstOrNull() ?: DEFAULT_SURFACE_SAMPLES[0], sampleList.getOrElse(1) { DEFAULT_SURFACE_SAMPLES[1] })
+                } else sampleList
+            }
+        val ranges = parseRanges(block[RANGE_KEY], variables.size)
+        val x = block[X_KEY]?.toString()?.takeIf(String::isNotBlank) ?: DEFAULT_FORMULA_X
+        val y = block[Y_KEY]?.toString()?.takeIf(String::isNotBlank) ?: DEFAULT_FORMULA_Y
+        val z = block[Z_KEY]?.toString()?.takeIf(String::isNotBlank) ?: DEFAULT_FORMULA_Z
+        val defaults = parseParameters(block[PARAMETERS_KEY])
+        val angularSpeed = block[ANGULAR_SPEED_KEY]?.number() ?: DEFAULT_ANGULAR_SPEED
+
+        // fail fast on a malformed formula so the user sees a clear message instead of a silent no-op
+        val valid = listOf(x, y, z).all { formula -> ExpressionEvaluator.compile(formula) != null }
+        if (!valid) {
+            plugin.logger.warning("Skipping parametric effect '${fileName}': one of the x/y/z formulas is invalid.")
+            return null
+        }
+        return ParametricEffect(
+            name = id,
+            variables = variables,
+            sampling = sampling,
+            ranges = ranges,
+            xFormula = x,
+            yFormula = y,
+            zFormula = z,
+            defaults = defaults,
+            angularSpeed = angularSpeed,
+        )
+    }
+
+    // builds a layered scripted effect from `layers` or a legacy single layer
+    private fun loadScripted(id: String, duration: Long, raw: Map<String, Any?>, fileName: String): ScriptedEffect? {
         val layers = parseLayers(raw)
         if (layers.isEmpty()) {
-            plugin.logger.warning("Skipping effect '${file.name}': no valid layers were found.")
+            plugin.logger.warning("Skipping effect '${fileName}': no valid layers were found.")
             return null
         }
         return ScriptedEffect(id, duration, layers)
+    }
+
+    private fun isParametric(raw: Map<String, Any?>): Boolean {
+        val hasBlock = raw.containsKey(CURVE_KEY) || raw.containsKey(SURFACE_KEY)
+        val type = raw[TYPE_KEY]?.toString()?.lowercase()
+        return hasBlock || type in PARAMETRIC_TYPES
+    }
+
+    private fun curveOrSurfaceKey(raw: Map<String, Any?>): String {
+        return if (raw.containsKey(SURFACE_KEY)) SURFACE_KEY else CURVE_KEY
+    }
+
+    private fun defaultVariables(raw: Map<String, Any?>): List<String> {
+        // a surface block implies two variables; a curve block implies one
+        return if (raw.containsKey(SURFACE_KEY)) DEFAULT_SURFACE_VARIABLES else DEFAULT_CURVE_VARIABLES
+    }
+
+    private fun parseStringList(value: Any?, fallback: List<String>): List<String> {
+        val list = value as? List<*> ?: return fallback
+        val parsed = list.mapNotNull { it?.toString()?.takeIf(String::isNotBlank) }
+        return parsed.ifEmpty { fallback }
+    }
+
+    private fun parseIntList(value: Any?, fallback: List<Int>): List<Int> {
+        // a scalar `samples: 100` applies to the first (and only) sampling dimension
+        val scalar = value?.number()
+        if (scalar != null) {
+            return listOf(scalar.toInt().coerceAtLeast(MIN_SAMPLES))
+        }
+        val list = value as? List<*> ?: return listOf(fallback.firstOrNull() ?: MIN_SAMPLES)
+        val parsed = list.mapNotNull { it.number()?.toInt()?.coerceAtLeast(MIN_SAMPLES) }
+        return parsed.ifEmpty { listOf(fallback.firstOrNull() ?: MIN_SAMPLES) }
+    }
+
+    private fun parseRanges(value: Any?, variableCount: Int): List<ParamRange> {
+        val ranges = if (value is List<*>) {
+            value.mapNotNull { rangeNode ->
+                val range = (rangeNode as? Map<*, *>) ?: return@mapNotNull null
+                val first = range[MIN_KEY].number() ?: return@mapNotNull null
+                val last = range[MAX_KEY].number() ?: return@mapNotNull null
+                ParamRange(first, last)
+            }
+        } else {
+            emptyList()
+        }
+        return if (ranges.size >= variableCount) ranges.take(variableCount)
+        else (ranges + List(variableCount - ranges.size) { DEFAULT_RANGE }).take(variableCount)
     }
 
     private fun parseLayers(raw: Map<String, Any?>): List<ScriptedLayer> {
@@ -281,6 +381,25 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private const val ID_KEY = "id"
         private const val EFFECT_KEY = "effect"
         private const val LAYERS_KEY = "layers"
+        private const val CURVE_KEY = "curve"
+        private const val SURFACE_KEY = "surface"
+        private const val VARIABLES_KEY = "variables"
+        private const val SAMPLES_KEY = "samples"
+        private const val SAMPLES_X_KEY = "samplesX"
+        private const val RANGE_KEY = "range"
+        private const val MIN_KEY = "min"
+        private const val MAX_KEY = "max"
+        private const val MIN_SAMPLES = 4
+        private const val DEFAULT_ANGULAR_SPEED = 0.05
+        private const val DEFAULT_FORMULA_X = "0"
+        private const val DEFAULT_FORMULA_Y = "0"
+        private const val DEFAULT_FORMULA_Z = "0"
+        private val DEFAULT_RANGE = ParamRange(0.0, MathUtils.TAU)
+        private val DEFAULT_CURVE_VARIABLES = listOf("t")
+        private val DEFAULT_SURFACE_VARIABLES = listOf("theta", "phi")
+        private val DEFAULT_CURVE_SAMPLES = listOf(64)
+        private val DEFAULT_SURFACE_SAMPLES = listOf(40, 20)
+        private val PARAMETRIC_TYPES = setOf("parametric", "parametric_curve", "parametric_surface")
         private const val START_KEY = "start"
         private const val DURATION_KEY = "duration"
         private const val PARTICLE_KEY = "particle"
