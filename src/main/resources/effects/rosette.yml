@@ -1,0 +1,18 @@
+# Epicycloid rosette expressed as a formula (no Kotlin code).
+# x = (R + r) cos(t) - d cos((R + r)/r t), y = 0, z = (R + r) sin(t) - d sin((R + r)/r t)
+id: rosette
+curve:
+  variables: [t]
+  samples: 180
+  angularSpeed: 0.04
+  range:
+    - { min: 0, max: 6.283185307179586 }
+  x: "(majorRadius + minorRadius) * cos(t) - distance * cos((majorRadius + minorRadius) / minorRadius * t)"
+  y: "0"
+  z: "(majorRadius + minorRadius) * sin(t) - distance * sin((majorRadius + minorRadius) / minorRadius * t)"
+  parameters:
+    majorRadius: 1.0
+    minorRadius: 0.25
+    distance: 0.9
+particle: FLAME
+duration: 100

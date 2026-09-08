@@ -1,0 +1,19 @@
+# Torus knot T(p, q) expressed as a formula (no Kotlin code).
+# x = (R + r cos(q t)) cos(p t), y = -r sin(q t), z = (R + r cos(q t)) sin(p t)
+id: torus_knot
+curve:
+  variables: [t]
+  samples: 160
+  angularSpeed: 0.03
+  range:
+    - { min: 0, max: 6.283185307179586 }
+  x: "(majorRadius + minorRadius * cos(q * t)) * cos(p * t)"
+  y: "-minorRadius * sin(q * t)"
+  z: "(majorRadius + minorRadius * cos(q * t)) * sin(p * t)"
+  parameters:
+    majorRadius: 1.6
+    minorRadius: 0.6
+    p: 2.0
+    q: 3.0
+particle: FLAME
+duration: 100

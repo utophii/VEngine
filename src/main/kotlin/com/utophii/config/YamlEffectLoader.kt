@@ -35,9 +35,12 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
     }
 
     // loads and registers all YAML effects from plugins/VEngine/effects
+    // parametric formula effects are atoms and are registered as primitives (so they can be used as
+    // layer bases too); layered scripted effects are registered separately
     fun loadAll(): List<ParticleEffect> {
         ensureDirectories()
         FXEngine.clearScripted()
+        FXEngine.clearParametricPrimitives()
 
         val loaded = effectsDirectory()
             .listFiles { file -> file.isFile && file.extension.equals(YAML_EXTENSION, ignoreCase = true) }
@@ -45,7 +48,13 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             ?.mapNotNull(::load)
             ?: emptyList()
 
-        loaded.forEach(FXEngine::registerScripted)
+        loaded.forEach { effect ->
+            if (effect is ParametricEffect) {
+                FXEngine.registerPrimitive(effect)
+            } else {
+                FXEngine.registerScripted(effect)
+            }
+        }
         return loaded
     }
 

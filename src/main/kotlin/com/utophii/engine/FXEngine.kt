@@ -18,14 +18,11 @@ object FXEngine {
     // initializes the engine and registers bundled primitive effects
     fun initialize(plugin: JavaPlugin) {
         scheduler = EffectScheduler(plugin)
-        registerPrimitive(HelixEffect())
         registerPrimitive(SphereEffect())
         registerPrimitive(TorusEffect())
-        registerPrimitive(LissajousEffect())
+        registerPrimitive(HelixEffect())
         registerPrimitive(BeamEffect())
-        registerPrimitive(RosetteEffect())
         registerPrimitive(RK4TrajectoryEffect())
-        registerPrimitive(TorusKnotEffect())
         registerPrimitive(LorenzAttractorEffect())
         registerPrimitive(SupershapeEffect())
         registerPrimitive(SplineBeamEffect())
@@ -46,6 +43,11 @@ object FXEngine {
     // clears all dynamically loaded scripted effects
     fun clearScripted() {
         scriptedEffects.clear()
+    }
+
+    // removes formula-based primitives that were refreshed from YAML, keeping bundled Kotlin primitives intact
+    fun clearParametricPrimitives() {
+        primitiveEffects.filterValues { it is ParametricEffect }.keys.forEach(primitiveEffects::remove)
     }
 
     // returns a primitive effect by registry name

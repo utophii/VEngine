@@ -1,0 +1,20 @@
+# Lissajous curve expressed as a formula (no Kotlin code).
+# x = A sin(a t + delta), y = 0, z = B sin(b t)
+id: lissajous
+curve:
+  variables: [t]
+  samples: 140
+  angularSpeed: 0.06
+  range:
+    - { min: 0, max: 6.283185307179586 }
+  x: "amplitudeX * sin(a * t + delta)"
+  y: "0"
+  z: "amplitudeZ * sin(b * t)"
+  parameters:
+    amplitudeX: 1.6
+    amplitudeZ: 1.6
+    a: 3.0
+    b: 2.0
+    delta: 1.5707963267948966
+particle: FLAME
+duration: 100
