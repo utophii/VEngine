@@ -1,4 +1,4 @@
-# Epicycloid rosette expressed as a formula (no Kotlin code).
+# Epicycloid rosette expressed as a formula
 # x = (R + r) cos(t) - d cos((R + r)/r t), y = 0, z = (R + r) sin(t) - d sin((R + r)/r t)
 id: rosette
 curve:

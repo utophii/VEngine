@@ -1,4 +1,4 @@
-# Torus knot T(p, q) expressed as a formula (no Kotlin code).
+# Torus knot T(p, q) expressed as a formula
 # x = (R + r cos(q t)) cos(p t), y = -r sin(q t), z = (R + r cos(q t)) sin(p t)
 id: torus_knot
 curve:

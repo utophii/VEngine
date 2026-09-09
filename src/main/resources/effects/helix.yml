@@ -1,0 +1,18 @@
+# Animated vertical helix expressed as a formula
+# x = r cos(turns * t), y = height * (t / tau) - height/2, z = r sin(turns * t)
+id: helix
+curve:
+  variables: [t]
+  samples: 96
+  angularSpeed: 0.12
+  range:
+    - { min: 0, max: 6.283185307179586 }
+  x: "radius * cos(turns * t)"
+  y: "height * (t / tau) - height * 0.5"
+  z: "radius * sin(turns * t)"
+  parameters:
+    radius: 1.0
+    height: 3.0
+    turns: 3.0
+particle: FLAME
+duration: 100

@@ -32,10 +32,12 @@ class ParametricEffect(
         val speed = opts.parameters[ANGULAR_SPEED_PARAM] ?: angularSpeed
         val phase = time * speed
         // params = defaults + runtime options: runtime values override the configured formula defaults
-        val params = HashMap<String, Double>(defaults.size + opts.parameters.size + CONSTANT_NAMES.size)
+        val params = HashMap<String, Double>(defaults.size + opts.parameters.size + CONSTANT_NAMES.size + TIME_PARAM_COUNT)
         params.putAll(defaults)
         params.putAll(opts.parameters)
         CONSTANT_NAMES.forEach { (name, value) -> params[name] = value }
+        // expose the current effect time as a formula variable (0.0 default is overridden here) for live animation
+        params[TIME_VARIABLE] = time
 
         when (variables.size) {
             1 -> calculateCurve(buffer, center, opts, time, phase, params, samplingFor(opts))
@@ -126,6 +128,8 @@ class ParametricEffect(
         private const val SAMPLES_PARAM = "samples"
         private const val POINTS_PARAM = "points"
         private const val ANGULAR_SPEED_PARAM = "angularSpeed"
+        private const val TIME_VARIABLE = "time"
+        private const val TIME_PARAM_COUNT = 1
 
         // named mathematical constants exposed to formulas as variables (0.0 default, always overridden here)
         private val CONSTANT_NAMES = linkedMapOf(

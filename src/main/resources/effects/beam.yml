@@ -1,0 +1,20 @@
+# Cubic Bezier beam expressed as a formula
+# B(t) = (1-t)^3 P0 + 3(1-t)^2 t P1 + 3(1-t) t^2 P2 + t^3 P3, with a running sine ripple.
+# x/y/z are relative offsets from the effect center; `time` drives the wave animation.
+id: beam
+curve:
+  variables: [t]
+  samples: 80
+  angularSpeed: 0.0
+  range:
+    - { min: 0, max: 1 }
+  x: "(1 - t)^3 * (-0.5 * length) + 3 * (1 - t)^2 * t * (-0.25 * length) + 3 * (1 - t) * t^2 * (0.25 * length) + t^3 * (0.5 * length)"
+  y: "3 * (1 - t)^2 * t * height + 3 * (1 - t) * t^2 * height + sin(t * tau + time * waveSpeed) * waveAmplitude"
+  z: "0"
+  parameters:
+    length: 5.0
+    height: 1.2
+    waveSpeed: 0.2
+    waveAmplitude: 0.08
+particle: FLAME
+duration: 100

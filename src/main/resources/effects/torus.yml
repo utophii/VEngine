@@ -1,22 +1,23 @@
-id: gravity_torus
-effect: torus
+# Parametric torus expressed as a formula
+# x = (R + r cos(phi)) cos(theta), y = r sin(phi), z = (R + r cos(phi)) sin(theta)
+id: torus
+surface:
+  variables: [theta, phi]
+  samples: [48, 18]
+  angularSpeed: 0.05
+  range:
+    - { min: 0, max: 6.283185307179586 }
+    - { min: 0, max: 6.283185307179586 }
+  x: "(majorRadius + minorRadius * cos(phi)) * cos(theta)"
+  y: "minorRadius * sin(phi)"
+  z: "(majorRadius + minorRadius * cos(phi)) * sin(theta)"
+  parameters:
+    majorRadius: 1.4
+    minorRadius: 0.45
 particle: DUST
 color:
   r: 120
   g: 210
   b: 255
 scale: 1.0
-rotationYaw: 0.0
-tiltAxis:
-  x: 1.0
-  y: 0.0
-  z: 0.0
-tiltAngle: 0.35
 duration: 80
-parameters:
-  majorRadius: 1.4
-  minorRadius: 0.45
-  thetaSteps: 48
-  phiSteps: 18
-  gravityDensity: 2.0
-  angularSpeed: 0.05

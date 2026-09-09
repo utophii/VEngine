@@ -1,0 +1,20 @@
+# Energy beam approximated as a parabolic arc with a running wave
+# x spans the length, y is a parabola peaking at arcHeight, plus a sine ripple driven by `time`.
+id: spline_beam
+curve:
+  variables: [t]
+  samples: 100
+  angularSpeed: 0.0
+  range:
+    - { min: 0, max: 1 }
+  x: "(t - 0.5) * length"
+  y: "arcHeight * 4 * t * (1 - t) + sin(t * waveFrequency * tau - time * waveSpeed) * waveAmplitude"
+  z: "0"
+  parameters:
+    length: 6.0
+    arcHeight: 1.4
+    waveAmplitude: 0.12
+    waveFrequency: 3.0
+    waveSpeed: 0.25
+particle: FLAME
+duration: 100

@@ -1,4 +1,4 @@
-# A rose (rhodonea) curve built entirely from formulas - no Kotlin code needed
+# A rose (rhodonea) curve built entirely from formulas
 # r = R * cos(k * t); x = r * cos(t), z = r * sin(t) (kept in the XZ plane, y = 0).
 id: parametric_rose
 curve:

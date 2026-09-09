@@ -1,0 +1,32 @@
+# 3D Gielis superformula surface expressed as a formula
+# r(phi) = ( |cos(m*phi/4)/a|^n2 + |sin(m*phi/4)/b|^n3 )^(-1/n1)
+# x = radius * r1(theta) * cos(theta) * r2(phi) * cos(phi)
+# y = radius * r2(phi) * sin(phi)
+# z = radius * r1(theta) * sin(theta) * r2(phi) * cos(phi)
+id: supershape
+surface:
+  variables: [theta, phi]
+  samples: [40, 20]
+  angularSpeed: 0.04
+  range:
+    - { min: -3.141592653589793, max: 3.141592653589793 }
+    - { min: -1.5707963267948966, max: 1.5707963267948966 }
+  x: "radius * (abs(cos(m1 * theta / 4) / a1)^n12 + abs(sin(m1 * theta / 4) / b1)^n13)^(-1 / n11) * cos(theta) * (abs(cos(m2 * phi / 4) / a2)^n22 + abs(sin(m2 * phi / 4) / b2)^n23)^(-1 / n21) * cos(phi)"
+  y: "radius * (abs(cos(m2 * phi / 4) / a2)^n22 + abs(sin(m2 * phi / 4) / b2)^n23)^(-1 / n21) * sin(phi)"
+  z: "radius * (abs(cos(m1 * theta / 4) / a1)^n12 + abs(sin(m1 * theta / 4) / b1)^n13)^(-1 / n11) * sin(theta) * (abs(cos(m2 * phi / 4) / a2)^n22 + abs(sin(m2 * phi / 4) / b2)^n23)^(-1 / n21) * cos(phi)"
+  parameters:
+    radius: 1.6
+    m1: 5.0
+    a1: 1.0
+    b1: 1.0
+    n11: 1.0
+    n12: 1.0
+    n13: 1.0
+    m2: 5.0
+    a2: 1.0
+    b2: 1.0
+    n21: 1.0
+    n22: 1.0
+    n23: 1.0
+particle: FLAME
+duration: 100

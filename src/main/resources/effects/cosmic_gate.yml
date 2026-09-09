@@ -1,3 +1,4 @@
+# Layered showcase combining formula atoms (torus, helix) with the sphere primitive
 id: cosmic_gate
 duration: 120
 layers:
@@ -18,10 +19,7 @@ layers:
     parameters:
       majorRadius: 1.35
       minorRadius: 0.40
-      thetaSteps: 52
-      phiSteps: 18
-      gravityDensity: 1.8
-      angularSpeed: 0.00
+      angularSpeed: 0.0
     animation:
       loop: true
       tracks:
@@ -31,14 +29,6 @@ layers:
               value: 0.0
             - tick: 120
               value: 6.283185307179586
-        - target: parameters.gravityDensity
-          keyframes:
-            - tick: 0
-              value: 0.6
-            - tick: 60
-              value: 2.0
-            - tick: 120
-              value: 0.6
   - effect: sphere
     start: 10
     duration: 100

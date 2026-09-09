@@ -2,8 +2,12 @@ package com.utophii.engine
 
 import com.utophii.api.EffectOptions
 import com.utophii.api.EffectHandle
+import com.utophii.api.EffectProvider
 import com.utophii.api.ParticleEffect
-import com.utophii.effects.*
+import com.utophii.effects.LorenzAttractorEffect
+import com.utophii.effects.ParametricEffect
+import com.utophii.effects.RK4TrajectoryEffect
+import com.utophii.effects.SphereEffect
 import org.bukkit.Location
 import org.bukkit.plugin.java.JavaPlugin
 import java.util.concurrent.atomic.AtomicInteger
@@ -12,20 +16,17 @@ import java.util.concurrent.atomic.AtomicInteger
 object FXEngine {
     private val primitiveEffects = linkedMapOf<String, ParticleEffect>()
     private val scriptedEffects = linkedMapOf<String, ParticleEffect>()
+    private val providers = mutableListOf<EffectProvider>()
     private var scheduler: EffectScheduler? = null
     private val scriptedIdCounter = AtomicInteger(1)
 
-    // initializes the engine and registers bundled primitive effects
+    // initializes the engine and registers the irreducible Kotlin primitive effects.
+    // All other shapes are formula primitives loaded from the effects/ YAML directory
     fun initialize(plugin: JavaPlugin) {
         scheduler = EffectScheduler(plugin)
         registerPrimitive(SphereEffect())
-        registerPrimitive(TorusEffect())
-        registerPrimitive(HelixEffect())
-        registerPrimitive(BeamEffect())
         registerPrimitive(RK4TrajectoryEffect())
         registerPrimitive(LorenzAttractorEffect())
-        registerPrimitive(SupershapeEffect())
-        registerPrimitive(SplineBeamEffect())
     }
 
     fun nextScriptedId(): Int = scriptedIdCounter.getAndIncrement()
@@ -33,6 +34,15 @@ object FXEngine {
     // registers or replaces a primitive effect used as an engine building block
     fun registerPrimitive(effect: ParticleEffect) {
         primitiveEffects[effect.name.lowercase()] = effect
+    }
+
+    // registers a custom effect from an external plugin; equivalent to registerPrimitive but named for the SPI
+    fun registerEffect(effect: ParticleEffect) = registerPrimitive(effect)
+
+    // registers an EffectProvider: every effect it contributes is made available to the registry and the DSL
+    fun registerProvider(provider: EffectProvider) {
+        providers.add(provider)
+        provider.provide().forEach(::registerPrimitive)
     }
 
     // registers or replaces a scripted effect loaded from configuration

@@ -1,4 +1,4 @@
-# Lissajous curve expressed as a formula (no Kotlin code).
+# Lissajous curve expressed as a formula
 # x = A sin(a t + delta), y = 0, z = B sin(b t)
 id: lissajous
 curve:
