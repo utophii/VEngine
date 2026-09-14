@@ -23,7 +23,7 @@ class VEngine : JavaPlugin() {
         cmd.setExecutor(handler)
         cmd.tabCompleter = handler
 
-        logger.info("VEngine enabled with ${loaded.size} scripted effects and ${FXEngine.effectNames().size} total registry entries.")
+        logger.info("VEngine enabled with ${loaded.size} YAML effects and ${FXEngine.effectNames().size} total registry entries.")
     }
 
     override fun onDisable() {
@@ -33,7 +33,7 @@ class VEngine : JavaPlugin() {
     fun reload() {
         applyConfig()
         val loaded = yamlEffectLoader.loadAll()
-        logger.info("VEngine effects reloaded: ${loaded.size} scripted effects available.")
+        logger.info("VEngine effects reloaded: ${loaded.size} YAML effects available.")
     }
 
     // reads plugin configuration and applies view-distance culling to the active scheduler
@@ -60,6 +60,10 @@ class VEngine : JavaPlugin() {
         saveIfMissing("effects/lissajous.yml")
         saveIfMissing("effects/rosette.yml")
         saveIfMissing("effects/torus_knot.yml")
+        saveIfMissing("effects/helix.yml")
+        saveIfMissing("effects/supershape.yml")
+        saveIfMissing("effects/beam.yml")
+        saveIfMissing("effects/spline_beam.yml")
     }
 
     private fun saveIfMissing(path: String) {

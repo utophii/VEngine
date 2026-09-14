@@ -3,8 +3,10 @@ package com.utophii.api
 import com.utophii.engine.FXEngine
 import com.utophii.effects.ParamRange
 import com.utophii.effects.ParametricEffect
+import com.utophii.math.EasingType
 import com.utophii.math.MathUtils
 import com.utophii.modifiers.ColorModifier
+import com.utophii.modifiers.MotionModifier
 import com.utophii.modifiers.RotationModifier
 import com.utophii.modifiers.TurbulenceModifier
 import com.utophii.modifiers.VortexModifier
@@ -37,11 +39,13 @@ annotation class VEngineDsl
  * @return handle to control the spawned effect, or null when the effect is not registered
  */
 fun Location.playEffect(name: String, config: EffectConfig.() -> Unit = {}): EffectHandle? {
-    val options = EffectConfig().apply(config).build()
-    return FXEngine.play(name, this, options)
+    val effectConfig = EffectConfig().apply(config)
+    val options = effectConfig.build()
+    val resolved = effectConfig.withAbsoluteMotion(options, toVector())
+    return FXEngine.play(name, this, resolved)
 }
 
-// typesafe builder for all [EffectOptions] rendering and transform fields
+// typesafe builder for all EffectOptions rendering and transform fields
 @VEngineDsl
 class EffectConfig {
     private val builder = EffectOptions.builder()
@@ -83,6 +87,33 @@ class EffectConfig {
 
     fun modifiers(block: ModifierConfig.() -> Unit) {
         builder.modifiers(ModifierConfig().apply(block).build())
+    }
+
+    // glides the whole effect from its spawn point to this absolute world position within ticks
+    // chain multiple calls to travel through several coordinates; the effect holds at the last one
+    fun moveTo(
+        target: Location,
+        ticks: Long,
+        easing: EasingType = MotionModifier.DEFAULT_EASING,
+    ) {
+        absoluteTargets += MotionModifier.MotionLeg(target.toVector(), ticks.toDouble(), easing)
+    }
+
+    private val absoluteTargets = mutableListOf<MotionModifier.MotionLeg>()
+
+    // converts absolute moveTo targets into a spawn-relative motion modifier; returns null when unused
+    internal fun absoluteMotion(origin: Vector): MotionModifier? {
+        if (absoluteTargets.isEmpty()) {
+            return null
+        }
+        val legs = absoluteTargets.map { leg -> leg.copy(offset = leg.offset.clone().subtract(origin)) }
+        return MotionModifier(legs)
+    }
+
+    // appends the absolute motion modifier (when configured) to already built options
+    internal fun withAbsoluteMotion(options: EffectOptions, origin: Vector): EffectOptions {
+        val motion = absoluteMotion(origin) ?: return options
+        return options.toBuilder().modifiers(options.modifiers + motion).build()
     }
 
     // adds a single effect-specific numeric parameter
@@ -145,10 +176,63 @@ class ModifierConfig {
         modifiers += ColorModifier(from, to, periodTicks)
     }
 
+    // moves the whole effect along a spawn-relative waypoint path
+    //
+    //     modifiers {
+    //         motion(mode = MotionModifier.Mode.PING_PONG) {
+    //             to(x = 5.0, y = 0.0, z = 0.0, ticks = 40L)
+    //             to(x = 5.0, y = 3.0, z = 0.0, ticks = 20L, easing = EasingType.EASE_OUT_CUBIC)
+    //         }
+    //     }
+    fun motion(
+        mode: MotionModifier.Mode = MotionModifier.Mode.HOLD,
+        path: MotionPath.() -> Unit,
+    ) {
+        modifiers += MotionModifier(MotionPath().apply(path).buildLegs(), mode)
+    }
+
+    // single-hop convenience: glide to the spawn-relative offset (x, y, z) within ticks
+    fun motionTo(
+        x: Double,
+        y: Double,
+        z: Double,
+        ticks: Long,
+        easing: EasingType = MotionModifier.DEFAULT_EASING,
+        mode: MotionModifier.Mode = MotionModifier.Mode.HOLD,
+    ) {
+        modifiers += MotionModifier.to(Vector(x, y, z), ticks, easing, mode)
+    }
+
     // appends a custom modifier implementation
     fun add(modifier: EffectModifier) = modifiers.add(modifier)
 
     fun build(): List<EffectModifier> = modifiers.toList()
+}
+
+// typesafe builder for a multi-leg motion path; every [to] adds one waypoint relative to the spawn point
+@VEngineDsl
+class MotionPath {
+    private val legs = mutableListOf<MotionModifier.MotionLeg>()
+
+    fun to(
+        x: Double,
+        y: Double,
+        z: Double,
+        ticks: Long,
+        easing: EasingType = MotionModifier.DEFAULT_EASING,
+    ) {
+        legs += MotionModifier.MotionLeg(Vector(x, y, z), ticks.toDouble(), easing)
+    }
+
+    fun to(
+        offset: Vector,
+        ticks: Long,
+        easing: EasingType = MotionModifier.DEFAULT_EASING,
+    ) {
+        legs += MotionModifier.MotionLeg(offset.clone(), ticks.toDouble(), easing)
+    }
+
+    fun buildLegs(): List<MotionModifier.MotionLeg> = legs.toList()
 }
 
 /**
@@ -171,7 +255,8 @@ class ModifierConfig {
  */
 fun Location.playParametric(name: String = "parametric", config: ParametricConfig.() -> Unit): EffectHandle? {
     val spec = ParametricConfig().apply(config)
-    return spec.buildEffect(name).play(this, spec.options)
+    val options = spec.withAbsoluteMotion(toVector())
+    return spec.buildEffect(name).play(this, options)
 }
 
 // configures a user-defined parametric formula effect (curve or surface) plus its rendering options
@@ -247,6 +332,10 @@ class ParametricConfig {
 
     val options: EffectOptions
         get() = optionsConfig.build()
+
+    // appends the absolute moveTo motion (configured inside render {}) resolved against the spawn origin
+    internal fun withAbsoluteMotion(origin: Vector): EffectOptions =
+        optionsConfig.withAbsoluteMotion(optionsConfig.build(), origin)
 
     internal fun buildEffect(effectName: String = "parametric"): ParametricEffect {
         val variableCount = variableNames.size

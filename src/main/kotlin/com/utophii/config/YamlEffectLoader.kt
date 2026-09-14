@@ -14,6 +14,7 @@ import com.utophii.engine.FXEngine
 import com.utophii.math.EasingType
 import com.utophii.math.ExpressionEvaluator
 import com.utophii.math.MathUtils
+import com.utophii.modifiers.MotionModifier
 import com.utophii.modifiers.RotationModifier
 import com.utophii.modifiers.TurbulenceModifier
 import com.utophii.modifiers.VortexModifier
@@ -42,17 +43,31 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         FXEngine.clearScripted()
         FXEngine.clearParametricPrimitives()
 
-        val loaded = effectsDirectory()
+        val parsedFiles = effectsDirectory()
             .listFiles { file -> file.isFile && file.extension.equals(YAML_EXTENSION, ignoreCase = true) }
             ?.sortedBy { file -> file.name }
-            ?.mapNotNull(::load)
+            ?.mapNotNull { file -> readRaw(file)?.let { raw -> file to raw } }
             ?: emptyList()
 
-        loaded.forEach { effect ->
-            if (effect is ParametricEffect) {
+        val loaded = mutableListOf<ParticleEffect>()
+
+        // register every formula atom so scripted layers can reference them regardless of file names
+        parsedFiles.forEach { (file, raw) ->
+            if (isParametric(raw)) {
+                val effect = parseParametric(effectId(raw, file), raw, file.name) ?: return@forEach
                 FXEngine.registerPrimitive(effect)
-            } else {
+                loaded += effect
+            }
+        }
+
+        // layered scripted effects; all YAML atoms are guaranteed to be resolvable now
+        parsedFiles.forEach { (file, raw) ->
+            if (!isParametric(raw)) {
+                val duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS)
+                    ?: DEFAULT_DURATION_TICKS
+                val effect = loadScripted(effectId(raw, file), duration, raw, file.name) ?: return@forEach
                 FXEngine.registerScripted(effect)
+                loaded += effect
             }
         }
         return loaded
@@ -60,15 +75,20 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
 
     // loads one YAML effect file into a runtime effect
     fun load(file: File): ParticleEffect? {
-        val raw = file.inputStream().use { stream -> yaml.load<Map<String, Any?>>(stream) } ?: return null
-        val id = raw[ID_KEY]?.toString()?.takeIf(String::isNotBlank) ?: file.nameWithoutExtension
+        val raw = readRaw(file) ?: return null
         val duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS) ?: DEFAULT_DURATION_TICKS
         return if (isParametric(raw)) {
-            parseParametric(id, raw, file.name)
+            parseParametric(effectId(raw, file), raw, file.name)
         } else {
-            loadScripted(id, duration, raw, file.name)
+            loadScripted(effectId(raw, file), duration, raw, file.name)
         }
     }
+
+    private fun readRaw(file: File): Map<String, Any?>? =
+        file.inputStream().use { stream -> yaml.load<Map<String, Any?>>(stream) }
+
+    private fun effectId(raw: Map<String, Any?>, file: File): String =
+        raw[ID_KEY]?.toString()?.takeIf(String::isNotBlank) ?: file.nameWithoutExtension
 
     // builds a parametric formula effect from a `curve`/`surface` YAML block
     private fun parseParametric(id: String, raw: Map<String, Any?>, fileName: String): ParametricEffect? {
@@ -287,9 +307,37 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
                     coreRadius = node[CORE_RADIUS_KEY].number() ?: DEFAULT_VORTEX_CORE_RADIUS,
                     vortexStrength = node[STRENGTH_KEY].number() ?: DEFAULT_VORTEX_STRENGTH,
                 )
+                MOTION_MODIFIER -> parseMotionModifier(node)
                 else -> null
             }
         }
+    }
+
+    // parses a motion modifier: the whole effect glides along spawn-relative waypoints over time
+    private fun parseMotionModifier(node: Map<*, *>): MotionModifier? {
+        val path = node[PATH_KEY] as? List<*> ?: return null
+        val defaultEasing = node[EASING_KEY]?.toString()?.let(EasingType::fromString)
+            ?: MotionModifier.DEFAULT_EASING
+        val legs = path.mapNotNull { legNode ->
+            val leg = legNode as? Map<*, *> ?: return@mapNotNull null
+            val ticks = leg[TICKS_KEY].number()?.takeIf { it > 0.0 } ?: return@mapNotNull null
+            val offset = Vector(
+                leg[X_KEY].number() ?: 0.0,
+                leg[Y_KEY].number() ?: 0.0,
+                leg[Z_KEY].number() ?: 0.0,
+            )
+            val easing = leg[EASING_KEY]?.toString()?.let(EasingType::fromString) ?: defaultEasing
+            MotionModifier.MotionLeg(offset, ticks, easing)
+        }
+        if (legs.isEmpty()) {
+            return null
+        }
+        val mode = when (node[MODE_KEY]?.toString()?.trim()?.lowercase()?.replace('-', '_')) {
+            MODE_LOOP -> MotionModifier.Mode.LOOP
+            MODE_PING_PONG -> MotionModifier.Mode.PING_PONG
+            else -> MotionModifier.Mode.HOLD
+        }
+        return MotionModifier(legs, mode)
     }
 
     private fun parseAnimation(raw: Any?): NumericAnimation {
@@ -460,6 +508,12 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private val DEFAULT_ROTATION_AXIS = Vector(0.0, 1.0, 0.0)
         private val DEFAULT_ROTATION_PIVOT_OFFSET = Vector(0.0, 0.0, 0.0)
         private const val VORTEX_MODIFIER = "vortex"
+        private const val MOTION_MODIFIER = "motion"
+        private const val PATH_KEY = "path"
+        private const val TICKS_KEY = "ticks"
+        private const val MODE_KEY = "mode"
+        private const val MODE_LOOP = "loop"
+        private const val MODE_PING_PONG = "ping_pong"
         private const val CORE_RADIUS_KEY = "coreRadius"
         private const val DEFAULT_VORTEX_CORE_RADIUS = 1.2
         private const val DEFAULT_VORTEX_STRENGTH = 0.15

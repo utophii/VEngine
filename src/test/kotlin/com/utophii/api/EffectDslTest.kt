@@ -1,6 +1,8 @@
 package com.utophii.api
 
+import com.utophii.math.EasingType
 import com.utophii.modifiers.ColorModifier
+import com.utophii.modifiers.MotionModifier
 import com.utophii.modifiers.RotationModifier
 import com.utophii.modifiers.TurbulenceModifier
 import com.utophii.modifiers.VortexModifier
@@ -11,7 +13,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-// verifies the type-safe DSL configures EffectOptions and modifier chains without a running server
+// Verifies the type-safe DSL configures EffectOptions and modifier chains without a running server.
 class EffectDslTest {
 
     private fun assertColor(actual: Color?, expected: Color) {
@@ -149,5 +151,83 @@ class EffectDslTest {
         val positions = effect.calculate(org.bukkit.Location(null, 0.0, 0.0, 0.0), spec.options, 0.0)
         assertEquals(8, positions.size)
         assertEquals(4.0, positions[0].x, 1.0E-4)
+    }
+
+    @Test
+    fun `motion path builds a motion modifier with waypoints and mode`() {
+        val opts = EffectConfig().apply {
+            modifiers {
+                motion(mode = MotionModifier.Mode.LOOP) {
+                    to(x = 10.0, y = 0.0, z = 0.0, ticks = 40L)
+                    to(Vector(10.0, 5.0, 0.0), ticks = 20L, easing = EasingType.LINEAR)
+                }
+            }
+        }.build()
+
+        val motion = opts.modifiers.filterIsInstance<MotionModifier>().single()
+        assertEquals(MotionModifier.Mode.LOOP, motion.mode)
+        assertEquals(2, motion.legs.size)
+        assertEquals(10.0, motion.legs[0].offset.x)
+        assertEquals(40.0, motion.legs[0].ticks)
+        assertEquals(5.0, motion.legs[1].offset.y)
+        assertEquals(EasingType.LINEAR, motion.legs[1].easing)
+        assertEquals(60.0, motion.totalTicks)
+    }
+
+    @Test
+    fun `motion to convenience creates a single hold leg`() {
+        val opts = EffectConfig().apply {
+            modifiers { motionTo(x = 3.0, y = -1.0, z = 2.0, ticks = 30L) }
+        }.build()
+
+        val motion = opts.modifiers.filterIsInstance<MotionModifier>().single()
+        assertEquals(MotionModifier.Mode.HOLD, motion.mode)
+        assertEquals(1, motion.legs.size)
+        assertEquals(3.0, motion.legs[0].offset.x)
+        assertEquals(-1.0, motion.legs[0].offset.y)
+        assertEquals(2.0, motion.legs[0].offset.z)
+    }
+
+    @Test
+    fun `move to resolves absolute targets against the spawn origin`() {
+        val config = EffectConfig().apply {
+            moveTo(org.bukkit.Location(null, 110.0, 64.0, 100.0), ticks = 40L)
+            moveTo(org.bukkit.Location(null, 100.0, 74.0, 100.0), ticks = 20L)
+        }
+
+        // spawned at (100, 64, 100): legs become (+10, 0, 0) then (0, +10, 0)
+        val options = config.withAbsoluteMotion(config.build(), Vector(100.0, 64.0, 100.0))
+        val motion = options.modifiers.filterIsInstance<MotionModifier>().single()
+
+        assertEquals(10.0, motion.legs[0].offset.x, 1.0E-9)
+        assertEquals(0.0, motion.legs[0].offset.y, 1.0E-9)
+        assertEquals(0.0, motion.legs[1].offset.x, 1.0E-9)
+        assertEquals(10.0, motion.legs[1].offset.y, 1.0E-9)
+    }
+
+    @Test
+    fun `options stay untouched when no absolute motion is configured`() {
+        val config = EffectConfig().apply { scale(2.0) }
+        val built = config.build()
+
+        val resolved = config.withAbsoluteMotion(built, Vector(1.0, 2.0, 3.0))
+
+        assertTrue(resolved === built)
+        assertTrue(resolved.modifiers.isEmpty())
+    }
+
+    @Test
+    fun `parametric config forwards absolute motion resolution`() {
+        val spec = ParametricConfig().apply {
+            x("t"); y("0"); z("0")
+            render {
+                moveTo(org.bukkit.Location(null, 15.0, 64.0, 0.0), ticks = 50L)
+            }
+        }
+
+        val options = spec.withAbsoluteMotion(Vector(10.0, 64.0, 0.0))
+        val motion = options.modifiers.filterIsInstance<MotionModifier>().single()
+        assertEquals(5.0, motion.legs[0].offset.x, 1.0E-9)
+        assertEquals(50.0, motion.legs[0].ticks)
     }
 }
