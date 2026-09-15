@@ -21,6 +21,8 @@ import org.bukkit.util.Vector
 * @property speed : Speed/extra particle parameter (extra)
 * @property scale : Geometric scale
 * @property rotationYaw : Rotation around the Y-axis in radians
+* @property rotationPitch : Rotation around the X-axis in radians (tilts the effect forward/backward)
+* @property rotationRoll : Rotation around the Z-axis in radians (tilts the effect sideways)
 * @property tiltAxis : Arbitrary Tilt axis
 * @property tiltAngle tilt angle in radians
 * @property duration effect duration in ticks
@@ -41,6 +43,8 @@ data class EffectOptions(
     val speed: Double = DEFAULT_PARTICLE_SPEED,
     val scale: Double = DEFAULT_SCALE,
     val rotationYaw: Double = DEFAULT_ROTATION_YAW,
+    val rotationPitch: Double = DEFAULT_ROTATION_PITCH,
+    val rotationRoll: Double = DEFAULT_ROTATION_ROLL,
     val tiltAxis: Vector? = null,
     val tiltAngle: Double = DEFAULT_TILT_ANGLE,
     val duration: Long = DEFAULT_DURATION_TICKS,
@@ -56,6 +60,8 @@ data class EffectOptions(
         .speed(speed)
         .scale(scale)
         .rotationYaw(rotationYaw)
+        .rotationPitch(rotationPitch)
+        .rotationRoll(rotationRoll)
         .tiltAngle(tiltAngle)
         .duration(duration)
         .receivers(receivers)
@@ -81,6 +87,8 @@ data class EffectOptions(
         private var speed: Double = DEFAULT_PARTICLE_SPEED
         private var scale: Double = DEFAULT_SCALE
         private var rotationYaw: Double = DEFAULT_ROTATION_YAW
+        private var rotationPitch: Double = DEFAULT_ROTATION_PITCH
+        private var rotationRoll: Double = DEFAULT_ROTATION_ROLL
         private var tiltAxis: Vector? = null
         private var tiltAngle: Double = DEFAULT_TILT_ANGLE
         private var duration: Long = DEFAULT_DURATION_TICKS
@@ -102,6 +110,8 @@ data class EffectOptions(
         fun speed(value: Double) = apply { speed = value }
         fun scale(value: Double) = apply { scale = value }
         fun rotationYaw(value: Double) = apply { rotationYaw = value }
+        fun rotationPitch(value: Double) = apply { rotationPitch = value }
+        fun rotationRoll(value: Double) = apply { rotationRoll = value }
         fun tiltAxis(value: Vector) = apply { tiltAxis = value.clone() }
         fun tiltAngle(value: Double) = apply { tiltAngle = value }
         fun duration(value: Long) = apply { duration = value }
@@ -124,6 +134,8 @@ data class EffectOptions(
             speed = speed,
             scale = scale,
             rotationYaw = rotationYaw,
+            rotationPitch = rotationPitch,
+            rotationRoll = rotationRoll,
             tiltAxis = tiltAxis?.clone(),
             tiltAngle = tiltAngle,
             duration = duration,
@@ -136,6 +148,8 @@ data class EffectOptions(
     companion object {
         const val DEFAULT_SCALE = 1.0
         const val DEFAULT_ROTATION_YAW = 0.0
+        const val DEFAULT_ROTATION_PITCH = 0.0
+        const val DEFAULT_ROTATION_ROLL = 0.0
         const val DEFAULT_TILT_ANGLE = 0.0
         const val DEFAULT_DURATION_TICKS = 1L
         const val DEFAULT_DUST_SIZE = 1.0f

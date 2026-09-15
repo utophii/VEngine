@@ -37,7 +37,9 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
 
     // loads and registers all YAML effects from plugins/VEngine/effects
     // parametric formula effects are atoms and are registered as primitives (so they can be used as
-    // layer bases too); layered scripted effects are registered separately
+    // layer bases too); layered scripted effects are registered separately.
+    // Loading runs in two passes: formula atoms are parsed and registered first, because scripted
+    // layers resolve their base primitives at parse time and would otherwise race file order
     fun loadAll(): List<ParticleEffect> {
         ensureDirectories()
         FXEngine.clearScripted()
@@ -227,6 +229,8 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         parseParticle(raw[PARTICLE_KEY])?.let(builder::particle)
         raw[SCALE_KEY]?.number()?.let(builder::scale)
         raw[ROTATION_YAW_KEY]?.number()?.let(builder::rotationYaw)
+        raw[ROTATION_PITCH_KEY]?.number()?.let(builder::rotationPitch)
+        raw[ROTATION_ROLL_KEY]?.number()?.let(builder::rotationRoll)
         raw[DURATION_KEY]?.number()?.toLong()?.let(builder::duration)
 
         parseColor(raw[COLOR_KEY])?.let(builder::color)
@@ -463,6 +467,8 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private const val COLOR_KEY = "color"
         private const val SCALE_KEY = "scale"
         private const val ROTATION_YAW_KEY = "rotationYaw"
+        private const val ROTATION_PITCH_KEY = "rotationPitch"
+        private const val ROTATION_ROLL_KEY = "rotationRoll"
         private const val TILT_AXIS_KEY = "tiltAxis"
         private const val TILT_ANGLE_KEY = "tiltAngle"
         private const val PARAMETERS_KEY = "parameters"

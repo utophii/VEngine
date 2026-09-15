@@ -197,9 +197,16 @@ object MathUtils {
         return Vector(curlX, curlY, curlZ)
     }
 
-    // applies scale, Y rotation, arbitrary tilt, and center translation
-    fun transform(local: Vector, center: Location, scale: Double, rotationYaw: Double, tiltAxis: Vector?, tiltAngle: Double): Location {
+    // applies scale, euler rotation (roll, pitch, yaw), arbitrary tilt, and center translation
+    // euler order: roll (Z) first, then pitch (X), then yaw (Y), so an effect pitches/rolls in its own local frame
+    fun transform(local: Vector, center: Location, scale: Double, rotationYaw: Double, tiltAxis: Vector?, tiltAngle: Double, rotationPitch: Double = 0.0, rotationRoll: Double = 0.0): Location {
         val transformed = local.clone().multiply(scale)
+        if (rotationRoll != 0.0) {
+            rotateZInPlace(transformed, rotationRoll)
+        }
+        if (rotationPitch != 0.0) {
+            rotateXInPlace(transformed, rotationPitch)
+        }
         if (rotationYaw != 0.0) {
             rotateYInPlace(transformed, rotationYaw)
         }
@@ -212,18 +219,37 @@ object MathUtils {
         return center.clone().add(transformed)
     }
 
-    // non-allocating transform: writes scale, Y rotation, arbitrary tilt, and center translation directly into output
+    // non-allocating transform: writes scale, euler rotation, arbitrary tilt, and center translation directly into output
     // used by the pooled render buffer so each frame allocates no per-particle Location
-    fun transformInto(output: Location, local: Vector, center: Location, scale: Double, rotationYaw: Double, tiltAxis: Vector?, tiltAngle: Double) {
-        transformInto(output, local.x, local.y, local.z, center, scale, rotationYaw, tiltAxis, tiltAngle)
+    fun transformInto(output: Location, local: Vector, center: Location, scale: Double, rotationYaw: Double, tiltAxis: Vector?, tiltAngle: Double, rotationPitch: Double = 0.0, rotationRoll: Double = 0.0) {
+        transformInto(output, local.x, local.y, local.z, center, scale, rotationYaw, tiltAxis, tiltAngle, rotationPitch, rotationRoll)
     }
 
     // component-based non-allocating transform; avoids constructing an intermediate Vector for each particle
-    fun transformInto(output: Location, x: Double, y: Double, z: Double, center: Location, scale: Double, rotationYaw: Double, tiltAxis: Vector?, tiltAngle: Double) {
+    // euler order: roll (Z) first, then pitch (X), then yaw (Y), then the arbitrary tilt axis
+    fun transformInto(output: Location, x: Double, y: Double, z: Double, center: Location, scale: Double, rotationYaw: Double, tiltAxis: Vector?, tiltAngle: Double, rotationPitch: Double = 0.0, rotationRoll: Double = 0.0) {
         // scaled = local * scale: applied before rotation
         var sx = x * scale
         var sy = y * scale
         var sz = z * scale
+        if (rotationRoll != 0.0) {
+            val cosR = cos(rotationRoll)
+            val sinR = sin(rotationRoll)
+            // x' = x * cos - y * sin, y' = x * sin + y * cos: Z-axis rotation in the XY plane
+            val originalX = sx
+            val originalY = sy
+            sx = originalX * cosR - originalY * sinR
+            sy = originalX * sinR + originalY * cosR
+        }
+        if (rotationPitch != 0.0) {
+            val cosP = cos(rotationPitch)
+            val sinP = sin(rotationPitch)
+            // y' = y * cos - z * sin, z' = y * sin + z * cos: X-axis rotation in the YZ plane
+            val originalY = sy
+            val originalZ = sz
+            sy = originalY * cosP - originalZ * sinP
+            sz = originalY * sinP + originalZ * cosP
+        }
         if (rotationYaw != 0.0) {
             val cosY = cos(rotationYaw)
             val sinY = sin(rotationYaw)
@@ -303,6 +329,22 @@ object MathUtils {
         vector.x = originalX * cos(theta) - originalZ * sin(theta)
         // z' = x * sin(theta) + z * cos(theta): Y-axis rotation in the XZ plane
         vector.z = originalX * sin(theta) + originalZ * cos(theta)
+    }
+
+    // x-axis rotation (pitch) in the YZ plane, matching the component math of transformInto
+    private fun rotateXInPlace(vector: Vector, theta: Double) {
+        val originalY = vector.y
+        val originalZ = vector.z
+        vector.y = originalY * cos(theta) - originalZ * sin(theta)
+        vector.z = originalY * sin(theta) + originalZ * cos(theta)
+    }
+
+    // z-axis rotation (roll) in the XY plane, matching the component math of transformInto
+    private fun rotateZInPlace(vector: Vector, theta: Double) {
+        val originalX = vector.x
+        val originalY = vector.y
+        vector.x = originalX * cos(theta) - originalY * sin(theta)
+        vector.y = originalX * sin(theta) + originalY * cos(theta)
     }
 
     private fun valueNoise(x: Double, y: Double, z: Double): Double {

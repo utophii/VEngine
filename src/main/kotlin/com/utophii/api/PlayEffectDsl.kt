@@ -45,7 +45,7 @@ fun Location.playEffect(name: String, config: EffectConfig.() -> Unit = {}): Eff
     return FXEngine.play(name, this, resolved)
 }
 
-// typesafe builder for all EffectOptions rendering and transform fields
+// typesafe builder for all [EffectOptions] rendering and transform fields
 @VEngineDsl
 class EffectConfig {
     private val builder = EffectOptions.builder()
@@ -73,6 +73,19 @@ class EffectConfig {
     fun scale(value: Double) = builder.scale(value)
 
     fun rotationYaw(radians: Double) = builder.rotationYaw(radians)
+
+    // tilt around the X-axis in radians: leans the effect forward/backward
+    fun rotationPitch(radians: Double) = builder.rotationPitch(radians)
+
+    // tilt around the Z-axis in radians: leans the effect sideways
+    fun rotationRoll(radians: Double) = builder.rotationRoll(radians)
+
+    // sets yaw, pitch and roll together (radians); omitted angles keep their previous values
+    fun orientation(yaw: Double = 0.0, pitch: Double = 0.0, roll: Double = 0.0) {
+        builder.rotationYaw(yaw)
+        builder.rotationPitch(pitch)
+        builder.rotationRoll(roll)
+    }
 
     fun tiltAxis(axis: Vector) = builder.tiltAxis(axis)
 
@@ -191,7 +204,7 @@ class ModifierConfig {
         modifiers += MotionModifier(MotionPath().apply(path).buildLegs(), mode)
     }
 
-    // single-hop convenience: glide to the spawn-relative offset (x, y, z) within ticks
+    // single-hop convenience: glide to the spawn-relative offset (x, y, z) within [ticks]
     fun motionTo(
         x: Double,
         y: Double,

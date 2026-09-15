@@ -103,7 +103,7 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
         yaw: Double = opts.rotationYaw,
     ) {
         val out = buffer.location(index)
-        MathUtils.transformInto(out, x, y, z, center, opts.scale, yaw, opts.tiltAxis, opts.tiltAngle)
+        MathUtils.transformInto(out, x, y, z, center, opts.scale, yaw, opts.tiltAxis, opts.tiltAngle, opts.rotationPitch, opts.rotationRoll)
         applyModifiersInto(out, opts, time, context)
     }
 

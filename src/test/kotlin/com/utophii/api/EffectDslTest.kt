@@ -217,6 +217,35 @@ class EffectDslTest {
     }
 
     @Test
+    fun `orientation sets yaw pitch and roll together`() {
+        val opts = EffectConfig().apply {
+            orientation(yaw = 0.5, pitch = -0.25, roll = 1.0)
+        }.build()
+
+        assertEquals(0.5, opts.rotationYaw)
+        assertEquals(-0.25, opts.rotationPitch)
+        assertEquals(1.0, opts.rotationRoll)
+    }
+
+    @Test
+    fun `individual euler setters carry through to builder`() {
+        val opts = EffectConfig().apply {
+            rotationYaw(0.1)
+            rotationPitch(0.2)
+            rotationRoll(0.3)
+        }.build()
+
+        assertEquals(0.1, opts.rotationYaw)
+        assertEquals(0.2, opts.rotationPitch)
+        assertEquals(0.3, opts.rotationRoll)
+
+        val rebuilt = opts.toBuilder().build()
+        assertEquals(0.1, rebuilt.rotationYaw)
+        assertEquals(0.2, rebuilt.rotationPitch)
+        assertEquals(0.3, rebuilt.rotationRoll)
+    }
+
+    @Test
     fun `parametric config forwards absolute motion resolution`() {
         val spec = ParametricConfig().apply {
             x("t"); y("0"); z("0")

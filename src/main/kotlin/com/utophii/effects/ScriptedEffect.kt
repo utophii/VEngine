@@ -153,6 +153,8 @@ data class ScriptedLayer(
         // scale = layerScale * runtimeScale
         builder.scale(options.scale * runtime.scale)
         builder.rotationYaw(options.rotationYaw + runtime.rotationYaw)
+        builder.rotationPitch(options.rotationPitch + runtime.rotationPitch)
+        builder.rotationRoll(options.rotationRoll + runtime.rotationRoll)
 
         (runtime.tiltAxis ?: options.tiltAxis)?.let(builder::tiltAxis)
         val tiltAngle = if (runtime.tiltAxis != null) runtime.tiltAngle else options.tiltAngle + runtime.tiltAngle
@@ -216,6 +218,8 @@ data class NumericAnimation(
             when {
                 track.target.equals(SCALE_TARGET, ignoreCase = true) -> builder.scale(value)
                 track.target.equals(ROTATION_YAW_TARGET, ignoreCase = true) -> builder.rotationYaw(value)
+                track.target.equals(ROTATION_PITCH_TARGET, ignoreCase = true) -> builder.rotationPitch(value)
+                track.target.equals(ROTATION_ROLL_TARGET, ignoreCase = true) -> builder.rotationRoll(value)
                 track.target.equals(TILT_ANGLE_TARGET, ignoreCase = true) -> builder.tiltAngle(value)
                 track.target.startsWith(PARAMETER_TARGET_PREFIX, ignoreCase = true) -> {
                     val key = track.target.substring(PARAMETER_TARGET_PREFIX.length)
@@ -256,6 +260,8 @@ data class NumericAnimation(
 
         private const val SCALE_TARGET = "scale"
         private const val ROTATION_YAW_TARGET = "rotationYaw"
+        private const val ROTATION_PITCH_TARGET = "rotationPitch"
+        private const val ROTATION_ROLL_TARGET = "rotationRoll"
         private const val TILT_ANGLE_TARGET = "tiltAngle"
         private const val PARAMETER_TARGET_PREFIX = "parameters."
         private const val COLOR_RED_TARGET = "color.r"
