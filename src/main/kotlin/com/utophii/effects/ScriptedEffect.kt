@@ -72,7 +72,7 @@ class ScriptedEffect(
 
         val compositeId = "$name#${FXEngine.nextScriptedId()}"
         val composite = CompositeEffectHandle(compositeId, name, childHandles)
-        FXEngine.scheduler().registerHandle(composite)
+        FXEngine.scheduler().registerComposite(composite, totalDuration)
         return composite
     }
 

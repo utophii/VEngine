@@ -96,6 +96,17 @@ class EffectScheduler(private val plugin: JavaPlugin) {
         activeHandles[handle.id] = handle
     }
 
+    // registers a composite handle and automatically unregisters it after ttlTicks,
+    // so scripted effects that finished naturally do not linger in the active handle listing
+    fun registerComposite(handle: EffectHandle, ttlTicks: Long) {
+        activeHandles[handle.id] = handle
+        plugin.server.scheduler.runTaskLater(plugin, Runnable {
+            // any straggler children cancel themselves and leave the registry through their own callbacks
+            handle.cancel()
+            activeHandles.remove(handle.id)
+        }, ttlTicks.coerceAtLeast(MIN_COMPOSITE_TTL_TICKS))
+    }
+
     // stops a running effect by handle ID
     fun stop(id: String): Boolean {
         val handle = activeHandles[id] ?: activeHandles.entries.firstOrNull { it.key.equals(id, ignoreCase = true) }?.value
@@ -171,6 +182,7 @@ class EffectScheduler(private val plugin: JavaPlugin) {
     companion object {
         private const val INITIAL_DELAY_TICKS = 0L
         private const val FRAME_PERIOD_TICKS = 1L
+        private const val MIN_COMPOSITE_TTL_TICKS = 1L
         private const val UNINITIALIZED_FRAME_INDEX = -1L
         private const val DEFAULT_PARTICLE_COUNT = 1
         private const val DEFAULT_PARTICLE_OFFSET = 0.0
