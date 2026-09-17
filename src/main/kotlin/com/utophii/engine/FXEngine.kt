@@ -95,5 +95,6 @@ object FXEngine {
         scheduler = null
         clearScripted()
         primitiveEffects.clear()
+        providers.clear()
     }
 }
