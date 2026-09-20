@@ -28,9 +28,6 @@ dependencies {
     // Kotlin runtime
     implementation(kotlin("stdlib"))
 
-    // SnakeYAML for config
-    implementation("org.yaml:snakeyaml:2.4")
-
     // Adventure text minimessage
     implementation("net.kyori:adventure-text-minimessage:4.24.0")
 
