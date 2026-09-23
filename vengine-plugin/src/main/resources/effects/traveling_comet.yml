@@ -1,0 +1,51 @@
+id: traveling_comet
+duration: 240   # 12 seconds
+
+layers:
+  # comet head: a small dense flame sphere
+  - effect: sphere
+    duration: 240
+    particle: FLAME
+    count: 2
+    parameters:
+      radius: 0.4
+      points: 24
+    modifiers: &flight   # anchor: the shared flight path, reused by the trail layer below
+      - type: motion
+        mode: hold
+        easing: ease_in_out_sine        # default easing for legs without their own
+        path:
+          - {x: 8,  y: 1.5, z: 0, ticks: 60}                          # gentle take-off
+          - {x: 16, y: 3.0, z: 4, ticks: 60, easing: linear}          # steady cruise
+          - {x: 24, y: 0.5, z: 0, ticks: 40, easing: ease_out_cubic}  # soft touchdown
+
+  # spiral trail wrapped around the head, following the exact same path
+  # rotationRoll lays the (normally vertical) helix on its side, along the flight direction
+  - effect: helix
+    duration: 240
+    particle: END_ROD
+    count: 1
+    rotationRoll: 1.5708   # 90 degrees in radians: extends the helix along the X axis
+    parameters:
+      radius: 0.5
+      height: 2.0
+      turns: 4
+      points: 64
+    modifiers: *flight
+
+  # departure gate: a rosette that bobs up and down at the spawn point
+  - effect: rosette
+    duration: 240
+    particle: DUST
+    color: {r: 120, g: 80, b: 255}
+    dustSize: 1.2
+    parameters:
+      majorRadius: 1.2
+      minorRadius: 0.4
+      distance: 0.7
+    modifiers:
+      - type: motion
+        mode: ping_pong
+        easing: ease_in_out_sine
+        path:
+          - {x: 0, y: 2.5, z: 0, ticks: 50}
