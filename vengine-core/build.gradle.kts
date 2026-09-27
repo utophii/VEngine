@@ -23,9 +23,6 @@ dependencies {
     // Kotlin runtime
     implementation(kotlin("stdlib"))
 
-    // SnakeYAML for config
-    implementation("org.yaml:snakeyaml:2.4")
-
     // Safe math expression evaluator for user-defined parametric effects (no arbitrary code execution)
     implementation("net.objecthunter:exp4j:0.4.8")
 
