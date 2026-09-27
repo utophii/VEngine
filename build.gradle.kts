@@ -5,7 +5,7 @@ plugins {
 
 subprojects {
     group = "com.utophii"
-    version = "01-a"
+    version = "0.1.0"
 
     repositories {
         mavenCentral()
