@@ -1,6 +1,6 @@
 plugins {
     kotlin("jvm") version "2.3.0" apply false
-    id("com.gradleup.shadow") version "9.4.1" apply false
+    id("com.gradleup.shadow") version "9.6.1" apply false
 }
 
 subprojects {
