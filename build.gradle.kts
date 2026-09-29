@@ -10,6 +10,10 @@ subprojects {
     repositories {
         mavenCentral()
         maven("https://repo.papermc.io/repository/maven-public/")
+        maven {
+          name = "faststatsReleases"
+          url = uri("https://repo.faststats.dev/releases")
+        }
     }
 
     tasks.withType<Test> {

@@ -16,6 +16,7 @@ kotlin {
 dependencies {
     implementation(project(":vengine-core"))
     implementation(kotlin("stdlib"))
+    implementation("dev.faststats.metrics:bukkit:0.30.2")
 
     compileOnly("io.papermc.paper:paper-api:1.21.6-R0.1-SNAPSHOT")
 

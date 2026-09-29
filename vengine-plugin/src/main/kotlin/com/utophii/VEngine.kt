@@ -4,10 +4,24 @@ import com.utophii.commands.VEngineCommand
 import com.utophii.config.YamlEffectLoader
 import com.utophii.engine.EffectScheduler
 import com.utophii.engine.FXEngine
+import dev.faststats.ErrorTracker
+import dev.faststats.bukkit.BukkitContext
+import dev.faststats.data.Metric
 import org.bukkit.plugin.java.JavaPlugin
 
 class VEngine : JavaPlugin() {
     private lateinit var yamlEffectLoader: YamlEffectLoader
+
+    private val context = BukkitContext.Factory(this, "a98bb29a39e57b6d335a6b67b7402ff6")
+        .errorTrackerService(ErrorTracker.contextAware())
+        .metrics { factory ->
+            factory
+                .addMetric(Metric.number("worlds") { server.worlds.size })
+                .addMetric(Metric.number("plugins") { server.pluginManager.plugins.size })
+                .addMetric(Metric.number("players_online") { server.onlinePlayers.size })
+                .create()
+        }
+        .create()
 
     override fun onEnable() {
         FXEngine.initialize(this)
@@ -15,6 +29,8 @@ class VEngine : JavaPlugin() {
         yamlEffectLoader = YamlEffectLoader(this)
         yamlEffectLoader.ensureDirectories()
         saveBundledEffectExamples()
+        context.ready()
+
         val loaded = yamlEffectLoader.loadAll()
 
         val cmd = getCommand("vengine")
@@ -28,6 +44,7 @@ class VEngine : JavaPlugin() {
 
     override fun onDisable() {
         FXEngine.shutdown()
+        context.shutdown()
     }
 
     fun reload() {
