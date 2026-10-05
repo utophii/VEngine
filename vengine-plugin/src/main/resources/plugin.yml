@@ -7,6 +7,8 @@ prefix: vengine
 api-version: '1.21.6'
 load: STARTUP
 
+softdepend: [PlaceholderAPI]
+
 commands:
   vengine:
     description: VEngine root command

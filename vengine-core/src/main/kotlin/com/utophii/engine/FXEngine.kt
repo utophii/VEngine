@@ -86,6 +86,12 @@ object FXEngine {
     // returns all active running effect handles
     fun activeHandles(): List<EffectHandle> = scheduler?.activeHandles() ?: emptyList()
 
+    // spawned effects that placeholders should count: one entry per play(), not per internal layer
+    fun runningEffects(): List<EffectScheduler.RunningEffect> = scheduler?.runningEffects() ?: emptyList()
+
+    // configured particle view distance, or the default when the engine is not initialized
+    fun viewDistance(): Double = scheduler?.viewDistance ?: EffectScheduler.DEFAULT_VIEW_DISTANCE_BLOCKS
+
     // returns the active scheduler or fails if the plugin was not initialized
     fun scheduler(): EffectScheduler = requireNotNull(scheduler) { "FXEngine is not initialized" }
 

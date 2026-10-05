@@ -72,7 +72,8 @@ class ScriptedEffect(
 
         val compositeId = "$name#${FXEngine.nextScriptedId()}"
         val composite = CompositeEffectHandle(compositeId, name, childHandles)
-        FXEngine.scheduler().registerComposite(composite, totalDuration)
+        // track the composite only: layer tasks are internal and must not inflate placeholder counts
+        FXEngine.scheduler().registerComposite(composite, totalDuration, stableCenter)
         return composite
     }
 

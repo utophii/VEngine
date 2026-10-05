@@ -19,6 +19,7 @@ dependencies {
     implementation("dev.faststats.metrics:bukkit:0.30.2")
 
     compileOnly("io.papermc.paper:paper-api:1.21.6-R0.1-SNAPSHOT")
+    compileOnly("me.clip:placeholderapi:2.12.3")
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")

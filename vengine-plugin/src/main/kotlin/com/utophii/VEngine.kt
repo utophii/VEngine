@@ -4,6 +4,7 @@ import com.utophii.commands.VEngineCommand
 import com.utophii.config.YamlEffectLoader
 import com.utophii.engine.EffectScheduler
 import com.utophii.engine.FXEngine
+import com.utophii.placeholders.PlaceholderService
 import dev.faststats.ErrorTracker
 import dev.faststats.bukkit.BukkitContext
 import dev.faststats.data.Metric
@@ -11,6 +12,7 @@ import org.bukkit.plugin.java.JavaPlugin
 
 class VEngine : JavaPlugin() {
     private lateinit var yamlEffectLoader: YamlEffectLoader
+    private val placeholders = PlaceholderService(this)
 
     private val context = BukkitContext.Factory(this, "a98bb29a39e57b6d335a6b67b7402ff6")
         .errorTrackerService(ErrorTracker.contextAware())
@@ -38,11 +40,13 @@ class VEngine : JavaPlugin() {
         val handler = VEngineCommand(this)
         cmd.setExecutor(handler)
         cmd.tabCompleter = handler
+        placeholders.hook()
 
         logger.info("VEngine enabled with ${loaded.size} YAML effects and ${FXEngine.effectNames().size} total registry entries.")
     }
 
     override fun onDisable() {
+        placeholders.shutdown()
         FXEngine.shutdown()
         context.shutdown()
     }

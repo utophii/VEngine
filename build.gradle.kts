@@ -14,6 +14,10 @@ subprojects {
           name = "faststatsReleases"
           url = uri("https://repo.faststats.dev/releases")
         }
+        maven {
+          name = "placeholderapi"
+          url = uri("https://repo.extendedclip.com/releases/")
+        }
     }
 
     tasks.withType<Test> {

@@ -22,6 +22,7 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
         return FXEngine.scheduler().scheduleFrames(
             effectName = name,
             durationTicks = opts.duration.coerceAtLeast(MIN_DURATION_TICKS),
+            origin = stableCenter,
             calculate = { time ->
                 val buffer = ParticleBufferPool.obtain(stableCenter)
                 try {

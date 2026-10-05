@@ -16,6 +16,7 @@ class EffectScheduler(private val plugin: JavaPlugin) {
 
     private val tasks: MutableSet<BukkitTask> = ConcurrentHashMap.newKeySet()
     private val activeHandles = ConcurrentHashMap<String, EffectHandle>()
+    private val running = ConcurrentHashMap<String, RunningEffect>()
     private val idCounter = AtomicInteger(1)
 
     // view-distance culling radius in blocks; particles are only sent to players within this radius of the particle location
@@ -36,6 +37,7 @@ class EffectScheduler(private val plugin: JavaPlugin) {
         calculate: (Double) -> T,
         render: (Double, T) -> Unit,
         release: ((T) -> Unit)? = null,
+        origin: Location? = null,
     ): EffectHandle {
         val handleId = "$effectName#${idCounter.getAndIncrement()}"
         var tick = 0L
@@ -45,7 +47,7 @@ class EffectScheduler(private val plugin: JavaPlugin) {
         val handle = SimpleEffectHandle(handleId, effectName) {
             task.cancel()
             tasks.remove(task)
-            activeHandles.remove(handleId)
+            forget(handleId)
         }
 
         task = plugin.server.scheduler.runTaskTimer(plugin, Runnable {
@@ -88,6 +90,7 @@ class EffectScheduler(private val plugin: JavaPlugin) {
 
         tasks.add(task)
         activeHandles[handleId] = handle
+        track(handle, origin)
         return handle
     }
 
@@ -96,14 +99,16 @@ class EffectScheduler(private val plugin: JavaPlugin) {
         activeHandles[handle.id] = handle
     }
 
-    // registers a composite handle and automatically unregisters it after [ttlTicks],
-    // so scripted effects that finished naturally do not linger in the active handle listing
-    fun registerComposite(handle: EffectHandle, ttlTicks: Long) {
+    // registers a composite handle and automatically unregisters it after ttlTicks,
+    // so scripted effects that finished naturally do not linger in the active handle listing.
+    // origin is the spawn point placeholders use; omit it for bookkeeping handles that should stay invisible
+    fun registerComposite(handle: EffectHandle, ttlTicks: Long, origin: Location? = null) {
         activeHandles[handle.id] = handle
+        track(handle, origin)
         plugin.server.scheduler.runTaskLater(plugin, Runnable {
             // any straggler children cancel themselves and leave the registry through their own callbacks
             handle.cancel()
-            activeHandles.remove(handle.id)
+            forget(handle.id)
         }, ttlTicks.coerceAtLeast(MIN_COMPOSITE_TTL_TICKS))
     }
 
@@ -112,7 +117,7 @@ class EffectScheduler(private val plugin: JavaPlugin) {
         val handle = activeHandles[id] ?: activeHandles.entries.firstOrNull { it.key.equals(id, ignoreCase = true) }?.value
         return if (handle != null) {
             handle.cancel()
-            activeHandles.remove(handle.id)
+            forget(handle.id)
             true
         } else {
             false
@@ -124,12 +129,48 @@ class EffectScheduler(private val plugin: JavaPlugin) {
         val count = activeHandles.size
         activeHandles.values.toList().forEach(EffectHandle::cancel)
         activeHandles.clear()
+        running.clear()
         cancelAllTasks()
         return count
     }
 
     // returns a snapshot of active effect handles
     fun activeHandles(): List<EffectHandle> = activeHandles.values.toList()
+
+    // returns a snapshot of user-facing spawned effects, including their spawn point
+    fun runningEffects(): List<RunningEffect> = running.values.toList()
+
+    // remembers a spawned effect's origin so placeholders can answer "what is playing, and where"
+    private fun track(handle: EffectHandle, origin: Location?) {
+        if (origin == null) {
+            return
+        }
+        val worldName = origin.world?.name ?: return
+        running[handle.id] = RunningEffect(
+            id = handle.id,
+            effectName = handle.effectName,
+            worldName = worldName,
+            x = origin.x,
+            y = origin.y,
+            z = origin.z,
+        )
+    }
+
+    // drops a handle from both the task registry and the placeholder snapshot
+    private fun forget(id: String) {
+        activeHandles.remove(id)
+        running.remove(id)
+    }
+
+    // spawn point of one user-facing effect. Coordinates are copied so later Location mutation cannot move the snapshot
+    data class RunningEffect(
+        val id: String,
+        val effectName: String,
+        val worldName: String,
+        val x: Double,
+        val y: Double,
+        val z: Double,
+    )
 
     // spawns a particle only to players within the configured view distance of the particle location
     // explicit receivers are filtered by distance; when none are given the particle is broadcast only to nearby online players in the same world
