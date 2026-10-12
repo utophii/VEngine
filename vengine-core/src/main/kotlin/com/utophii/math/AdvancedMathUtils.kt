@@ -67,6 +67,74 @@ object AdvancedMathUtils {
         return Vector(current.x + dx, current.y + dy, current.z + dz)
     }
 
+    // calculates one step of the differential equations of the Aizawa Strange Attractor
+    // https://en.wikipedia.org/wiki/Aizawa_system
+    // dx/dt = x(cos β + sin α) - z sin(α - β)
+    // dy/dt = y(cos β - sin α) + z(cos(α - β) + 1)
+    // dz/dt = z sin(γ) + (x² + y²)(α - cos β)
+    fun aizawaStep(current: Vector, alpha: Double, beta: Double, gamma: Double, dt: Double): Vector {
+        // sinAlpha/sinBeta/cosAlpha/cosBeta: pre-trig values reused across all three components
+        val sinAlpha = sin(alpha)
+        val cosAlpha = cos(alpha)
+        val sinBeta = sin(beta)
+        val cosBeta = cos(beta)
+        val sinGamma = sin(gamma)
+        val sinAlphaMinusBeta = sin(alpha - beta)
+        val cosAlphaMinusBeta = cos(alpha - beta)
+        // dx = (x(cos β + sin α) - z sin(α - β)) * dt: change in X per the Aizawa equation
+        val dx = (current.x * (cosBeta + sinAlpha) - current.z * sinAlphaMinusBeta) * dt
+        // dy = (y(cos β - sin α) + z(cos(α - β) + 1)) * dt: change in Y per the Aizawa equation
+        val dy = (current.y * (cosBeta - sinAlpha) + current.z * (cosAlphaMinusBeta + 1.0)) * dt
+        // dz = (z sin γ + (x² + y²)(α - cos β)) * dt: change in Z per the Aizawa equation
+        val dz = (current.z * sinGamma + (current.x * current.x + current.y * current.y) * (alpha - cosBeta)) * dt
+        return Vector(current.x + dx, current.y + dy, current.z + dz)
+    }
+
+    // calculates one step of the differential equations of the Thomas Prehydretica Attractor
+    // https://en.wikipedia.org/wiki/Thomas%27_cyclically_symmetric_attractor
+    // dx/dt = sin y - b x
+    // dy/dt = sin z - b y
+    // dz/dt = sin x - b z
+    fun thomasStep(current: Vector, b: Double, dt: Double): Vector {
+        // dx = (sin(y) - b * x) * dt: change in X coupling to the sine of Y with linear damping
+        val dx = (sin(current.y) - b * current.x) * dt
+        // dy = (sin(z) - b * y) * dt: change in Y coupling to the sine of Z with linear damping
+        val dy = (sin(current.z) - b * current.y) * dt
+        // dz = (sin(x) - b * z) * dt: change in Z coupling to the sine of X with linear damping
+        val dz = (sin(current.x) - b * current.z) * dt
+        return Vector(current.x + dx, current.y + dy, current.z + dz)
+    }
+
+    // calculates one step of the differential equations of the Rössler Attractor
+    // https://en.wikipedia.org/wiki/R%C3%B6ssler_system
+    // dx/dt = -(y + z)
+    // dy/dt = x + a*y
+    // dz/dt = b + z*(x - c)
+    fun rosslerStep(current: Vector, a: Double, b: Double, c: Double, dt: Double): Vector {
+        // dx = -(y + z) * dt: change in X driven by the sum of Y and Z
+        val dx = -(current.y + current.z) * dt
+        // dy = (x + a * y) * dt: change in Y driven by X with linear coupling
+        val dy = (current.x + a * current.y) * dt
+        // dz = (b + z * (x - c)) * dt: change in Z with constant offset and nonlinear feedback
+        val dz = (b + current.z * (current.x - c)) * dt
+        return Vector(current.x + dx, current.y + dy, current.z + dz)
+    }
+
+    // calculates one step of the differential equations of the Halvorsen Attractor
+    // https://en.wikipedia.org/wiki/Halvorsen_system
+    // dx/dt = -a x - y - z + a z
+    // dy/dt = x - a y + z
+    // dz/dt = x + b (y - x)
+    fun halvorsenStep(current: Vector, a: Double, dt: Double): Vector {
+        // dx = (-a * x - y - z + a * z) * dt: change in X with self-damping and cross-axis coupling
+        val dx = (-a * current.x - current.y - current.z + a * current.z) * dt
+        // dy = (x - a * y + z) * dt: change in Y driven by X and Z with linear damping
+        val dy = (current.x - a * current.y + current.z) * dt
+        // dz = (x + a * (y - x)) * dt: change in Z driven by X and the difference of Y and X
+        val dz = (current.x + a * (current.y - current.x)) * dt
+        return Vector(current.x + dx, current.y + dy, current.z + dz)
+    }
+
     // interpolates a single coordinate of a cubic Catmull-Rom spline from four control coordinates
     // P(t) = 0.5 * ((2 * P1) + (-P0 + P2) * t + (2*P0 - 5*P1 + 4*P2 - P3) * t^2 + (-P0 + 3*P1 - 3*P2 + P3) * t^3)
     fun catmullRomComponent(p0: Double, p1: Double, p2: Double, p3: Double, t: Double): Double {

@@ -4,8 +4,12 @@ import com.utophii.api.EffectOptions
 import com.utophii.api.EffectHandle
 import com.utophii.api.EffectProvider
 import com.utophii.api.ParticleEffect
+import com.utophii.effects.AizawaAttractorEffect
+import com.utophii.effects.HalvorsenAttractorEffect
 import com.utophii.effects.LorenzAttractorEffect
 import com.utophii.effects.ParametricEffect
+import com.utophii.effects.RosslerAttractorEffect
+import com.utophii.effects.ThomasAttractorEffect
 import com.utophii.effects.RK4TrajectoryEffect
 import com.utophii.effects.SphereEffect
 import org.bukkit.Location
@@ -27,6 +31,10 @@ object FXEngine {
         registerPrimitive(SphereEffect())
         registerPrimitive(RK4TrajectoryEffect())
         registerPrimitive(LorenzAttractorEffect())
+        registerPrimitive(AizawaAttractorEffect())
+        registerPrimitive(ThomasAttractorEffect())
+        registerPrimitive(RosslerAttractorEffect())
+        registerPrimitive(HalvorsenAttractorEffect())
     }
 
     fun nextScriptedId(): Int = scriptedIdCounter.getAndIncrement()
