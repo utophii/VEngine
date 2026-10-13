@@ -83,6 +83,7 @@ class VEngine : JavaPlugin() {
         saveIfMissing("effects/supershape.yml")
         saveIfMissing("effects/beam.yml")
         saveIfMissing("effects/spline_beam.yml")
+        saveIfMissing("effects/crystal_ward.yml")
         saveIfMissing("effects/parametric_rose.yml")
         saveIfMissing("effects/parametric_torus.yml")
         saveIfMissing("effects/traveling_comet.yml")

@@ -60,6 +60,9 @@ class EffectConfig {
 
     fun material(material: Material) = builder.material(material)
 
+    // renders display entities at the effect points instead of particles
+    fun display(options: DisplayOptions) = builder.display(options)
+
     fun count(value: Int) = builder.count(value)
 
     fun speed(value: Double) = builder.speed(value)

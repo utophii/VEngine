@@ -19,6 +19,7 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
     // plays the effect through the pooled render buffer, writing positions per frame without new allocations
     override fun play(center: Location, opts: EffectOptions): EffectHandle {
         val stableCenter = center.clone()
+        val renderer = FrameRenderer()
         return FXEngine.scheduler().scheduleFrames(
             effectName = name,
             durationTicks = opts.duration.coerceAtLeast(MIN_DURATION_TICKS),
@@ -33,8 +34,9 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
                     throw t
                 }
             },
-            render = { _, buffer -> render(buffer.list(), opts) },
+            render = { time, buffer -> renderer.render(buffer.list(), opts, time) },
             release = { buffer -> ParticleBufferPool.release(buffer) },
+            onStop = renderer::dispose,
         )
     }
 
@@ -110,23 +112,6 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
 
     protected fun param(options: EffectOptions, key: String, defaultValue: Double): Double {
         return options.parameters[key] ?: defaultValue
-    }
-
-    private fun render(positions: List<Location>, opts: EffectOptions) {
-        val data = resolveParticleData(opts)
-        positions.forEach { location ->
-            FXEngine.scheduler().spawnParticle(
-                location = location,
-                particle = opts.particle,
-                data = data,
-                receivers = opts.receivers,
-                count = opts.count,
-                offsetX = opts.offsetX,
-                offsetY = opts.offsetY,
-                offsetZ = opts.offsetZ,
-                speed = opts.speed,
-            )
-        }
     }
 
     companion object {

@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 // owns Bukkit task scheduling, active handles and frame synchronization for VEngine effects
-class EffectScheduler(private val plugin: JavaPlugin) {
+class EffectScheduler(val plugin: JavaPlugin) {
 
     private val tasks: MutableSet<BukkitTask> = ConcurrentHashMap.newKeySet()
     private val activeHandles = ConcurrentHashMap<String, EffectHandle>()
@@ -30,6 +30,7 @@ class EffectScheduler(private val plugin: JavaPlugin) {
 
     // schedules frame calculation asynchronously while rendering strictly monotonically on the main thread
     // when a computed frame is dropped (stale, cancelled, or after rendering) [release] disposes it exactly once
+    // onStop runs once on the server thread when the effect finishes or is cancelled
     fun <T> scheduleFrames(
         effectName: String,
         initialDelayTicks: Long = INITIAL_DELAY_TICKS,
@@ -38,6 +39,7 @@ class EffectScheduler(private val plugin: JavaPlugin) {
         render: (Double, T) -> Unit,
         release: ((T) -> Unit)? = null,
         origin: Location? = null,
+        onStop: (() -> Unit)? = null,
     ): EffectHandle {
         val handleId = "$effectName#${idCounter.getAndIncrement()}"
         var tick = 0L
@@ -48,6 +50,7 @@ class EffectScheduler(private val plugin: JavaPlugin) {
             task.cancel()
             tasks.remove(task)
             forget(handleId)
+            onStop?.let(::runOnMainThread)
         }
 
         task = plugin.server.scheduler.runTaskTimer(plugin, Runnable {
@@ -208,6 +211,15 @@ class EffectScheduler(private val plugin: JavaPlugin) {
                 speed,
                 data,
             )
+        }
+    }
+
+    // runs action on the server thread
+    fun runOnMainThread(action: () -> Unit) {
+        if (plugin.server.isPrimaryThread) {
+            action()
+        } else if (plugin.isEnabled) {
+            plugin.server.scheduler.runTask(plugin, Runnable(action))
         }
     }
 

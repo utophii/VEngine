@@ -29,6 +29,7 @@ import org.bukkit.util.Vector
 * @property receivers list of receivers (empty - visible to everyone in the world)
 * @property modifiers position post-processing chain
 * @property parameters effect-specific numeric parameters
+* @property display renders display entities at each point instead of particles (null = particles only)
 */
 data class EffectOptions(
     val particle: Particle = Particle.FLAME,
@@ -51,6 +52,7 @@ data class EffectOptions(
     val receivers: List<Player> = emptyList(),
     val modifiers: List<EffectModifier> = emptyList(),
     val parameters: Map<String, Double> = emptyMap(),
+    val display: DisplayOptions? = null,
 ) {
     fun toBuilder(): Builder = Builder()
         .particle(particle)
@@ -72,6 +74,7 @@ data class EffectOptions(
             toColor?.let(builder::toColor)
             material?.let(builder::material)
             tiltAxis?.let(builder::tiltAxis)
+            display?.let(builder::display)
         }
 
     class Builder {
@@ -95,6 +98,7 @@ data class EffectOptions(
         private var receivers: List<Player> = emptyList()
         private var modifiers: List<EffectModifier> = emptyList()
         private var parameters: Map<String, Double> = emptyMap()
+        private var display: DisplayOptions? = null
 
         fun particle(value: Particle) = apply { particle = value }
         fun color(value: Color) = apply { color = value }
@@ -120,6 +124,7 @@ data class EffectOptions(
         fun modifier(value: EffectModifier) = apply { modifiers = modifiers + value }
         fun parameters(value: Map<String, Double>) = apply { parameters = value.toMap() }
         fun parameter(key: String, value: Double) = apply { parameters = parameters + (key to value) }
+        fun display(value: DisplayOptions?) = apply { display = value }
 
         fun build(): EffectOptions = EffectOptions(
             particle = particle,
@@ -142,6 +147,7 @@ data class EffectOptions(
             receivers = receivers,
             modifiers = modifiers,
             parameters = parameters,
+            display = display,
         )
     }
 

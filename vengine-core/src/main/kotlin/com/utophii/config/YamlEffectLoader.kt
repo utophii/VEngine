@@ -1,5 +1,6 @@
 package com.utophii.config
 
+import com.utophii.api.DisplayOptions
 import com.utophii.api.EffectOptions
 import com.utophii.api.EffectModifier
 import com.utophii.api.ParticleEffect
@@ -21,6 +22,7 @@ import com.utophii.modifiers.VortexModifier
 import org.bukkit.Color
 import org.bukkit.Material
 import org.bukkit.Particle
+import org.bukkit.entity.Display
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.util.Vector
 import org.yaml.snakeyaml.Yaml
@@ -241,6 +243,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         raw[DUST_SIZE_KEY]?.number()?.toFloat()?.let(builder::dustSize)
 
         parseMaterial(raw[MATERIAL_KEY])?.let(builder::material)
+        parseDisplay(raw[DISPLAY_KEY])?.let(builder::display)
     
         raw[COUNT_KEY]?.number()?.toInt()?.let(builder::count)
         raw[SPEED_KEY]?.number()?.let(builder::speed)
@@ -258,6 +261,61 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             builder.modifiers(modifiers)
         }
         return builder.build()
+    }
+
+    // parses a `display:` block: the layer renders display entities at its points instead of particles
+    private fun parseDisplay(value: Any?): DisplayOptions? {
+        val node = value as? Map<*, *> ?: return null
+        val typeName = node[TYPE_KEY]?.toString()?.trim()?.uppercase() ?: DisplayOptions.Type.ITEM.name
+        val type = runCatching { DisplayOptions.Type.valueOf(typeName) }.getOrElse {
+            plugin.logger.warning("Unknown display type '$typeName' in VEngine YAML; expected item, block or text.")
+            return null
+        }
+        val defaults = DisplayOptions(type = type)
+        val brightness = node[BRIGHTNESS_KEY]
+        val shadow = node[SHADOW_KEY] as? Map<*, *>
+        return DisplayOptions(
+            type = type,
+            material = parseMaterial(node[MATERIAL_KEY]) ?: if (type == DisplayOptions.Type.BLOCK) Material.AMETHYST_BLOCK else defaults.material,
+            text = when (val text = node[TEXT_KEY]) {
+                is List<*> -> text.mapNotNull { it?.toString() }
+                null -> emptyList()
+                else -> listOf(text.toString())
+            },
+            size = parseScale(node[SIZE_KEY]) ?: defaults.size,
+            rotation = parseVector(node[ROTATION_KEY]) ?: defaults.rotation,
+            spin = parseVector(node[SPIN_KEY]) ?: defaults.spin,
+            phase = node[PHASE_KEY].number() ?: defaults.phase,
+            billboard = node[BILLBOARD_KEY]?.toString()?.trim()?.uppercase()?.let { name ->
+                runCatching { Display.Billboard.valueOf(name) }
+                    .onFailure { plugin.logger.warning("Unknown display billboard '$name' in VEngine YAML.") }
+                    .getOrNull()
+            },
+            blockLight = (brightness as? Map<*, *>)?.get(BLOCK_KEY).number()?.toInt() ?: brightness.number()?.toInt(),
+            skyLight = (brightness as? Map<*, *>)?.get(SKY_KEY).number()?.toInt() ?: brightness.number()?.toInt(),
+            glowColor = parseColor(node[GLOW_KEY]),
+            interpolationTicks = node[INTERPOLATION_KEY].number()?.toInt() ?: defaults.interpolationTicks,
+            viewRange = node[VIEW_RANGE_KEY].number()?.toFloat(),
+            shadowRadius = shadow?.get(RADIUS_KEY).number()?.toFloat() ?: defaults.shadowRadius,
+            shadowStrength = shadow?.get(STRENGTH_KEY).number()?.toFloat() ?: defaults.shadowStrength,
+            textBackground = parseArgb(node[BACKGROUND_KEY]),
+            textShadow = node[TEXT_SHADOW_KEY] as? Boolean ?: defaults.textShadow,
+            seeThrough = node[SEE_THROUGH_KEY] as? Boolean ?: defaults.seeThrough,
+            withParticles = node[PARTICLES_KEY] as? Boolean ?: defaults.withParticles,
+        )
+    }
+
+    // uniform `0.5` or per-axis `{x, y, z}`
+    private fun parseScale(value: Any?): Vector? {
+        value.number()?.let { uniform -> return Vector(uniform, uniform, uniform) }
+        return parseVector(value)
+    }
+
+    // "#AARRGGBB" (or "#RRGGBB", treated as opaque)
+    private fun parseArgb(value: Any?): Color? {
+        val hex = value?.toString()?.removePrefix("#") ?: return null
+        val argb = hex.toLongOrNull(HEX_RADIX)?.toInt() ?: return null
+        return if (hex.length > RGB_HEX_LENGTH) Color.fromARGB(argb) else Color.fromRGB(argb)
     }
 
     private fun parseMaterial(value: Any?): Material? {
@@ -513,6 +571,26 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private const val COUNT_KEY = "count"
         private const val OFFSET_KEY = "offset"
         private const val SPEED_KEY = "speed"
+        private const val DISPLAY_KEY = "display"
+        private const val TEXT_KEY = "text"
+        private const val SIZE_KEY = "size"
+        private const val ROTATION_KEY = "rotation"
+        private const val SPIN_KEY = "spin"
+        private const val PHASE_KEY = "phase"
+        private const val BILLBOARD_KEY = "billboard"
+        private const val BRIGHTNESS_KEY = "brightness"
+        private const val BLOCK_KEY = "block"
+        private const val SKY_KEY = "sky"
+        private const val GLOW_KEY = "glow"
+        private const val INTERPOLATION_KEY = "interpolation"
+        private const val VIEW_RANGE_KEY = "viewRange"
+        private const val SHADOW_KEY = "shadow"
+        private const val RADIUS_KEY = "radius"
+        private const val BACKGROUND_KEY = "background"
+        private const val TEXT_SHADOW_KEY = "textShadow"
+        private const val SEE_THROUGH_KEY = "seeThrough"
+        private const val PARTICLES_KEY = "particles"
+        private const val RGB_HEX_LENGTH = 6
 
         private const val TURBULENCE_MODIFIER = "turbulence"
         private const val ROTATION_MODIFIER = "rotation"

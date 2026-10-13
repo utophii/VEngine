@@ -1,0 +1,71 @@
+# Display-entity showcase: solid crystals and glowing runes framed by a particle aura.
+# A layer with a `display:` block places one display entity at each point of its primitive
+# instead of spawning particles there.
+id: crystal_ward
+duration: 160
+layers:
+  # six amethyst crystals orbiting on a ring, each spinning a little out of phase
+  - effect: helix
+    parameters:
+      radius: 1.4
+      height: 0.0
+      turns: 1.0
+      points: 6
+      angularSpeed: 0.03
+    display:
+      type: item
+      material: AMETHYST_CLUSTER
+      size: 0.7
+      spin: {x: 0.0, y: 0.12, z: 0.0}
+      phase: 5
+      brightness: 15
+      glow: "#B26BFF"
+    animation:
+      tracks:
+        - target: display.size
+          keyframes:
+            - {tick: 0, value: 0.0}
+            - {tick: 20, value: 0.7, easing: ease_out_elastic}
+            - {tick: 140, value: 0.7}
+            - {tick: 160, value: 0.0}
+
+  # a slower counter-rotating ring of runes that always face the viewer
+  - effect: helix
+    start: 10
+    parameters:
+      radius: 2.3
+      height: 0.0
+      turns: 1.0
+      points: 8
+      angularSpeed: -0.015
+    display:
+      type: text
+      text: ["<#C59BFF>ᚠ", "<#C59BFF>ᚢ", "<#C59BFF>ᚦ", "<#C59BFF>ᚨ", "<#C59BFF>ᚱ", "<#C59BFF>ᚲ", "<#C59BFF>ᚷ", "<#C59BFF>ᚹ"]
+      size: 1.4
+      billboard: center
+      brightness: 15
+      background: "#00000000"
+      textShadow: true
+
+  # four overlapping cubes at the center, rotated out of phase, tumble as one star-shaped core
+  - effect: sphere
+    start: 5
+    parameters:
+      radius: 0.0
+      points: 4
+    display:
+      type: block
+      material: CRYING_OBSIDIAN
+      size: 0.35
+      spin: {x: 0.05, y: 0.08, z: 0.03}
+      phase: 15
+      brightness: 12
+
+  # particle aura around everything: displays and particles complement each other
+  - effect: sphere
+    particle: END_ROD
+    speed: 0.0
+    parameters:
+      radius: 1.0
+      points: 40
+      angularSpeed: 0.03

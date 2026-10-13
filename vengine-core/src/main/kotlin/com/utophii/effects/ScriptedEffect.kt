@@ -8,7 +8,7 @@ import com.utophii.engine.FXEngine
 import com.utophii.math.EasingType
 import org.bukkit.Color
 import org.bukkit.Location
-import org.bukkit.Particle
+import org.bukkit.util.Vector
 
 // YAML-driven composite effect assembled from primitive particle effects
 // a scripted effect is composed from layers. Each layer references a primitive effect, has its own timing window, static options, and animated numeric tracks
@@ -35,6 +35,7 @@ class ScriptedEffect(
             val remainingDuration = (totalDuration - startTick).coerceAtLeast(MIN_DURATION_TICKS)
             val layerDuration = layer.durationTicks?.coerceAtLeast(MIN_DURATION_TICKS) ?: remainingDuration
             val clampedDuration = layerDuration.coerceAtMost(remainingDuration)
+            val renderer = FrameRenderer()
 
             val handle = FXEngine.scheduler().scheduleFrames(
                 effectName = "${name}_${layer.effect}",
@@ -64,8 +65,9 @@ class ScriptedEffect(
                         throw t
                     }
                 },
-                render = { _, frame -> render(frame.positions.list(), frame.options) },
+                render = { time, frame -> renderer.render(frame.positions.list(), frame.options, time) },
                 release = { frame -> ParticleBufferPool.release(frame.positions) },
+                onStop = renderer::dispose,
             )
             childHandles.add(handle)
         }
@@ -99,31 +101,6 @@ class ScriptedEffect(
         }
     }
 
-    private fun render(positions: List<Location>, opts: EffectOptions) {
-        val particleData = AbstractParticleEffect.resolveParticleData(opts)
-        positions.forEach { location ->
-            FXEngine.scheduler().spawnParticle(
-                location = location,
-                particle = opts.particle,
-                data = particleData,
-                receivers = opts.receivers,
-                count = opts.count,
-                offsetX = opts.offsetX,
-                offsetY = opts.offsetY,
-                offsetZ = opts.offsetZ,
-                speed = opts.speed,
-            )
-        }
-    }
-
-    private fun particleData(opts: EffectOptions): Any? {
-        val color = opts.color ?: return null
-        return when (opts.particle) {
-            Particle.DUST -> Particle.DustOptions(color, DUST_SIZE)
-            else -> null
-        }
-    }
-
     private data class LayerFrame(
         val options: EffectOptions,
         val positions: ParticleBuffer,
@@ -132,7 +109,6 @@ class ScriptedEffect(
     companion object {
         private const val MIN_START_TICKS = 0L
         private const val MIN_DURATION_TICKS = 1L
-        private const val DUST_SIZE = 1.0F
     }
 }
 
@@ -168,6 +144,7 @@ data class ScriptedLayer(
         runtime.color?.let(builder::color)
         runtime.toColor?.let(builder::toColor)
         runtime.material?.let(builder::material)
+        runtime.display?.let(builder::display)
 
         if (runtime.count != EffectOptions.DEFAULT_PARTICLE_COUNT) builder.count(runtime.count)
         if (runtime.speed != EffectOptions.DEFAULT_PARTICLE_SPEED) builder.speed(runtime.speed)
@@ -213,6 +190,7 @@ data class NumericAnimation(
             COLOR_BLUE_TARGET to (options.color?.blue?.toDouble() ?: 255.0),
         )
         var colorTouched = options.color != null
+        var display = options.display
 
         tracks.forEach { track ->
             val value = track.valueAt(time)
@@ -227,6 +205,19 @@ data class NumericAnimation(
                     if (key.isNotBlank()) {
                         parameters[key] = value
                     }
+                }
+                // display tracks only apply when the layer renders display entities
+                track.target.equals(DISPLAY_SIZE_TARGET, ignoreCase = true) -> {
+                    display = display?.copy(size = Vector(value, value, value))
+                }
+                track.target.equals(DISPLAY_ROTATION_X_TARGET, ignoreCase = true) -> {
+                    display = display?.let { it.copy(rotation = it.rotation.clone().setX(value)) }
+                }
+                track.target.equals(DISPLAY_ROTATION_Y_TARGET, ignoreCase = true) -> {
+                    display = display?.let { it.copy(rotation = it.rotation.clone().setY(value)) }
+                }
+                track.target.equals(DISPLAY_ROTATION_Z_TARGET, ignoreCase = true) -> {
+                    display = display?.let { it.copy(rotation = it.rotation.clone().setZ(value)) }
                 }
                 track.target.equals(COLOR_RED_TARGET, ignoreCase = true) -> {
                     colorChannels[COLOR_RED_TARGET] = value
@@ -244,6 +235,7 @@ data class NumericAnimation(
         }
 
         builder.parameters(parameters)
+        builder.display(display)
         if (colorTouched) {
             builder.color(
                 Color.fromRGB(
@@ -268,6 +260,10 @@ data class NumericAnimation(
         private const val COLOR_RED_TARGET = "color.r"
         private const val COLOR_GREEN_TARGET = "color.g"
         private const val COLOR_BLUE_TARGET = "color.b"
+        private const val DISPLAY_SIZE_TARGET = "display.size"
+        private const val DISPLAY_ROTATION_X_TARGET = "display.rotation.x"
+        private const val DISPLAY_ROTATION_Y_TARGET = "display.rotation.y"
+        private const val DISPLAY_ROTATION_Z_TARGET = "display.rotation.z"
         private const val MIN_COLOR_CHANNEL = 0
         private const val MAX_COLOR_CHANNEL = 255
     }
