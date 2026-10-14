@@ -3,13 +3,14 @@ package com.utophii.effects
 import com.utophii.api.EffectOptions
 import com.utophii.math.MathUtils
 import org.bukkit.Location
+import org.bukkit.util.Vector
+import java.util.concurrent.ConcurrentHashMap
 
 // Fibonacci-distributed particle sphere
 class SphereEffect : AbstractParticleEffect("sphere") {
-    // invariant unit sphere sampled once and reused across frames to avoid reallocating per tick
-    // keyed by the number of points so a different point count produces a correct cache entry
-    private var cachedUnitCount: Int = 0
-    private var cachedUnits: List<org.bukkit.util.Vector> = emptyList()
+    // invariant unit spheres sampled once per point count and reused across frames
+    // the effect is a shared singleton whose frames are calculated concurrently on async threads
+    private val unitSpheres = ConcurrentHashMap<Int, List<Vector>>()
 
     // writes uniformly distributed sphere points into the pooled buffer
     // uses y = 1 - (i / (n - 1)) * 2 and theta = goldenAngle * i
@@ -18,11 +19,7 @@ class SphereEffect : AbstractParticleEffect("sphere") {
         val points = param(opts, "points", DEFAULT_POINTS).toInt().coerceAtLeast(MIN_POINTS)
         val phase = time * param(opts, "angularSpeed", DEFAULT_ANGULAR_SPEED)
 
-        if (cachedUnitCount != points) {
-            cachedUnits = MathUtils.fibonacciSphere(points)
-            cachedUnitCount = points
-        }
-        val units = cachedUnits
+        val units = unitSpheres(points)
         buffer.acquire(points)
         for (index in 0 until points) {
             val unit = units[index]
@@ -39,7 +36,17 @@ class SphereEffect : AbstractParticleEffect("sphere") {
         }
     }
 
+    private fun unitSpheres(points: Int): List<Vector> {
+        unitSpheres[points]?.let { return it }
+        // animated point counts could otherwise grow the cache without bound
+        if (unitSpheres.size >= MAX_CACHED_SPHERES) {
+            unitSpheres.clear()
+        }
+        return unitSpheres.computeIfAbsent(points, MathUtils::fibonacciSphere)
+    }
+
     companion object {
+        private const val MAX_CACHED_SPHERES = 32
         private const val DEFAULT_RADIUS = 1.5
         private const val DEFAULT_POINTS = 160.0
         private const val DEFAULT_ANGULAR_SPEED = 0.04
