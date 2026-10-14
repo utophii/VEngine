@@ -20,6 +20,7 @@ import com.utophii.effects.ClientDisplays
 import com.utophii.engine.EffectScheduler
 import com.utophii.engine.FollowAnchor
 import io.github.retrooper.packetevents.util.SpigotConversionUtil
+import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.MiniMessage
 import org.bukkit.Bukkit
 import org.bukkit.Location
@@ -50,6 +51,9 @@ class PacketClientDisplays(
 
     // client view range sent with the models, grows when the effect spreads further from its reference point
     private var sentViewRange = 0f
+
+    // pixel color sent with the models
+    private var sentPixelColor: Int? = null
 
     // viewer -> world the models were spawned in
     private val viewers = ConcurrentHashMap<UUID, UUID>()
@@ -95,6 +99,9 @@ class PacketClientDisplays(
         if (previousCount == 0 || viewRangeGrew) {
             sentViewRange = viewRange
         }
+        val pixelColor = if (display.type == DisplayOptions.Type.PIXEL) display.pixelColor(opts) else null
+        val pixelColorChanged = previousCount > 0 && pixelColor != sentPixelColor
+        sentPixelColor = pixelColor
 
         val current = if (entity != null) ridingViewers(entity, opts) else nearbyViewers(reference, extent, opts)
         viewers.keys.filter { it !in current }.forEach { uuid ->
@@ -124,8 +131,9 @@ class PacketClientDisplays(
             for (index in 0 until minOf(previousCount, target)) {
                 val data = if (transforms[index] != sent[index]) transformData(transforms[index], interpolation) else null
                 val range = if (viewRangeGrew) EntityData(INDEX_VIEW_RANGE, EntityDataTypes.FLOAT, sentViewRange) else null
-                if (data != null || range != null) {
-                    send(player, WrapperPlayServerEntityMetadata(ids[index], listOfNotNull(range) + data.orEmpty()))
+                val color = if (pixelColorChanged && pixelColor != null) EntityData(INDEX_TEXT_BACKGROUND, EntityDataTypes.INT, pixelColor) else null
+                if (data != null || range != null || color != null) {
+                    send(player, WrapperPlayServerEntityMetadata(ids[index], listOfNotNull(range, color) + data.orEmpty()))
                 }
             }
         }
@@ -148,6 +156,7 @@ class PacketClientDisplays(
         vehicleId = NO_VEHICLE
         look = null
         sentViewRange = 0f
+        sentPixelColor = null
         ids = EMPTY
         uuids.clear()
         sent.clear()
@@ -215,7 +224,7 @@ class PacketClientDisplays(
         val type = when (display.type) {
             DisplayOptions.Type.ITEM -> EntityTypes.ITEM_DISPLAY
             DisplayOptions.Type.BLOCK -> EntityTypes.BLOCK_DISPLAY
-            DisplayOptions.Type.TEXT -> EntityTypes.TEXT_DISPLAY
+            DisplayOptions.Type.TEXT, DisplayOptions.Type.PIXEL -> EntityTypes.TEXT_DISPLAY
         }
         send(player, WrapperPlayServerSpawnEntity(
             ids[index], Optional.of(uuids[index]), type,
@@ -270,6 +279,12 @@ class PacketClientDisplays(
             DisplayOptions.Type.BLOCK -> {
                 val material = if (display.material.isBlock) display.material else Material.AMETHYST_BLOCK
                 data += EntityData(INDEX_CONTENT, EntityDataTypes.BLOCK_STATE, SpigotConversionUtil.fromBukkitBlockData(material.createBlockData()).globalId)
+            }
+            DisplayOptions.Type.PIXEL -> {
+                // no default-background flag
+                data += EntityData(INDEX_CONTENT, EntityDataTypes.ADV_COMPONENT, Component.text(DisplayEntityPool.PIXEL_TEXT))
+                data += EntityData(INDEX_TEXT_BACKGROUND, EntityDataTypes.INT, sentPixelColor ?: display.pixelColor(opts))
+                data += EntityData(INDEX_TEXT_FLAGS, EntityDataTypes.BYTE, 0.toByte())
             }
             DisplayOptions.Type.TEXT -> {
                 val line = display.text.takeIf { it.isNotEmpty() }?.let { it[index % it.size] } ?: ""

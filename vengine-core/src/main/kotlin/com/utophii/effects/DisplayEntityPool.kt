@@ -3,7 +3,9 @@ package com.utophii.effects
 import com.utophii.api.DisplayOptions
 import com.utophii.api.EffectOptions
 import com.utophii.engine.EffectScheduler
+import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.minimessage.MiniMessage
+import org.bukkit.Color
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.entity.BlockDisplay
@@ -22,6 +24,9 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
     private val lastTransforms = ArrayList<Transformation?>()
     private var lastPositions = DoubleArray(0)
     private var look: DisplayOptions? = null
+
+    // pixel color last applied to the entities
+    private var pixelColor: Int? = null
     private val scratch = Location(null, 0.0, 0.0, 0.0)
 
     // matches the entity set to positions
@@ -39,6 +44,11 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         ensurePositionCapacity(target)
         if (lookChanged) {
             entities.forEachIndexed { index, entity -> applyLook(entity, display, index) }
+        }
+        val color = if (display.type == DisplayOptions.Type.PIXEL) display.pixelColor(opts) else null
+        if (color != pixelColor) {
+            pixelColor = color
+            if (color != null) entities.forEach { entity -> (entity as? TextDisplay)?.backgroundColor = Color.fromARGB(color) }
         }
 
         val interpolation = display.interpolationTicks.coerceIn(0, DisplayOptions.MAX_INTERPOLATION_TICKS)
@@ -72,6 +82,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         entities.clear()
         lastTransforms.clear()
         look = null
+        pixelColor = null
     }
 
     private fun spawn(position: Location, display: DisplayOptions, transform: Transformation, index: Int, opts: EffectOptions): Display? {
@@ -94,7 +105,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         val type = when (display.type) {
             DisplayOptions.Type.ITEM -> ItemDisplay::class.java
             DisplayOptions.Type.BLOCK -> BlockDisplay::class.java
-            DisplayOptions.Type.TEXT -> TextDisplay::class.java
+            DisplayOptions.Type.TEXT, DisplayOptions.Type.PIXEL -> TextDisplay::class.java
         }
         // everything is configured inside the spawn consumer
         return world.spawn(zeroRotation(position), type) { entity ->
@@ -102,6 +113,9 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
             entity.teleportDuration = display.interpolationTicks.coerceIn(0, DisplayOptions.MAX_INTERPOLATION_TICKS)
             entity.transformation = transform
             applyLook(entity, display, index)
+            if (entity is TextDisplay && display.type == DisplayOptions.Type.PIXEL) {
+                entity.backgroundColor = Color.fromARGB(display.pixelColor(opts))
+            }
             if (opts.receivers.isNotEmpty()) {
                 entity.isVisibleByDefault = false
                 opts.receivers.forEach { player -> if (player.isOnline) player.showEntity(scheduler.plugin, entity) }
@@ -129,7 +143,10 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         when (entity) {
             is ItemDisplay -> entity.setItemStack(ItemStack(itemMaterial(display.material)))
             is BlockDisplay -> entity.block = blockMaterial(display.material).createBlockData()
-            is TextDisplay -> {
+            is TextDisplay -> if (display.type == DisplayOptions.Type.PIXEL) {
+                entity.text(Component.text(PIXEL_TEXT))
+                entity.isDefaultBackground = false
+            } else {
                 val line = display.text.takeIf { it.isNotEmpty() }?.let { it[index % it.size] } ?: ""
                 entity.text(MINI_MESSAGE.deserialize(line))
                 entity.isShadowed = display.textShadow
@@ -191,6 +208,13 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         private const val VANILLA_VIEW_RANGE_BLOCKS = 64.0
         private const val MAX_LIGHT = 15
         private const val HALF = 0.5f
+        private const val PIXEL_SCALE_X = 8f
+        private const val PIXEL_SCALE_Y = 4f
+        private const val PIXEL_CENTER_X = -0.1f
+        private const val PIXEL_CENTER_Y = -0.5f
+
+        // a pixel is a text display whose only glyph is a space, so only its background shows
+        const val PIXEL_TEXT = " "
         private val MINI_MESSAGE = MiniMessage.miniMessage()
 
         // model transform for point index, shared by the server-side and the packet-based pools
@@ -210,18 +234,23 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
                 (display.rotation.z + display.spin.z * angleTime).toFloat(),
             )
             frameRotation?.let { frame -> rotation.premul(frame) }
-            val scale = Vector3f(
+            val size = Vector3f(
                 (display.size.x * opts.scale).toFloat(),
                 (display.size.y * opts.scale).toFloat(),
                 (display.size.z * opts.scale).toFloat(),
             )
-            // T = -R(S * 0.5) rotates and scales them around their center instead
-            val translation = if (display.type == DisplayOptions.Type.BLOCK) {
-                rotation.transform(Vector3f(scale).mul(-HALF))
-            } else {
-                Vector3f()
+            return when (display.type) {
+                // block models span 0..1 from their corner; T = R(S * -0.5) rotates and scales them around their center
+                DisplayOptions.Type.BLOCK -> Transformation(rotation.transform(Vector3f(size).mul(-HALF)), rotation, size, Quaternionf())
+                // the background of a single space is 1/8 x 1/4 block; S = (8, 4) * edge makes an edge-sized square
+                // whose center T = R(-0.1, -0.5) * edge moves onto the entity position
+                DisplayOptions.Type.PIXEL -> {
+                    val scale = Vector3f(size.x * PIXEL_SCALE_X, size.y * PIXEL_SCALE_Y, 1f)
+                    val center = Vector3f(size.x * PIXEL_CENTER_X, size.y * PIXEL_CENTER_Y, 0f)
+                    Transformation(rotation.transform(center), rotation, scale, Quaternionf())
+                }
+                else -> Transformation(Vector3f(), rotation, size, Quaternionf())
             }
-            return Transformation(translation, rotation, scale, Quaternionf())
         }
 
         // the static appearance

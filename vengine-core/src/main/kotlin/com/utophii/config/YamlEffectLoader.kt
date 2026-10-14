@@ -293,10 +293,15 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         val node = value as? Map<*, *> ?: return null
         val typeName = node[TYPE_KEY]?.toString()?.trim()?.uppercase() ?: DisplayOptions.Type.ITEM.name
         val type = runCatching { DisplayOptions.Type.valueOf(typeName) }.getOrElse {
-            plugin.logger.warning("Unknown display type '$typeName' in VEngine YAML; expected item, block or text.")
+            plugin.logger.warning("Unknown display type '$typeName' in VEngine YAML; expected item, block, text or pixel.")
             return null
         }
-        val defaults = DisplayOptions(type = type)
+        val defaults = if (type == DisplayOptions.Type.PIXEL) {
+            val edge = DisplayOptions.DEFAULT_PIXEL_SIZE
+            DisplayOptions(type = type, size = Vector(edge, edge, edge))
+        } else {
+            DisplayOptions(type = type)
+        }
         val brightness = node[BRIGHTNESS_KEY]
         val shadow = node[SHADOW_KEY] as? Map<*, *>
         return DisplayOptions(
