@@ -20,7 +20,7 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
     // plays the effect through the pooled render buffer, writing positions per frame without new allocations
     override fun play(center: Location, opts: EffectOptions): EffectHandle {
         val stableCenter = center.clone()
-        val renderer = FrameRenderer()
+        val renderer = FrameRenderer(stableCenter)
         val anchor = opts.follow?.let { follow -> FollowAnchor(follow.withDefaults(followDefaults), stableCenter) }
         return FXEngine.scheduler().scheduleFrames(
             effectName = name,

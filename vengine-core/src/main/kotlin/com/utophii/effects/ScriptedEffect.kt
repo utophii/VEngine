@@ -46,7 +46,7 @@ class ScriptedEffect(
             val remainingDuration = (totalDuration - startTick).coerceAtLeast(MIN_DURATION_TICKS)
             val layerDuration = layer.durationTicks?.coerceAtLeast(MIN_DURATION_TICKS) ?: remainingDuration
             val clampedDuration = layerDuration.coerceAtMost(remainingDuration)
-            val renderer = FrameRenderer()
+            val renderer = FrameRenderer(stableCenter)
 
             val handle = FXEngine.scheduler().scheduleFrames(
                 effectName = "${name}_${layer.effect}",

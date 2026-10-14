@@ -7,9 +7,10 @@ import org.bukkit.Location
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-// display models of one followed effect that ride its entity as client-side passengers
-interface RidingDisplays {
-    fun sync(positions: List<Location>, opts: EffectOptions, display: DisplayOptions, time: Double, anchor: FollowAnchor)
+// display models of one running effect that exist only on the clients.
+// A followed effect's models ride its entity as passengers
+interface ClientDisplays {
+    fun sync(positions: List<Location>, opts: EffectOptions, display: DisplayOptions, time: Double, anchor: FollowAnchor?)
 
     fun clear()
 
@@ -17,32 +18,32 @@ interface RidingDisplays {
     fun idsFor(viewer: UUID): IntArray
 }
 
-// switch and registry for packet-based riding displays; only active when the PacketEvents plugin is installed.
-// this object never touches PacketEvents classes itself
+// switch and registry for packet-based displays
 object PacketDisplays {
-    private val byVehicle = ConcurrentHashMap<Int, MutableSet<RidingDisplays>>()
+    private val byVehicle = ConcurrentHashMap<Int, MutableSet<ClientDisplays>>()
 
     @Volatile
-    private var factory: (() -> RidingDisplays)? = null
+    private var factory: ((Location) -> ClientDisplays)? = null
 
     val isEnabled: Boolean
         get() = factory != null
 
     // called by the PacketEvents bootstrap
-    fun install(newFactory: (() -> RidingDisplays)?) {
+    fun install(newFactory: ((Location) -> ClientDisplays)?) {
         factory = newFactory
         if (newFactory == null) {
             byVehicle.clear()
         }
     }
 
-    fun create(): RidingDisplays? = factory?.invoke()
+    // origin is the spawn point of the effect
+    fun create(origin: Location): ClientDisplays? = factory?.invoke(origin)
 
-    fun register(vehicleId: Int, displays: RidingDisplays) {
+    fun register(vehicleId: Int, displays: ClientDisplays) {
         byVehicle.computeIfAbsent(vehicleId) { ConcurrentHashMap.newKeySet() }.add(displays)
     }
 
-    fun unregister(vehicleId: Int, displays: RidingDisplays) {
+    fun unregister(vehicleId: Int, displays: ClientDisplays) {
         byVehicle.computeIfPresent(vehicleId) { _, set -> set.remove(displays); set.ifEmpty { null } }
     }
 

@@ -16,7 +16,7 @@ import com.utophii.api.DisplayOptions
 import com.utophii.api.EffectOptions
 import com.utophii.effects.DisplayEntityPool
 import com.utophii.effects.PacketDisplays
-import com.utophii.effects.RidingDisplays
+import com.utophii.effects.ClientDisplays
 import com.utophii.engine.EffectScheduler
 import com.utophii.engine.FollowAnchor
 import io.github.retrooper.packetevents.util.SpigotConversionUtil
@@ -31,14 +31,14 @@ import org.bukkit.util.Transformation
 import java.util.Optional
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.sqrt
 
-// display models that exist only on the clients and ride the followed entity as passengers.
-// The server never sees them, so they cannot block teleports or collide with anything, and the client
-// carries them along with the entity between ticks.
-//
-// Riding passengers are placed at the vehicle's passenger attachment point, which is the top of the
-// bounding box for players and most mobs
-class PacketRidingDisplays(private val scheduler: EffectScheduler) : RidingDisplays {
+// display models that exist only on the clients.
+// Every model is spawned at one reference point and placed by the translation of its transformation
+class PacketClientDisplays(
+    private val scheduler: EffectScheduler,
+    private val origin: Location,
+) : ClientDisplays {
     private var vehicle: Entity? = null
     private var vehicleId = NO_VEHICLE
     private var look: DisplayOptions? = null
@@ -48,20 +48,23 @@ class PacketRidingDisplays(private val scheduler: EffectScheduler) : RidingDispl
     private val uuids = ArrayList<UUID>()
     private val sent = ArrayList<Transformation>()
 
+    // client view range sent with the models, grows when the effect spreads further from its reference point
+    private var sentViewRange = 0f
+
     // viewer -> world the models were spawned in
     private val viewers = ConcurrentHashMap<UUID, UUID>()
 
     override fun idsFor(viewer: UUID): IntArray = if (viewers.containsKey(viewer)) ids else EMPTY
 
-    override fun sync(positions: List<Location>, opts: EffectOptions, display: DisplayOptions, time: Double, anchor: FollowAnchor) {
-        val entity = anchor.entity
-        if (!entity.isValid) {
+    override fun sync(positions: List<Location>, opts: EffectOptions, display: DisplayOptions, time: Double, anchor: FollowAnchor?) {
+        val entity = anchor?.entity
+        if (entity != null && !entity.isValid) {
             return
         }
         if (vehicle !== entity || look?.let { !DisplayEntityPool.sameLook(it, display) } == true) {
             clear()
         }
-        if (vehicle == null) {
+        if (entity != null && vehicle == null) {
             vehicle = entity
             vehicleId = entity.entityId
             PacketDisplays.register(vehicleId, this)
@@ -73,46 +76,56 @@ class PacketRidingDisplays(private val scheduler: EffectScheduler) : RidingDispl
         val removed = if (target < previousCount) ids.copyOfRange(target, previousCount) else EMPTY
         resize(target)
 
-        val base = entity.location
-        val ridingY = base.y + entity.height
-        val frameRotation = anchor.frameRotation()
+        val reference = reference(entity) ?: return
+        val frameRotation = anchor?.frameRotation()
+        var extentSquared = 0.0
         val transforms = List(target) { index ->
             val position = positions[index]
+            val dx = position.x - reference.x
+            val dy = position.y - reference.y
+            val dz = position.z - reference.z
+            extentSquared = maxOf(extentSquared, dx * dx + dy * dy + dz * dz)
             val transform = DisplayEntityPool.modelTransformation(display, opts, index, time, frameRotation)
-            transform.translation.add(
-                (position.x - base.x).toFloat(),
-                (position.y - ridingY).toFloat(),
-                (position.z - base.z).toFloat(),
-            )
+            transform.translation.add(dx.toFloat(), dy.toFloat(), dz.toFloat())
             transform
         }
-
-        val current = currentViewers(entity, opts)
-        viewers.keys.filter { it !in current }.forEach { uuid ->
-            viewers.remove(uuid)
-            Bukkit.getPlayer(uuid)?.let { player -> send(player, WrapperPlayServerDestroyEntities(*ids)) }
-            if (removed.isNotEmpty()) Bukkit.getPlayer(uuid)?.let { player -> send(player, WrapperPlayServerDestroyEntities(*removed)) }
+        val extent = sqrt(extentSquared)
+        val viewRange = viewRange(display, extent)
+        val viewRangeGrew = previousCount > 0 && viewRange > sentViewRange
+        if (previousCount == 0 || viewRangeGrew) {
+            sentViewRange = viewRange
         }
 
+        val current = if (entity != null) ridingViewers(entity, opts) else nearbyViewers(reference, extent, opts)
+        viewers.keys.filter { it !in current }.forEach { uuid ->
+            viewers.remove(uuid)
+            Bukkit.getPlayer(uuid)?.let { player ->
+                send(player, WrapperPlayServerDestroyEntities(*ids))
+                if (removed.isNotEmpty()) send(player, WrapperPlayServerDestroyEntities(*removed))
+            }
+        }
+
+        val interpolation = interpolationTicks(display)
         current.values.forEach { player ->
             val world = player.world.uid
             if (viewers[player.uniqueId] != world) {
                 viewers[player.uniqueId] = world
-                for (index in 0 until target) spawn(player, index, display, opts, transforms[index], base, ridingY)
-                sendPassengers(player, entity)
+                for (index in 0 until target) spawn(player, index, display, opts, transforms[index], reference)
+                entity?.let { sendPassengers(player, it) }
                 return@forEach
             }
             if (removed.isNotEmpty()) {
                 send(player, WrapperPlayServerDestroyEntities(*removed))
             }
-            for (index in previousCount until target) spawn(player, index, display, opts, transforms[index], base, ridingY)
-            if (target != previousCount) {
+            for (index in previousCount until target) spawn(player, index, display, opts, transforms[index], reference)
+            if (entity != null && target != previousCount) {
                 sendPassengers(player, entity)
             }
-            val interpolation = interpolationTicks(display)
             for (index in 0 until minOf(previousCount, target)) {
-                if (transforms[index] != sent[index]) {
-                    send(player, WrapperPlayServerEntityMetadata(ids[index], transformData(transforms[index], interpolation)))
+                val data = if (transforms[index] != sent[index]) transformData(transforms[index], interpolation) else null
+                val range = if (viewRangeGrew) EntityData(INDEX_VIEW_RANGE, EntityDataTypes.FLOAT, sentViewRange) else null
+                if (data != null || range != null) {
+                    send(player, WrapperPlayServerEntityMetadata(ids[index], listOfNotNull(range) + data.orEmpty()))
                 }
             }
         }
@@ -134,10 +147,26 @@ class PacketRidingDisplays(private val scheduler: EffectScheduler) : RidingDispl
         vehicle = null
         vehicleId = NO_VEHICLE
         look = null
+        sentViewRange = 0f
         ids = EMPTY
         uuids.clear()
         sent.clear()
     }
+
+    // where the models are spawned
+    private fun reference(entity: Entity?): Location? {
+        if (entity == null) {
+            return origin.takeIf { it.world != null }
+        }
+        val location = entity.location
+        location.y += entity.height
+        return location
+    }
+
+    // the client hides an entity farther than its view range from the camera, measured from the reference point,
+    // so the range must also cover how far the models reach from it
+    private fun viewRange(display: DisplayOptions, extent: Double): Float =
+        display.viewRange ?: ((scheduler.viewDistance + extent) / VANILLA_VIEW_RANGE_BLOCKS).toFloat()
 
     private fun resize(target: Int) {
         if (target == ids.size) {
@@ -154,8 +183,21 @@ class PacketRidingDisplays(private val scheduler: EffectScheduler) : RidingDispl
     }
 
     // players whose client knows the entity, plus the player itself when it is the one being followed
-    private fun currentViewers(entity: Entity, opts: EffectOptions): Map<UUID, Player> {
+    private fun ridingViewers(entity: Entity, opts: EffectOptions): Map<UUID, Player> {
         val candidates = if (entity is Player) entity.trackedBy + entity else entity.trackedBy
+        return allowedViewers(candidates, opts)
+    }
+
+    // players of the same world within the view distance of any model, matching the particle culling
+    private fun nearbyViewers(reference: Location, extent: Double, opts: EffectOptions): Map<UUID, Player> {
+        val world = reference.world ?: return emptyMap()
+        val radius = scheduler.viewDistance + extent
+        val radiusSquared = radius * radius
+        val candidates = world.players.filter { player -> player.location.distanceSquared(reference) <= radiusSquared }
+        return allowedViewers(candidates, opts)
+    }
+
+    private fun allowedViewers(candidates: Collection<Player>, opts: EffectOptions): Map<UUID, Player> {
         val allowed = opts.receivers.takeIf { it.isNotEmpty() }?.mapTo(HashSet()) { it.uniqueId }
         return candidates
             .filter { player -> player.isOnline && (allowed == null || player.uniqueId in allowed) }
@@ -168,8 +210,7 @@ class PacketRidingDisplays(private val scheduler: EffectScheduler) : RidingDispl
         display: DisplayOptions,
         opts: EffectOptions,
         transform: Transformation,
-        base: Location,
-        ridingY: Double,
+        reference: Location,
     ) {
         val type = when (display.type) {
             DisplayOptions.Type.ITEM -> EntityTypes.ITEM_DISPLAY
@@ -178,7 +219,7 @@ class PacketRidingDisplays(private val scheduler: EffectScheduler) : RidingDispl
         }
         send(player, WrapperPlayServerSpawnEntity(
             ids[index], Optional.of(uuids[index]), type,
-            Vector3d(base.x, ridingY, base.z), 0f, 0f, 0f, 0, Optional.empty(),
+            Vector3d(reference.x, reference.y, reference.z), 0f, 0f, 0f, 0, Optional.empty(),
         ))
         send(player, WrapperPlayServerEntityMetadata(ids[index], lookData(display, index, opts) + transformData(transform, interpolationTicks(display))))
     }
@@ -216,7 +257,7 @@ class PacketRidingDisplays(private val scheduler: EffectScheduler) : RidingDispl
             EntityData(INDEX_FLAGS, EntityDataTypes.BYTE, (if (display.glowColor != null) FLAG_GLOWING else 0).toByte()),
             EntityData(INDEX_BILLBOARD, EntityDataTypes.BYTE, display.resolvedBillboard.ordinal.toByte()),
             EntityData(INDEX_BRIGHTNESS, EntityDataTypes.INT, brightness),
-            EntityData(INDEX_VIEW_RANGE, EntityDataTypes.FLOAT, display.viewRange ?: (scheduler.viewDistance / VANILLA_VIEW_RANGE_BLOCKS).toFloat()),
+            EntityData(INDEX_VIEW_RANGE, EntityDataTypes.FLOAT, sentViewRange),
             EntityData(INDEX_SHADOW_RADIUS, EntityDataTypes.FLOAT, display.shadowRadius),
             EntityData(INDEX_SHADOW_STRENGTH, EntityDataTypes.FLOAT, display.shadowStrength),
             EntityData(INDEX_GLOW_COLOR, EntityDataTypes.INT, display.glowColor?.asARGB() ?: NO_GLOW_COLOR),

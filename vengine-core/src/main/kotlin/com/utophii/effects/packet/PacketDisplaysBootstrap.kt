@@ -10,12 +10,12 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSe
 import com.utophii.effects.PacketDisplays
 import com.utophii.engine.FXEngine
 
-// wires packet-based riding displays into the engine
+// wires packet-based displays into the engine
 object PacketDisplaysBootstrap {
     private var registered: PacketListenerCommon? = null
 
     fun enable() {
-        PacketDisplays.install { PacketRidingDisplays(FXEngine.scheduler()) }
+        PacketDisplays.install { origin -> PacketClientDisplays(FXEngine.scheduler(), origin) }
         registered = PacketEvents.getAPI().eventManager.registerListener(PassengersListener, PacketListenerPriority.NORMAL)
     }
 

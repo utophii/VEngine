@@ -30,7 +30,7 @@ class VEngine : JavaPlugin() {
         FXEngine.initialize(this)
         if (server.pluginManager.isPluginEnabled(PACKETEVENTS_PLUGIN)) {
             PacketDisplaysBootstrap.enable()
-            logger.info("PacketEvents found: followed display models ride their entity client-side.")
+            logger.info("PacketEvents found: display models are sent to clients as packets.")
         }
         applyConfig()
         yamlEffectLoader = YamlEffectLoader(this)

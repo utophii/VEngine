@@ -5,10 +5,11 @@ import com.utophii.engine.FXEngine
 import com.utophii.engine.FollowAnchor
 import org.bukkit.Location
 
-// renders the frames of one running effect on the server thread
-class FrameRenderer {
+// renders the frames of one running effect on the server thread.
+// Origin is the effect's spawn point, the reference for client-side display models
+class FrameRenderer(private val origin: Location) {
     private var displays: DisplayEntityPool? = null
-    private var riding: RidingDisplays? = null
+    private var client: ClientDisplays? = null
 
     // anchor is set for followed effects
     fun render(positions: List<Location>, opts: EffectOptions, time: Double, anchor: FollowAnchor? = null) {
@@ -18,11 +19,11 @@ class FrameRenderer {
             spawnParticles(positions, opts)
             return
         }
-        // followed models ride the entity on the client when PacketEvents is available
-        val ridingPool = if (anchor != null) riding ?: PacketDisplays.create()?.also { riding = it } else null
-        if (anchor != null && ridingPool != null) {
+        // with PacketEvents the models exist only on the clients
+        val clientPool = client ?: PacketDisplays.create(origin)?.also { client = it }
+        if (clientPool != null) {
             displays?.clear()
-            ridingPool.sync(positions, opts, display, time, anchor)
+            clientPool.sync(positions, opts, display, time, anchor)
         } else {
             val pool = displays ?: DisplayEntityPool(FXEngine.scheduler()).also { displays = it }
             pool.sync(positions, opts, display, time, anchor?.frameRotation())
@@ -36,12 +37,12 @@ class FrameRenderer {
     fun dispose() {
         clearDisplays()
         displays = null
-        riding = null
+        client = null
     }
 
     private fun clearDisplays() {
         displays?.clear()
-        riding?.clear()
+        client?.clear()
     }
 
     private fun spawnParticles(positions: List<Location>, opts: EffectOptions) {
