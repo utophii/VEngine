@@ -25,7 +25,8 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
     private val scratch = Location(null, 0.0, 0.0, 0.0)
 
     // matches the entity set to positions
-    fun sync(positions: List<Location>, opts: EffectOptions, display: DisplayOptions, time: Double) {
+    // frameRotation turns every model with a followed entity (see [com.utophii.engine.FollowAnchor.frameRotation])
+    fun sync(positions: List<Location>, opts: EffectOptions, display: DisplayOptions, time: Double, frameRotation: Quaternionf? = null) {
         val previous = look
         if (previous != null && previous.type != display.type) {
             clear()
@@ -43,7 +44,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         val interpolation = display.interpolationTicks.coerceIn(0, DisplayOptions.MAX_INTERPOLATION_TICKS)
         for (index in 0 until target) {
             val position = positions[index]
-            val transform = transformation(display, opts, index, time)
+            val transform = modelTransformation(display, opts, index, time, frameRotation)
             if (index >= entities.size) {
                 spawn(position, display, transform, index, opts) ?: return
                 continue
@@ -139,29 +140,6 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         }
     }
 
-    // model transform for point index
-    private fun transformation(display: DisplayOptions, opts: EffectOptions, index: Int, time: Double): Transformation {
-        // angleTime = t + i * phase: offsets each piece along the spin so the set does not rotate in lockstep
-        val angleTime = time + index * display.phase
-        val rotation = Quaternionf().rotateXYZ(
-            (display.rotation.x + display.spin.x * angleTime).toFloat(),
-            (display.rotation.y + display.spin.y * angleTime).toFloat(),
-            (display.rotation.z + display.spin.z * angleTime).toFloat(),
-        )
-        val scale = Vector3f(
-            (display.size.x * opts.scale).toFloat(),
-            (display.size.y * opts.scale).toFloat(),
-            (display.size.z * opts.scale).toFloat(),
-        )
-        // T = -R(S * 0.5) rotates and scales them around their center instead
-        val translation = if (display.type == DisplayOptions.Type.BLOCK) {
-            rotation.transform(Vector3f(scale).mul(-HALF))
-        } else {
-            Vector3f()
-        }
-        return Transformation(translation, rotation, scale, Quaternionf())
-    }
-
     private fun moveIfChanged(entity: Display, index: Int, position: Location) {
         val base = index * 3
         val moved = lastPositions[base] != position.x || lastPositions[base + 1] != position.y || lastPositions[base + 2] != position.z
@@ -215,8 +193,39 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         private const val HALF = 0.5f
         private val MINI_MESSAGE = MiniMessage.miniMessage()
 
+        // model transform for point index, shared by the server-side and the packet-based pools
+        // frameRotation (when following an entity) is applied on top of the model's own rotation
+        fun modelTransformation(
+            display: DisplayOptions,
+            opts: EffectOptions,
+            index: Int,
+            time: Double,
+            frameRotation: Quaternionf? = null,
+        ): Transformation {
+            // angleTime = t + i * phase: offsets each piece along the spin so the set does not rotate in lockstep
+            val angleTime = time + index * display.phase
+            val rotation = Quaternionf().rotateXYZ(
+                (display.rotation.x + display.spin.x * angleTime).toFloat(),
+                (display.rotation.y + display.spin.y * angleTime).toFloat(),
+                (display.rotation.z + display.spin.z * angleTime).toFloat(),
+            )
+            frameRotation?.let { frame -> rotation.premul(frame) }
+            val scale = Vector3f(
+                (display.size.x * opts.scale).toFloat(),
+                (display.size.y * opts.scale).toFloat(),
+                (display.size.z * opts.scale).toFloat(),
+            )
+            // T = -R(S * 0.5) rotates and scales them around their center instead
+            val translation = if (display.type == DisplayOptions.Type.BLOCK) {
+                rotation.transform(Vector3f(scale).mul(-HALF))
+            } else {
+                Vector3f()
+            }
+            return Transformation(translation, rotation, scale, Quaternionf())
+        }
+
         // the static appearance
-        private fun sameLook(a: DisplayOptions, b: DisplayOptions): Boolean =
+        internal fun sameLook(a: DisplayOptions, b: DisplayOptions): Boolean =
             a.copy(size = b.size, rotation = b.rotation, spin = b.spin, phase = b.phase, withParticles = b.withParticles) == b
     }
 }

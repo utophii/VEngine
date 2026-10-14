@@ -3,6 +3,7 @@ package com.utophii.engine
 import com.utophii.api.EffectOptions
 import com.utophii.api.EffectHandle
 import com.utophii.api.EffectProvider
+import com.utophii.api.FollowOptions
 import com.utophii.api.ParticleEffect
 import com.utophii.effects.AizawaAttractorEffect
 import com.utophii.effects.HalvorsenAttractorEffect
@@ -83,6 +84,11 @@ object FXEngine {
     // plays a registered effect and returns its EffectHandle
     fun play(name: String, center: Location, options: EffectOptions = EffectOptions()): EffectHandle? {
         return effect(name)?.play(center, options)
+    }
+
+    // plays a registered effect bound to an entity: the effect moves with it every frame
+    fun play(name: String, follow: FollowOptions, options: EffectOptions = EffectOptions()): EffectHandle? {
+        return effect(name)?.play(follow.entity.location, options.toBuilder().follow(follow).build())
     }
 
     // stops an active running effect by ID

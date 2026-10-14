@@ -1,6 +1,7 @@
 package com.utophii.engine
 
 import com.utophii.api.EffectHandle
+import com.utophii.api.EffectOptions
 import com.utophii.api.SimpleEffectHandle
 import org.bukkit.Location
 import org.bukkit.Particle
@@ -17,6 +18,7 @@ class EffectScheduler(val plugin: JavaPlugin) {
     private val tasks: MutableSet<BukkitTask> = ConcurrentHashMap.newKeySet()
     private val activeHandles = ConcurrentHashMap<String, EffectHandle>()
     private val running = ConcurrentHashMap<String, RunningEffect>()
+    private val anchors = ConcurrentHashMap<String, FollowAnchor>()
     private val idCounter = AtomicInteger(1)
 
     // view-distance culling radius in blocks; particles are only sent to players within this radius of the particle location
@@ -31,6 +33,7 @@ class EffectScheduler(val plugin: JavaPlugin) {
     // schedules frame calculation asynchronously while rendering strictly monotonically on the main thread
     // when a computed frame is dropped (stale, cancelled, or after rendering) [release] disposes it exactly once
     // onStop runs once on the server thread when the effect finishes or is cancelled
+    // keepAlive is checked on the server thread every tick
     fun <T> scheduleFrames(
         effectName: String,
         initialDelayTicks: Long = INITIAL_DELAY_TICKS,
@@ -40,6 +43,8 @@ class EffectScheduler(val plugin: JavaPlugin) {
         release: ((T) -> Unit)? = null,
         origin: Location? = null,
         onStop: (() -> Unit)? = null,
+        keepAlive: (() -> Boolean)? = null,
+        anchor: FollowAnchor? = null,
     ): EffectHandle {
         val handleId = "$effectName#${idCounter.getAndIncrement()}"
         var tick = 0L
@@ -54,7 +59,7 @@ class EffectScheduler(val plugin: JavaPlugin) {
         }
 
         task = plugin.server.scheduler.runTaskTimer(plugin, Runnable {
-            if (tick >= durationTicks || handle.isCancelled) {
+            if (tick >= durationTicks || handle.isCancelled || keepAlive?.invoke() == false) {
                 handle.cancel()
                 return@Runnable
             }
@@ -93,7 +98,7 @@ class EffectScheduler(val plugin: JavaPlugin) {
 
         tasks.add(task)
         activeHandles[handleId] = handle
-        track(handle, origin)
+        track(handle, origin, anchor)
         return handle
     }
 
@@ -104,10 +109,13 @@ class EffectScheduler(val plugin: JavaPlugin) {
 
     // registers a composite handle and automatically unregisters it after ttlTicks,
     // so scripted effects that finished naturally do not linger in the active handle listing.
-    // origin is the spawn point placeholders use; omit it for bookkeeping handles that should stay invisible
-    fun registerComposite(handle: EffectHandle, ttlTicks: Long, origin: Location? = null) {
+    // origin is the spawn point placeholders use
+    fun registerComposite(handle: EffectHandle, ttlTicks: Long, origin: Location? = null, anchor: FollowAnchor? = null) {
         activeHandles[handle.id] = handle
-        track(handle, origin)
+        track(handle, origin, anchor)
+        if (ttlTicks >= EffectOptions.INFINITE_DURATION) {
+            return
+        }
         plugin.server.scheduler.runTaskLater(plugin, Runnable {
             // any straggler children cancel themselves and leave the registry through their own callbacks
             handle.cancel()
@@ -133,6 +141,7 @@ class EffectScheduler(val plugin: JavaPlugin) {
         activeHandles.values.toList().forEach(EffectHandle::cancel)
         activeHandles.clear()
         running.clear()
+        anchors.clear()
         cancelAllTasks()
         return count
     }
@@ -141,13 +150,19 @@ class EffectScheduler(val plugin: JavaPlugin) {
     fun activeHandles(): List<EffectHandle> = activeHandles.values.toList()
 
     // returns a snapshot of user-facing spawned effects, including their spawn point
-    fun runningEffects(): List<RunningEffect> = running.values.toList()
+    // followed effects report the last sampled position of their entity instead of the spawn point
+    fun runningEffects(): List<RunningEffect> = running.values.map { effect ->
+        val position = anchors[effect.id]?.position() ?: return@map effect
+        val worldName = position.world?.name ?: return@map effect
+        effect.copy(worldName = worldName, x = position.x, y = position.y, z = position.z)
+    }
 
     // remembers a spawned effect's origin so placeholders can answer "what is playing, and where"
-    private fun track(handle: EffectHandle, origin: Location?) {
+    private fun track(handle: EffectHandle, origin: Location?, anchor: FollowAnchor? = null) {
         if (origin == null) {
             return
         }
+        anchor?.let { anchors[handle.id] = it }
         val worldName = origin.world?.name ?: return
         running[handle.id] = RunningEffect(
             id = handle.id,
@@ -163,6 +178,7 @@ class EffectScheduler(val plugin: JavaPlugin) {
     private fun forget(id: String) {
         activeHandles.remove(id)
         running.remove(id)
+        anchors.remove(id)
     }
 
     // spawn point of one user-facing effect. Coordinates are copied so later Location mutation cannot move the snapshot

@@ -2,6 +2,7 @@ package com.utophii.commands
 
 import com.utophii.VEngine
 import com.utophii.api.EffectOptions
+import com.utophii.api.FollowOptions
 import com.utophii.engine.FXEngine
 import com.utophii.util.LegacyFormat
 import org.bukkit.command.Command
@@ -100,8 +101,9 @@ class VEngineCommand(
         }
 
         val effectName = args[1].lowercase()
+        val effect = FXEngine.effect(effectName)
 
-        if (FXEngine.effect(effectName) == null) {
+        if (effect == null) {
             sender.sendMessage(LegacyFormat.format(
                 "<red>Unknown effect <gold>'$effectName'</gold>. " +
                 "Use <gold>/ve list</gold> to see available effects.</red>"
@@ -121,9 +123,12 @@ class VEngineCommand(
             return true
         }
 
+        // effects with a `follow:` block stick to the player who played them
+        val follow = effect.followDefaults?.let { FollowOptions(sender) }
         val opts = EffectOptions.builder()
             .scale(scale)
             .duration(duration)
+            .follow(follow)
             .build()
 
         val handle = FXEngine.play(effectName, sender.location, opts)

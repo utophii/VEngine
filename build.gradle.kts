@@ -18,6 +18,10 @@ subprojects {
           name = "placeholderapi"
           url = uri("https://repo.extendedclip.com/releases/")
         }
+        maven {
+          name = "codemc"
+          url = uri("https://repo.codemc.io/repository/maven-releases/")
+        }
     }
 
     tasks.withType<Test> {

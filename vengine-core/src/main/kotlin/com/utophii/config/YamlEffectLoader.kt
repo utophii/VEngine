@@ -3,6 +3,8 @@ package com.utophii.config
 import com.utophii.api.DisplayOptions
 import com.utophii.api.EffectOptions
 import com.utophii.api.EffectModifier
+import com.utophii.api.FollowDefaults
+import com.utophii.api.FollowRotation
 import com.utophii.api.ParticleEffect
 import com.utophii.effects.NumericAnimation
 import com.utophii.effects.NumericKeyframe
@@ -133,6 +135,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             zFormula = z,
             defaults = defaults,
             angularSpeed = angularSpeed,
+            followDefaults = parseFollow(raw[FOLLOW_KEY], fileName),
         )
     }
 
@@ -143,7 +146,29 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             plugin.logger.warning("Skipping effect '${fileName}': no valid layers were found.")
             return null
         }
-        return ScriptedEffect(id, duration, layers)
+        return ScriptedEffect(id, duration, layers, parseFollow(raw[FOLLOW_KEY], fileName))
+    }
+
+    // an effect with this block follows whoever plays it
+    private fun parseFollow(value: Any?, fileName: String): FollowDefaults? {
+        if (value == true) {
+            return FollowDefaults()
+        }
+        val node = value as? Map<*, *> ?: return null
+        val offset = parseOffset(node[OFFSET_KEY])?.let { (x, y, z) -> Vector(x, y, z) }
+        val rotationName = node[ROTATION_KEY]?.toString()?.trim()
+        val rotation = rotationName?.let { name ->
+            FollowRotation.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
+                ?: run {
+                    plugin.logger.warning(
+                        "Unknown follow rotation '$name' in '$fileName'; expected one of " +
+                            FollowRotation.entries.joinToString { it.name.lowercase() } + ".",
+                    )
+                    null
+                }
+        }
+        val stopWithEntity = node[STOP_WITH_ENTITY_KEY] as? Boolean
+        return FollowDefaults(offset, rotation, stopWithEntity)
     }
 
     private fun isParametric(raw: Map<String, Any?>): Boolean {
@@ -549,6 +574,8 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private const val VALUE_KEY = "value"
         private const val LOOP_KEY = "loop"
         private const val TYPE_KEY = "type"
+        private const val FOLLOW_KEY = "follow"
+        private const val STOP_WITH_ENTITY_KEY = "stopWithEntity"
         private const val RED_KEY = "r"
         private const val GREEN_KEY = "g"
         private const val BLUE_KEY = "b"

@@ -1,6 +1,7 @@
 package com.utophii.effects
 
 import com.utophii.api.EffectOptions
+import com.utophii.api.FollowDefaults
 import com.utophii.math.ExpressionEvaluator
 import com.utophii.math.MathUtils
 import org.bukkit.Location
@@ -20,6 +21,7 @@ class ParametricEffect(
     private val zFormula: String,
     private val defaults: Map<String, Double>,
     private val angularSpeed: Double,
+    override val followDefaults: FollowDefaults? = null,
 ) : AbstractParticleEffect(name) {
 
     // compiled once per axis; the evaluator is thread-safe and shared across concurrent plays

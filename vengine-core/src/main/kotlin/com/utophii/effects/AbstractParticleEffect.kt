@@ -5,6 +5,7 @@ import com.utophii.api.EffectOptions
 import com.utophii.api.EffectHandle
 import com.utophii.api.ParticleEffect
 import com.utophii.engine.FXEngine
+import com.utophii.engine.FollowAnchor
 import com.utophii.math.MathUtils
 import org.bukkit.Color
 import org.bukkit.Location
@@ -20,6 +21,7 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
     override fun play(center: Location, opts: EffectOptions): EffectHandle {
         val stableCenter = center.clone()
         val renderer = FrameRenderer()
+        val anchor = opts.follow?.let { follow -> FollowAnchor(follow.withDefaults(followDefaults), stableCenter) }
         return FXEngine.scheduler().scheduleFrames(
             effectName = name,
             durationTicks = opts.duration.coerceAtLeast(MIN_DURATION_TICKS),
@@ -34,9 +36,14 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
                     throw t
                 }
             },
-            render = { time, buffer -> renderer.render(buffer.list(), opts, time) },
+            render = { time, buffer ->
+                anchor?.apply(buffer.list())
+                renderer.render(buffer.list(), opts, time, anchor)
+            },
             release = { buffer -> ParticleBufferPool.release(buffer) },
             onStop = renderer::dispose,
+            keepAlive = anchor?.let { it::isAlive },
+            anchor = anchor,
         )
     }
 

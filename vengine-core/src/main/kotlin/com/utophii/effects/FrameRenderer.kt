@@ -2,21 +2,31 @@ package com.utophii.effects
 
 import com.utophii.api.EffectOptions
 import com.utophii.engine.FXEngine
+import com.utophii.engine.FollowAnchor
 import org.bukkit.Location
 
 // renders the frames of one running effect on the server thread
 class FrameRenderer {
     private var displays: DisplayEntityPool? = null
+    private var riding: RidingDisplays? = null
 
-    fun render(positions: List<Location>, opts: EffectOptions, time: Double) {
+    // anchor is set for followed effects
+    fun render(positions: List<Location>, opts: EffectOptions, time: Double, anchor: FollowAnchor? = null) {
         val display = opts.display
         if (display == null) {
-            displays?.clear()
+            clearDisplays()
             spawnParticles(positions, opts)
             return
         }
-        val pool = displays ?: DisplayEntityPool(FXEngine.scheduler()).also { displays = it }
-        pool.sync(positions, opts, display, time)
+        // followed models ride the entity on the client when PacketEvents is available
+        val ridingPool = if (anchor != null) riding ?: PacketDisplays.create()?.also { riding = it } else null
+        if (anchor != null && ridingPool != null) {
+            displays?.clear()
+            ridingPool.sync(positions, opts, display, time, anchor)
+        } else {
+            val pool = displays ?: DisplayEntityPool(FXEngine.scheduler()).also { displays = it }
+            pool.sync(positions, opts, display, time, anchor?.frameRotation())
+        }
         if (display.withParticles) {
             spawnParticles(positions, opts)
         }
@@ -24,8 +34,14 @@ class FrameRenderer {
 
     // removes any display entities spawned by this run
     fun dispose() {
-        displays?.clear()
+        clearDisplays()
         displays = null
+        riding = null
+    }
+
+    private fun clearDisplays() {
+        displays?.clear()
+        riding?.clear()
     }
 
     private fun spawnParticles(positions: List<Location>, opts: EffectOptions) {

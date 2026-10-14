@@ -6,6 +6,10 @@ import org.bukkit.Location
 interface ParticleEffect {
     val name: String
 
+    // how this effect prefers to be attached when played on an entity
+    val followDefaults: FollowDefaults?
+        get() = null
+
     /**
      * renders this effect around a center point
      *

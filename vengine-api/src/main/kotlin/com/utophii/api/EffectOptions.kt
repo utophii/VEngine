@@ -30,6 +30,7 @@ import org.bukkit.util.Vector
 * @property modifiers position post-processing chain
 * @property parameters effect-specific numeric parameters
 * @property display renders display entities at each point instead of particles (null = particles only)
+* @property follow binds the effect to an entity instead of its fixed spawn point (null = stays in place)
 */
 data class EffectOptions(
     val particle: Particle = Particle.FLAME,
@@ -53,6 +54,7 @@ data class EffectOptions(
     val modifiers: List<EffectModifier> = emptyList(),
     val parameters: Map<String, Double> = emptyMap(),
     val display: DisplayOptions? = null,
+    val follow: FollowOptions? = null,
 ) {
     fun toBuilder(): Builder = Builder()
         .particle(particle)
@@ -75,6 +77,7 @@ data class EffectOptions(
             material?.let(builder::material)
             tiltAxis?.let(builder::tiltAxis)
             display?.let(builder::display)
+            follow?.let(builder::follow)
         }
 
     class Builder {
@@ -99,6 +102,7 @@ data class EffectOptions(
         private var modifiers: List<EffectModifier> = emptyList()
         private var parameters: Map<String, Double> = emptyMap()
         private var display: DisplayOptions? = null
+        private var follow: FollowOptions? = null
 
         fun particle(value: Particle) = apply { particle = value }
         fun color(value: Color) = apply { color = value }
@@ -125,6 +129,7 @@ data class EffectOptions(
         fun parameters(value: Map<String, Double>) = apply { parameters = value.toMap() }
         fun parameter(key: String, value: Double) = apply { parameters = parameters + (key to value) }
         fun display(value: DisplayOptions?) = apply { display = value }
+        fun follow(value: FollowOptions?) = apply { follow = value }
 
         fun build(): EffectOptions = EffectOptions(
             particle = particle,
@@ -148,6 +153,7 @@ data class EffectOptions(
             modifiers = modifiers,
             parameters = parameters,
             display = display,
+            follow = follow,
         )
     }
 
@@ -158,6 +164,8 @@ data class EffectOptions(
         const val DEFAULT_ROTATION_ROLL = 0.0
         const val DEFAULT_TILT_ANGLE = 0.0
         const val DEFAULT_DURATION_TICKS = 1L
+
+        const val INFINITE_DURATION = Long.MAX_VALUE
         const val DEFAULT_DUST_SIZE = 1.0f
         const val DEFAULT_PARTICLE_COUNT = 1
         const val DEFAULT_PARTICLE_OFFSET = 0.0

@@ -3,8 +3,10 @@ package com.utophii.effects
 import com.utophii.api.CompositeEffectHandle
 import com.utophii.api.EffectHandle
 import com.utophii.api.EffectOptions
+import com.utophii.api.FollowDefaults
 import com.utophii.api.ParticleEffect
 import com.utophii.engine.FXEngine
+import com.utophii.engine.FollowAnchor
 import com.utophii.math.EasingType
 import org.bukkit.Color
 import org.bukkit.Location
@@ -16,6 +18,7 @@ class ScriptedEffect(
     override val name: String,
     private val defaultDurationTicks: Long,
     private val layers: List<ScriptedLayer>,
+    override val followDefaults: FollowDefaults? = null,
 ) : ParticleEffect {
 
     // plays every active layer with async calculation and sync rendering
@@ -24,6 +27,14 @@ class ScriptedEffect(
         val stableCenter = center.clone()
         val totalDuration = totalDuration(opts)
         val childHandles = mutableListOf<EffectHandle>()
+        val compositeId = "$name#${FXEngine.nextScriptedId()}"
+        // one anchor for all layers so every layer sees the same pose
+        val anchor = opts.follow?.let { follow -> FollowAnchor(follow.withDefaults(followDefaults), stableCenter) }
+        val keepAlive = anchor?.let {
+            {
+                anchor.isAlive().also { alive -> if (!alive) FXEngine.stop(compositeId) }
+            }
+        }
 
         layers.forEach { layer ->
             val primitive = FXEngine.primitiveEffect(layer.effect) ?: return@forEach
@@ -65,17 +76,20 @@ class ScriptedEffect(
                         throw t
                     }
                 },
-                render = { time, frame -> renderer.render(frame.positions.list(), frame.options, time) },
+                render = { time, frame ->
+                    anchor?.apply(frame.positions.list())
+                    renderer.render(frame.positions.list(), frame.options, time, anchor)
+                },
                 release = { frame -> ParticleBufferPool.release(frame.positions) },
                 onStop = renderer::dispose,
+                keepAlive = keepAlive,
             )
             childHandles.add(handle)
         }
 
-        val compositeId = "$name#${FXEngine.nextScriptedId()}"
         val composite = CompositeEffectHandle(compositeId, name, childHandles)
         // track the composite only: layer tasks are internal and must not inflate placeholder counts
-        FXEngine.scheduler().registerComposite(composite, totalDuration, stableCenter)
+        FXEngine.scheduler().registerComposite(composite, totalDuration, stableCenter, anchor)
         return composite
     }
 

@@ -2,6 +2,7 @@ package com.utophii
 
 import com.utophii.commands.VEngineCommand
 import com.utophii.config.YamlEffectLoader
+import com.utophii.effects.packet.PacketDisplaysBootstrap
 import com.utophii.engine.EffectScheduler
 import com.utophii.engine.FXEngine
 import com.utophii.placeholders.PlaceholderService
@@ -27,6 +28,10 @@ class VEngine : JavaPlugin() {
 
     override fun onEnable() {
         FXEngine.initialize(this)
+        if (server.pluginManager.isPluginEnabled(PACKETEVENTS_PLUGIN)) {
+            PacketDisplaysBootstrap.enable()
+            logger.info("PacketEvents found: followed display models ride their entity client-side.")
+        }
         applyConfig()
         yamlEffectLoader = YamlEffectLoader(this)
         yamlEffectLoader.ensureDirectories()
@@ -48,6 +53,9 @@ class VEngine : JavaPlugin() {
     override fun onDisable() {
         placeholders.shutdown()
         FXEngine.shutdown()
+        if (server.pluginManager.isPluginEnabled(PACKETEVENTS_PLUGIN)) {
+            PacketDisplaysBootstrap.disable()
+        }
         context.shutdown()
     }
 
@@ -70,6 +78,7 @@ class VEngine : JavaPlugin() {
 
     companion object {
         private const val VIEW_DISTANCE_CONFIG_KEY = "view-distance"
+        private const val PACKETEVENTS_PLUGIN = "packetevents"
     }
 
     private fun saveBundledEffectExamples() {
@@ -87,6 +96,7 @@ class VEngine : JavaPlugin() {
         saveIfMissing("effects/parametric_rose.yml")
         saveIfMissing("effects/parametric_torus.yml")
         saveIfMissing("effects/traveling_comet.yml")
+        saveIfMissing("effects/halo.yml")
     }
 
     private fun saveIfMissing(path: String) {

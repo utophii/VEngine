@@ -20,6 +20,9 @@ dependencies {
     // Paper API: compiled against the oldest supported version (1.21.6), runs up to 26.x
     compileOnly("io.papermc.paper:paper-api:1.21.6-R0.1-SNAPSHOT")
 
+    // optional: with the PacketEvents plugin installed, followed display models are client-side passengers
+    compileOnly("com.github.retrooper:packetevents-spigot:2.13.0")
+
     // Kotlin runtime
     implementation(kotlin("stdlib"))
 

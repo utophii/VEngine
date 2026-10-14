@@ -14,6 +14,7 @@ import org.bukkit.Color
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.Particle
+import org.bukkit.entity.Entity
 import org.bukkit.entity.Player
 import org.bukkit.util.Vector
 
@@ -43,6 +44,33 @@ fun Location.playEffect(name: String, config: EffectConfig.() -> Unit = {}): Eff
     val options = effectConfig.build()
     val resolved = effectConfig.withAbsoluteMotion(options, toVector())
     return FXEngine.play(name, this, resolved)
+}
+
+/**
+ * Spawns a registered effect bound to this entity: it moves with the entity every frame and,
+ * depending on [rotation], turns with it. The effect stops when the entity is gone.
+ *
+ * ```
+ * player.playEffect("wings", offset = Vector(0.0, 1.2, -0.3), rotation = FollowRotation.BODY) {
+ *     duration(EffectOptions.INFINITE_DURATION)
+ * }
+ * arrow.playEffect("comet_trail", rotation = FollowRotation.VELOCITY)
+ * ```
+ *
+ * @param offset local offset (+Z forward, +Y up, +X left), rotated together with the effect;
+ * null uses the effect's YAML `follow:` default
+ * @param rotation which orientation of the entity the effect inherits; null uses the effect's default
+ */
+fun Entity.playEffect(
+    name: String,
+    offset: Vector? = null,
+    rotation: FollowRotation? = null,
+    config: EffectConfig.() -> Unit = {},
+): EffectHandle? {
+    val effectConfig = EffectConfig().apply { follow(this@playEffect, offset, rotation) }.apply(config)
+    val options = effectConfig.build()
+    val resolved = effectConfig.withAbsoluteMotion(options, location.toVector())
+    return FXEngine.play(name, location, resolved)
 }
 
 // typesafe builder for all [EffectOptions] rendering and transform fields
@@ -95,6 +123,14 @@ class EffectConfig {
     fun tiltAngle(radians: Double) = builder.tiltAngle(radians)
 
     fun duration(ticks: Long) = builder.duration(ticks)
+
+    // binds the effect to an entity instead of its spawn point; null values use the effect's defaults (see [FollowOptions])
+    fun follow(
+        entity: Entity,
+        offset: Vector? = null,
+        rotation: FollowRotation? = null,
+        stopWithEntity: Boolean? = null,
+    ) = builder.follow(FollowOptions(entity, offset?.clone(), rotation, stopWithEntity))
 
     // restricts the effect to an explicit audience; empty means everyone nearby sees it
     fun receivers(vararg players: Player) = builder.receivers(players.toList())
