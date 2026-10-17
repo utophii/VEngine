@@ -137,6 +137,9 @@ class EffectConfig {
 
     fun receivers(players: Iterable<Player>) = builder.receivers(players.toList())
 
+    // the player whose PlaceholderAPI values fill %placeholders% in the effect's YAML
+    fun subject(player: Player?) = builder.subject(player)
+
     fun modifiers(block: ModifierConfig.() -> Unit) {
         builder.modifiers(ModifierConfig().apply(block).build())
     }

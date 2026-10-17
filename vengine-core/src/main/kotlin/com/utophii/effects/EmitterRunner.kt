@@ -82,6 +82,7 @@ internal class EmitterRunner(
         val builder = EffectOptions.builder()
             .scale(scale)
             .receivers(runtime.receivers)
+            .subject(runtime.subject)
         emitter.duration?.let(builder::duration)
 
         val handle = if (follow != null) {

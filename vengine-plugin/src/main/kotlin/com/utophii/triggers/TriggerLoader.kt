@@ -1,7 +1,7 @@
 package com.utophii.triggers
 
 import com.utophii.engine.FXEngine
-import com.utophii.math.ExpressionEvaluator
+import com.utophii.engine.PlaceholderExpression
 import org.bukkit.Material
 import org.bukkit.entity.EntityType
 import java.util.logging.Logger
@@ -77,9 +77,9 @@ class TriggerLoader(private val logger: Logger) {
     }
 
     // numbers and formulas share one path: a plain number is a constant expression
-    private fun parseExpression(id: String, key: String, value: Any?): ExpressionEvaluator? {
+    private fun parseExpression(id: String, key: String, value: Any?): PlaceholderExpression? {
         val formula = value?.toString()?.takeIf(String::isNotBlank) ?: return null
-        return ExpressionEvaluator.compile(formula) ?: run {
+        return PlaceholderExpression.compile(formula) ?: run {
             logger.warning("Trigger '$id': invalid expression for '$key': $formula")
             null
         }

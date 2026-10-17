@@ -1,6 +1,6 @@
 package com.utophii.triggers
 
-import com.utophii.math.ExpressionEvaluator
+import com.utophii.engine.PlaceholderExpression
 import org.bukkit.Material
 import org.bukkit.entity.EntityType
 
@@ -42,7 +42,7 @@ data class TriggerDefinition(
     val attackers: Set<EntityType> = emptySet(),
     val causes: Set<String> = emptySet(),
     val items: Set<Material> = emptySet(),
-    val scale: ExpressionEvaluator? = null,
-    val duration: ExpressionEvaluator? = null,
-    val parameters: Map<String, ExpressionEvaluator> = emptyMap(),
+    val scale: PlaceholderExpression? = null,
+    val duration: PlaceholderExpression? = null,
+    val parameters: Map<String, PlaceholderExpression> = emptyMap(),
 )

@@ -15,6 +15,8 @@ import com.utophii.effects.ParametricEffect
 import com.utophii.effects.ScriptedEffect
 import com.utophii.effects.ScriptedLayer
 import com.utophii.engine.FXEngine
+import com.utophii.engine.PlaceholderExpression
+import com.utophii.engine.Placeholders
 import com.utophii.math.EasingType
 import com.utophii.math.ExpressionEvaluator
 import com.utophii.math.MathUtils
@@ -50,6 +52,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         ensureDirectories()
         FXEngine.clearScripted()
         FXEngine.clearParametricPrimitives()
+        Placeholders.resetWarnings()
 
         val parsedFiles = effectsDirectory()
             .listFiles { file -> file.isFile && file.extension.equals(YAML_EXTENSION, ignoreCase = true) }
@@ -77,6 +80,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         // pass 2: layered scripted effects; all YAML atoms are guaranteed to be resolvable now
         parsedFiles.forEach { (file, raw) ->
             if (!isParametric(raw)) {
+                // a duration formula is only known at play time, so layer timing falls back to the default
                 val duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS)
                     ?: DEFAULT_DURATION_TICKS
                 val effect = loadScripted(effectId(raw, file), duration, raw, file.name) ?: return@forEach
@@ -172,7 +176,8 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         }
         val emitters = parseEmitters(raw[EMITTERS_KEY], fromEnd = false, fileName) +
             parseEmitters(raw[THEN_KEY], fromEnd = true, fileName)
-        return ScriptedEffect(id, duration, layers, parseFollow(raw[FOLLOW_KEY], fileName), emitters)
+        val durationFormula = parseFormula(raw[DURATION_KEY], DURATION_KEY, fileName)
+        return ScriptedEffect(id, duration, layers, parseFollow(raw[FOLLOW_KEY], fileName), emitters, durationFormula)
     }
 
     // parses emitters: or then:
@@ -280,11 +285,11 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             val nodes = configuredLayers.filterIsInstance<Map<*, *>>()
             val timeline = LayerTimeline.resolve(nodes.map(::parseTiming), effectDuration)
             timeline.problems.forEach { problem -> plugin.logger.warning("In '$fileName': $problem.") }
-            return nodes.zip(timeline.starts).mapNotNull { (node, start) -> start?.let { parseLayer(node, it) } }
+            return nodes.zip(timeline.starts).mapNotNull { (node, start) -> start?.let { parseLayer(node, it, fileName) } }
         }
 
         // backward-compatible single-layer format
-        val legacyLayer = parseLayer(raw, parseTiming(raw).start)
+        val legacyLayer = parseLayer(raw, parseTiming(raw).start, fileName)
         return legacyLayer?.let(::listOf) ?: emptyList()
     }
 
@@ -296,7 +301,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         delay = raw[DELAY_KEY].number()?.toLong()?.coerceAtLeast(MIN_START_TICKS) ?: DEFAULT_START_TICKS,
     )
 
-    private fun parseLayer(raw: Map<*, *>, startTick: Long): ScriptedLayer? {
+    private fun parseLayer(raw: Map<*, *>, startTick: Long, fileName: String): ScriptedLayer? {
         val effectName = raw[EFFECT_KEY]?.toString()?.lowercase()?.takeIf(String::isNotBlank) ?: return null
         if (FXEngine.primitiveEffect(effectName) == null) {
             plugin.logger.warning("Skipping layer for unknown primitive effect '$effectName'.")
@@ -313,7 +318,21 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             durationTicks = durationTicks,
             options = options,
             animation = animation,
+            scaleFormula = parseFormula(raw[SCALE_KEY], SCALE_KEY, fileName),
+            parameterFormulas = (raw[PARAMETERS_KEY] as? Map<*, *>).orEmpty().mapNotNull { (name, value) ->
+                val key = name?.toString()?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+                parseFormula(value, "$PARAMETERS_KEY.$key", fileName)?.let { key to it }
+            }.toMap(),
         )
+    }
+
+    // a string that is not a plain number is a formula
+    private fun parseFormula(value: Any?, key: String, fileName: String): PlaceholderExpression? {
+        val formula = (value as? String)?.takeIf { it.isNotBlank() && it.trim().toDoubleOrNull() == null } ?: return null
+        return PlaceholderExpression.compile(formula) ?: run {
+            plugin.logger.warning("In '$fileName': invalid expression for '$key': $formula")
+            null
+        }
     }
 
     private fun parseOptions(raw: Map<*, *>): EffectOptions {

@@ -28,6 +28,8 @@
 #                hit:      damage, health, max_health   (victim health before the hit)
 #                death:    max_health
 #                teleport: distance                     (0 across worlds)
+#              PlaceholderAPI placeholders work too and are read for the same player as `permission`,
+#              e.g. scale: "0.5 + %player_level% / 50" (non-numeric values count as 0)
 
 #crit_spark:
 #  event: hit

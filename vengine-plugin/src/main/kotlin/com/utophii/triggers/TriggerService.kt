@@ -35,9 +35,9 @@ class TriggerService(private val plugin: JavaPlugin) {
             }
             val placement = context.place(definition.target) ?: return@forEach
             if (definition.delayTicks > 0L) {
-                plugin.server.scheduler.runTaskLater(plugin, Runnable { play(definition, placement, context.variables) }, definition.delayTicks)
+                plugin.server.scheduler.runTaskLater(plugin, Runnable { play(definition, placement, context) }, definition.delayTicks)
             } else {
-                play(definition, placement, context.variables)
+                play(definition, placement, context)
             }
         }
     }
@@ -67,21 +67,23 @@ class TriggerService(private val plugin: JavaPlugin) {
         return true
     }
 
-    private fun play(definition: TriggerDefinition, placement: Placement, variables: Map<String, Double>) {
+    private fun play(definition: TriggerDefinition, placement: Placement, context: TriggerContext) {
         val effect = FXEngine.effect(definition.effect) ?: return
         val entity = placement.entity
         if (entity != null && !entity.isValid) {
             return
         }
-        val values = variables + (RANDOM_VARIABLE to ThreadLocalRandom.current().nextDouble())
-        val builder = EffectOptions.builder()
-        definition.scale?.evaluate(values)?.takeIf { it > 0.0 }?.let(builder::scale)
+        // placeholders are read for the same player the permission is checked on
+        val subject = context.player
+        val values = context.variables + (RANDOM_VARIABLE to ThreadLocalRandom.current().nextDouble())
+        val builder = EffectOptions.builder().subject(subject)
+        definition.scale?.evaluate(subject, values)?.takeIf { it > 0.0 }?.let(builder::scale)
         // formula atoms last a single tick by default
-        val duration = definition.duration?.evaluate(values)?.toLong()
+        val duration = definition.duration?.evaluate(subject, values)?.toLong()
             ?: DEFAULT_ATOM_DURATION_TICKS.takeIf { effect !is ScriptedEffect }
         duration?.let { builder.duration(it.coerceAtLeast(1L)) }
         if (definition.parameters.isNotEmpty()) {
-            builder.parameters(definition.parameters.mapValues { (_, expression) -> expression.evaluate(values) })
+            builder.parameters(definition.parameters.mapValues { (_, expression) -> expression.evaluate(subject, values) })
         }
 
         // like /ve play: an effect with a follow: block sticks to the entity it was triggered on

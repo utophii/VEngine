@@ -7,9 +7,11 @@ import com.utophii.api.FollowDefaults
 import com.utophii.api.ParticleEffect
 import com.utophii.engine.FXEngine
 import com.utophii.engine.FollowAnchor
+import com.utophii.engine.PlaceholderExpression
 import com.utophii.math.EasingType
 import org.bukkit.Color
 import org.bukkit.Location
+import org.bukkit.entity.Player
 import org.bukkit.util.Vector
 
 // YAML-driven composite effect assembled from primitive particle effects
@@ -20,6 +22,8 @@ class ScriptedEffect(
     private val layers: List<ScriptedLayer>,
     override val followDefaults: FollowDefaults? = null,
     private val emitters: List<EffectEmitter> = emptyList(),
+    // duration: written as a placeholder formula
+    private val durationFormula: PlaceholderExpression? = null,
 ) : ParticleEffect {
 
     // registry names this effect spawns through emitters: and then:
@@ -30,7 +34,9 @@ class ScriptedEffect(
     // each layer uses its own particle/material options, which is why this class owns rendering instead of delegating to [AbstractParticleEffect]
     override fun play(center: Location, opts: EffectOptions): EffectHandle {
         val stableCenter = center.clone()
-        val totalDuration = totalDuration(opts)
+        // placeholders are read once here
+        val subject = subjectOf(opts)
+        val totalDuration = totalDuration(opts, subject)
         val childHandles = mutableListOf<EffectHandle>()
         val compositeId = "$name#${FXEngine.nextScriptedId()}"
         // one anchor for all layers so every layer sees the same pose
@@ -41,7 +47,7 @@ class ScriptedEffect(
             }
         }
 
-        layers.forEach { layer ->
+        layers.map { it.bind(subject) }.forEach { layer ->
             val primitive = FXEngine.primitiveEffect(layer.effect) ?: return@forEach
             val startTick = layer.startTick.coerceAtLeast(MIN_START_TICKS)
             if (startTick >= totalDuration) {
@@ -109,8 +115,11 @@ class ScriptedEffect(
     // calculates all active layer positions for the supplied frame time
     // this method merges all active layer positions into a single list, but per-layer rendering options such as particle type are only preserved in [play]
     override fun calculate(center: Location, opts: EffectOptions, time: Double): List<Location> {
+        val subject = subjectOf(opts)
+        val totalDuration = totalDuration(opts, subject)
         return layers.asSequence()
-            .filter { layer -> layer.isActiveAt(time, totalDuration(opts)) }
+            .filter { layer -> layer.isActiveAt(time, totalDuration) }
+            .map { layer -> layer.bind(subject) }
             .flatMap { layer ->
                 val primitive = FXEngine.primitiveEffect(layer.effect) ?: return@flatMap emptySequence<Location>()
                 val localTime = time - layer.startTick
@@ -120,13 +129,16 @@ class ScriptedEffect(
             .toList()
     }
 
-    private fun totalDuration(runtime: EffectOptions): Long {
+    private fun totalDuration(runtime: EffectOptions, subject: Player?): Long {
         return if (runtime.duration != EffectOptions.DEFAULT_DURATION_TICKS) {
             runtime.duration.coerceAtLeast(MIN_DURATION_TICKS)
         } else {
-            defaultDurationTicks.coerceAtLeast(MIN_DURATION_TICKS)
+            (durationFormula?.evaluate(subject)?.toLong() ?: defaultDurationTicks).coerceAtLeast(MIN_DURATION_TICKS)
         }
     }
+
+    // a followed player stands in for an explicit subject
+    private fun subjectOf(opts: EffectOptions): Player? = opts.subject ?: opts.follow?.entity as? Player
 
     private data class LayerFrame(
         val options: EffectOptions,
@@ -146,7 +158,23 @@ data class ScriptedLayer(
     val durationTicks: Long?,
     val options: EffectOptions,
     val animation: NumericAnimation = NumericAnimation.EMPTY,
+    // values written as placeholder formulas
+    val scaleFormula: PlaceholderExpression? = null,
+    val parameterFormulas: Map<String, PlaceholderExpression> = emptyMap(),
 ) {
+
+    // this layer with its placeholder formulas evaluated for one play
+    fun bind(subject: Player?): ScriptedLayer {
+        if (scaleFormula == null && parameterFormulas.isEmpty()) {
+            return this
+        }
+        val builder = options.toBuilder()
+        scaleFormula?.evaluate(subject)?.takeIf { it > 0.0 }?.let(builder::scale)
+        if (parameterFormulas.isNotEmpty()) {
+            builder.parameters(options.parameters + parameterFormulas.mapValues { (_, formula) -> formula.evaluate(subject) })
+        }
+        return copy(options = builder.build(), scaleFormula = null, parameterFormulas = emptyMap())
+    }
 
     // resolves the final layer options for one frame
     // global runtime values from the caller are merged with layer-local YAML values, and then animated tracks override the numeric targets they address

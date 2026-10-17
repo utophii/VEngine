@@ -1,8 +1,13 @@
 package com.utophii.placeholders
 
 import com.utophii.VEngine
+import com.utophii.engine.PlaceholderResolver
+import com.utophii.engine.Placeholders
+import me.clip.placeholderapi.PlaceholderAPI
+import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
+import org.bukkit.event.server.PluginDisableEvent
 import org.bukkit.event.server.PluginEnableEvent
 
 // hooks PlaceholderAPI
@@ -24,6 +29,7 @@ class PlaceholderService(
     }
 
     fun shutdown() {
+        Placeholders.resolver = null
         val current = expansion ?: return
         expansion = null
         if (!plugin.server.pluginManager.isPluginEnabled(PLUGIN_NAME)) {
@@ -43,10 +49,19 @@ class PlaceholderService(
         }
     }
 
+    @EventHandler
+    fun onPluginDisable(event: PluginDisableEvent) {
+        if (event.plugin.name.equals(PLUGIN_NAME, ignoreCase = true)) {
+            Placeholders.resolver = null
+        }
+    }
+
     private fun register() {
         if (!plugin.server.pluginManager.isPluginEnabled(PLUGIN_NAME)) {
             return
         }
+        // effects read %placeholders% through PlaceholderAPI as well
+        Placeholders.resolver = PapiResolver
         val current = expansion
         if (current != null && runCatching { current.isRegistered }.getOrDefault(false)) {
             return
@@ -63,4 +78,9 @@ class PlaceholderService(
     private companion object {
         const val PLUGIN_NAME = "PlaceholderAPI"
     }
+}
+
+// only touched once PlaceholderAPI is enabled
+private object PapiResolver : PlaceholderResolver {
+    override fun resolve(player: Player?, placeholder: String): String = PlaceholderAPI.setPlaceholders(player, placeholder)
 }

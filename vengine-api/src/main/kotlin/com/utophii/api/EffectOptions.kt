@@ -31,6 +31,7 @@ import org.bukkit.util.Vector
 * @property parameters effect-specific numeric parameters
 * @property display renders display entities at each point instead of particles (null = particles only)
 * @property follow binds the effect to an entity instead of its fixed spawn point (null = stays in place)
+* @property subject player whose PlaceholderAPI values fill `%placeholders%` in the effect (null = the followed player, if any)
 */
 data class EffectOptions(
     val particle: Particle = Particle.FLAME,
@@ -55,6 +56,7 @@ data class EffectOptions(
     val parameters: Map<String, Double> = emptyMap(),
     val display: DisplayOptions? = null,
     val follow: FollowOptions? = null,
+    val subject: Player? = null,
 ) {
     fun toBuilder(): Builder = Builder()
         .particle(particle)
@@ -78,6 +80,7 @@ data class EffectOptions(
             tiltAxis?.let(builder::tiltAxis)
             display?.let(builder::display)
             follow?.let(builder::follow)
+            subject?.let(builder::subject)
         }
 
     class Builder {
@@ -103,6 +106,7 @@ data class EffectOptions(
         private var parameters: Map<String, Double> = emptyMap()
         private var display: DisplayOptions? = null
         private var follow: FollowOptions? = null
+        private var subject: Player? = null
 
         fun particle(value: Particle) = apply { particle = value }
         fun color(value: Color) = apply { color = value }
@@ -130,6 +134,7 @@ data class EffectOptions(
         fun parameter(key: String, value: Double) = apply { parameters = parameters + (key to value) }
         fun display(value: DisplayOptions?) = apply { display = value }
         fun follow(value: FollowOptions?) = apply { follow = value }
+        fun subject(value: Player?) = apply { subject = value }
 
         fun build(): EffectOptions = EffectOptions(
             particle = particle,
@@ -154,6 +159,7 @@ data class EffectOptions(
             parameters = parameters,
             display = display,
             follow = follow,
+            subject = subject,
         )
     }
 

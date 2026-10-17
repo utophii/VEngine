@@ -129,6 +129,7 @@ class VEngineCommand(
             .scale(scale)
             .duration(duration)
             .follow(follow)
+            .subject(sender)
             .build()
 
         val handle = FXEngine.play(effectName, sender.location, opts)
