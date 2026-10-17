@@ -6,14 +6,19 @@ import com.utophii.effects.packet.PacketDisplaysBootstrap
 import com.utophii.engine.EffectScheduler
 import com.utophii.engine.FXEngine
 import com.utophii.placeholders.PlaceholderService
+import com.utophii.triggers.TriggerListener
+import com.utophii.triggers.TriggerLoader
+import com.utophii.triggers.TriggerService
 import dev.faststats.ErrorTracker
 import dev.faststats.bukkit.BukkitContext
 import dev.faststats.data.Metric
 import org.bukkit.plugin.java.JavaPlugin
+import org.yaml.snakeyaml.Yaml
 
 class VEngine : JavaPlugin() {
     private lateinit var yamlEffectLoader: YamlEffectLoader
     private val placeholders = PlaceholderService(this)
+    private val triggers = TriggerService(this)
 
     private val context = BukkitContext.Factory(this, "a98bb29a39e57b6d335a6b67b7402ff6")
         .errorTrackerService(ErrorTracker.contextAware())
@@ -39,6 +44,8 @@ class VEngine : JavaPlugin() {
         context.ready()
 
         val loaded = yamlEffectLoader.loadAll()
+        loadTriggers()
+        server.pluginManager.registerEvents(TriggerListener(triggers), this)
 
         val cmd = getCommand("vengine")
             ?: error("Command 'vengine' missing from plugin.yml")
@@ -63,6 +70,21 @@ class VEngine : JavaPlugin() {
         applyConfig()
         val loaded = yamlEffectLoader.loadAll()
         logger.info("VEngine effects reloaded: ${loaded.size} YAML effects available.")
+        loadTriggers()
+    }
+
+    // reads triggers.yml after the effects
+    private fun loadTriggers() {
+        saveIfMissing(TRIGGERS_FILE)
+        val root = runCatching {
+            dataFolder.resolve(TRIGGERS_FILE).inputStream().use { stream -> Yaml().load<Map<*, *>>(stream) }
+        }.getOrElse { error ->
+            logger.warning("Could not read $TRIGGERS_FILE, triggers are disabled: ${error.message}")
+            null
+        }
+        val definitions = TriggerLoader(logger).parse(root.orEmpty())
+        triggers.replace(definitions)
+        logger.info("VEngine triggers loaded: ${definitions.size}.")
     }
 
     // reads plugin configuration and applies view-distance culling to the active scheduler
@@ -74,10 +96,13 @@ class VEngine : JavaPlugin() {
         )
         FXEngine.scheduler().viewDistance = viewDistance
         logger.info("VEngine particle view distance set to ${FXEngine.scheduler().viewDistance} blocks.")
+        FXEngine.maxEmittedEffects = config.getInt(MAX_EMITTED_EFFECTS_CONFIG_KEY, FXEngine.DEFAULT_MAX_EMITTED_EFFECTS)
     }
 
     companion object {
         private const val VIEW_DISTANCE_CONFIG_KEY = "view-distance"
+        private const val MAX_EMITTED_EFFECTS_CONFIG_KEY = "max-emitted-effects"
+        private const val TRIGGERS_FILE = "triggers.yml"
         private const val PACKETEVENTS_PLUGIN = "packetevents"
     }
 
@@ -96,7 +121,6 @@ class VEngine : JavaPlugin() {
         saveIfMissing("effects/parametric_rose.yml")
         saveIfMissing("effects/parametric_torus.yml")
         saveIfMissing("effects/traveling_comet.yml")
-        saveIfMissing("effects/halo.yml")
     }
 
     private fun saveIfMissing(path: String) {

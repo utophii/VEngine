@@ -1,0 +1,73 @@
+# VEngine triggers: play an effect when something happens in the game.
+#
+# Every top-level key is a trigger id. Nothing here is active by default:
+# uncomment an example or write your own, then run /ve reload.
+#
+# event:       hit | death | join | teleport | item_use
+# effect:      any effect from /ve list
+# at:          where the effect plays (the first value is the default)
+#                hit:      victim | attacker
+#                death:    victim | killer      (victim = the spot where it died)
+#                join:     player
+#                teleport: to | from
+#                item_use: player | block       (block = on top of the clicked block)
+#              If the effect has a `follow:` block and `at` is an entity, it follows that entity.
+# permission:  true (= vengine.trigger.<id>) or any permission node; leave out to let everyone trigger it.
+#              Checked on the attacker/killer when it is a player, otherwise on the victim/player.
+# cooldown:    ticks before the same trigger may fire again for the same attacker/player
+# chance:      0..1 probability to fire
+# delay:       ticks to wait before playing (useful for join)
+# filter:      all optional, a single value or a list
+#                entity:   victim types (hit, death), e.g. [ZOMBIE, PLAYER]
+#                attacker: attacker/killer types (hit, death); arrows count as their shooter
+#                cause:    damage cause (hit, death) or teleport cause, e.g. ENDER_PEARL
+#                item:     item in hand (item_use), e.g. BLAZE_ROD
+# options:     numbers or formulas over the event variables
+#                scale, duration, parameters.<name>
+#              variables: random (0..1) for every event, plus
+#                hit:      damage, health, max_health   (victim health before the hit)
+#                death:    max_health
+#                teleport: distance                     (0 across worlds)
+
+#crit_spark:
+#  event: hit
+#  effect: sphere
+#  at: victim
+#  cooldown: 10
+#  filter:
+#    attacker: PLAYER
+#  options:
+#    scale: "0.4 + damage / 20"
+#    duration: 10
+#
+#mob_soul:
+#  event: death
+#  effect: helix
+#  filter:
+#    entity: [ZOMBIE, SKELETON, CREEPER]
+#    attacker: PLAYER
+#  options:
+#    duration: 40
+#
+#vip_join:
+#  event: join
+#  effect: nova
+#  permission: true
+#  delay: 20
+#
+#pearl_trail:
+#  event: teleport
+#  effect: cosmic_gate
+#  at: from
+#  filter:
+#    cause: ENDER_PEARL
+#  options:
+#    scale: 0.6
+#    duration: 40
+#
+#staff_cast:
+#  event: item_use
+#  effect: rk4_comet
+#  cooldown: 40
+#  filter:
+#    item: BLAZE_ROD

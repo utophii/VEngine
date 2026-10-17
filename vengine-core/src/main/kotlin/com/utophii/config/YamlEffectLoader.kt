@@ -6,6 +6,7 @@ import com.utophii.api.EffectModifier
 import com.utophii.api.FollowDefaults
 import com.utophii.api.FollowRotation
 import com.utophii.api.ParticleEffect
+import com.utophii.effects.EffectEmitter
 import com.utophii.effects.NumericAnimation
 import com.utophii.effects.NumericKeyframe
 import com.utophii.effects.NumericTrack
@@ -62,6 +63,12 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         parsedFiles.forEach { (file, raw) ->
             if (isParametric(raw)) {
                 val effect = parseParametric(effectId(raw, file), raw, file.name) ?: return@forEach
+                if (raw.containsKey(EMITTERS_KEY) || raw.containsKey(THEN_KEY)) {
+                    plugin.logger.warning(
+                        "'${file.name}' is a formula effect; its emitters/then are ignored. " +
+                            "Use it as a layer of a layered effect to spawn other effects.",
+                    )
+                }
                 FXEngine.registerPrimitive(effect)
                 loaded += effect
             }
@@ -77,7 +84,24 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
                 loaded += effect
             }
         }
-        return loaded
+        return loaded - rejectEmitterProblems(loaded).toSet()
+    }
+
+    // warns about emitters pointing at unknown effects and unregisters effects that would spawn themselves forever
+    private fun rejectEmitterProblems(loaded: List<ParticleEffect>): List<ParticleEffect> {
+        val scripted = loaded.filterIsInstance<ScriptedEffect>()
+        scripted.forEach { effect ->
+            effect.emittedEffects.filter { FXEngine.effect(it) == null }.distinct().forEach { missing ->
+                plugin.logger.warning("Effect '${effect.name}' emits unknown effect '$missing'; that emitter will do nothing.")
+            }
+        }
+        val cyclic = EmitterGraph.cyclic(scripted.associate { it.name.lowercase() to it.emittedEffects.map(String::lowercase) })
+        val rejected = scripted.filter { it.name.lowercase() in cyclic }
+        rejected.forEach { effect ->
+            plugin.logger.warning("Skipping effect '${effect.name}': its emitters/then spawn it again, directly or through other effects.")
+            FXEngine.unregisterScripted(effect.name)
+        }
+        return rejected
     }
 
     // loads one YAML effect file into a runtime effect (parametric formula or a layered scripted effect)
@@ -141,12 +165,44 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
 
     // builds a layered scripted effect from `layers` or a legacy single layer
     private fun loadScripted(id: String, duration: Long, raw: Map<String, Any?>, fileName: String): ScriptedEffect? {
-        val layers = parseLayers(raw)
+        val layers = parseLayers(raw, duration, fileName)
         if (layers.isEmpty()) {
             plugin.logger.warning("Skipping effect '${fileName}': no valid layers were found.")
             return null
         }
-        return ScriptedEffect(id, duration, layers, parseFollow(raw[FOLLOW_KEY], fileName))
+        val emitters = parseEmitters(raw[EMITTERS_KEY], fromEnd = false, fileName) +
+            parseEmitters(raw[THEN_KEY], fromEnd = true, fileName)
+        return ScriptedEffect(id, duration, layers, parseFollow(raw[FOLLOW_KEY], fileName), emitters)
+    }
+
+    // parses emitters: or then:
+    private fun parseEmitters(value: Any?, fromEnd: Boolean, fileName: String): List<EffectEmitter> {
+        val entries = when (value) {
+            null -> return emptyList()
+            is List<*> -> value
+            else -> listOf(value)
+        }
+        return entries.mapNotNull { entry ->
+            val node = entry as? Map<*, *> ?: mapOf(EFFECT_KEY to entry)
+            val effect = node[EFFECT_KEY]?.toString()?.trim()?.lowercase()?.takeIf(String::isNotBlank) ?: run {
+                plugin.logger.warning("Skipping an ${if (fromEnd) THEN_KEY else EMITTERS_KEY} entry without 'effect' in '$fileName'.")
+                return@mapNotNull null
+            }
+            val every = node[EVERY_KEY].number()?.toLong()?.takeIf { it > 0L }
+            val count = node[COUNT_KEY].number()?.toInt()?.coerceAtLeast(1)
+            EffectEmitter(
+                effect = effect,
+                startTick = (node[if (fromEnd) DELAY_KEY else START_KEY].number()?.toLong() ?: DEFAULT_START_TICKS)
+                    .coerceAtLeast(MIN_START_TICKS),
+                // `count` alone repeats every tick
+                every = every ?: count?.takeIf { it > 1 }?.let { 1L },
+                count = count,
+                offset = parseOffset(node[OFFSET_KEY])?.let { (x, y, z) -> Vector(x, y, z) },
+                scale = node[SCALE_KEY].number()?.takeIf { it > 0.0 } ?: 1.0,
+                duration = node[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS),
+                fromEnd = fromEnd,
+            )
+        }
     }
 
     // an effect with this block follows whoever plays it
@@ -218,29 +274,35 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         else (ranges + List(variableCount - ranges.size) { DEFAULT_RANGE }).take(variableCount)
     }
 
-    private fun parseLayers(raw: Map<String, Any?>): List<ScriptedLayer> {
+    private fun parseLayers(raw: Map<String, Any?>, effectDuration: Long, fileName: String): List<ScriptedLayer> {
         val configuredLayers = raw[LAYERS_KEY]
         if (configuredLayers is List<*>) {
-            return configuredLayers.mapNotNull(::parseLayer)
+            val nodes = configuredLayers.filterIsInstance<Map<*, *>>()
+            val timeline = LayerTimeline.resolve(nodes.map(::parseTiming), effectDuration)
+            timeline.problems.forEach { problem -> plugin.logger.warning("In '$fileName': $problem.") }
+            return nodes.zip(timeline.starts).mapNotNull { (node, start) -> start?.let { parseLayer(node, it) } }
         }
 
         // backward-compatible single-layer format
-        val legacyLayer = parseLayer(raw)
+        val legacyLayer = parseLayer(raw, parseTiming(raw).start)
         return legacyLayer?.let(::listOf) ?: emptyList()
     }
 
-    private fun parseLayer(raw: Any?): ScriptedLayer? {
-        if (raw !is Map<*, *>) {
-            return null
-        }
+    private fun parseTiming(raw: Map<*, *>): LayerTimeline.Timing = LayerTimeline.Timing(
+        id = raw[ID_KEY]?.toString()?.takeIf(String::isNotBlank),
+        start = raw[START_KEY].number()?.toLong()?.coerceAtLeast(MIN_START_TICKS) ?: DEFAULT_START_TICKS,
+        duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS),
+        after = raw[AFTER_KEY]?.toString()?.takeIf(String::isNotBlank),
+        delay = raw[DELAY_KEY].number()?.toLong()?.coerceAtLeast(MIN_START_TICKS) ?: DEFAULT_START_TICKS,
+    )
 
+    private fun parseLayer(raw: Map<*, *>, startTick: Long): ScriptedLayer? {
         val effectName = raw[EFFECT_KEY]?.toString()?.lowercase()?.takeIf(String::isNotBlank) ?: return null
         if (FXEngine.primitiveEffect(effectName) == null) {
             plugin.logger.warning("Skipping layer for unknown primitive effect '$effectName'.")
             return null
         }
 
-        val startTick = raw[START_KEY].number()?.toLong()?.coerceAtLeast(MIN_START_TICKS) ?: DEFAULT_START_TICKS
         val durationTicks = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS)
         val options = parseOptions(raw)
         val animation = parseAnimation(raw[ANIMATION_KEY])
@@ -560,6 +622,11 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private val DEFAULT_SURFACE_SAMPLES = listOf(40, 20)
         private val PARAMETRIC_TYPES = setOf("parametric", "parametric_curve", "parametric_surface")
         private const val START_KEY = "start"
+        private const val AFTER_KEY = "after"
+        private const val EMITTERS_KEY = "emitters"
+        private const val THEN_KEY = "then"
+        private const val EVERY_KEY = "every"
+        private const val DELAY_KEY = "delay"
         private const val DURATION_KEY = "duration"
         private const val PARTICLE_KEY = "particle"
         private const val COLOR_KEY = "color"

@@ -25,6 +25,13 @@ object FXEngine {
     private var scheduler: EffectScheduler? = null
     private val scriptedIdCounter = AtomicInteger(1)
 
+    // upper bound on effects spawned by emitters that may play at once, across all parents
+    @Volatile
+    var maxEmittedEffects: Int = DEFAULT_MAX_EMITTED_EFFECTS
+        set(value) { field = value.coerceAtLeast(0) }
+
+    const val DEFAULT_MAX_EMITTED_EFFECTS = 256
+
     // initializes the engine and registers the irreducible Kotlin primitive effects.
     // All other shapes are formula primitives loaded from the effects/ YAML directory.
     fun initialize(plugin: JavaPlugin) {
@@ -57,6 +64,11 @@ object FXEngine {
     // registers or replaces a scripted effect loaded from configuration
     fun registerScripted(effect: ParticleEffect) {
         scriptedEffects[effect.name.lowercase()] = effect
+    }
+
+    // removes one scripted effect
+    fun unregisterScripted(name: String) {
+        scriptedEffects.remove(name.lowercase())
     }
 
     // clears all dynamically loaded scripted effects

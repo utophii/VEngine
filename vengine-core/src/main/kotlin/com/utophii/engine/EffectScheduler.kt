@@ -123,6 +123,11 @@ class EffectScheduler(val plugin: JavaPlugin) {
         }, ttlTicks.coerceAtLeast(MIN_COMPOSITE_TTL_TICKS))
     }
 
+    // removes a handle from the listing without stopping it
+    fun detach(id: String) {
+        forget(id)
+    }
+
     // stops a running effect by handle ID
     fun stop(id: String): Boolean {
         val handle = activeHandles[id] ?: activeHandles.entries.firstOrNull { it.key.equals(id, ignoreCase = true) }?.value

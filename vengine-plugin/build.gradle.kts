@@ -23,6 +23,7 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
+    testImplementation("io.papermc.paper:paper-api:1.21.6-R0.1-SNAPSHOT")
 }
 
 tasks {

@@ -6,3 +6,8 @@
 # which cuts network traffic and rendering load. Set this to a large
 # value to effectively disable culling.
 view-distance: 64
+
+# max-emitted-effects: how many effects spawned by `emitters:` / `then:`
+# may play at once across the whole server. Emissions beyond the limit
+# are skipped, which keeps runaway emitters from flooding clients.
+max-emitted-effects: 256

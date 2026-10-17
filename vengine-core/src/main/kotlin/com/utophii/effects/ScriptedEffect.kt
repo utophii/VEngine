@@ -19,7 +19,12 @@ class ScriptedEffect(
     private val defaultDurationTicks: Long,
     private val layers: List<ScriptedLayer>,
     override val followDefaults: FollowDefaults? = null,
+    private val emitters: List<EffectEmitter> = emptyList(),
 ) : ParticleEffect {
+
+    // registry names this effect spawns through emitters: and then:
+    val emittedEffects: List<String>
+        get() = emitters.map(EffectEmitter::effect)
 
     // plays every active layer with async calculation and sync rendering
     // each layer uses its own particle/material options, which is why this class owns rendering instead of delegating to [AbstractParticleEffect]
@@ -87,9 +92,17 @@ class ScriptedEffect(
             childHandles.add(handle)
         }
 
+        // with emitters the runner decides when the whole group is over, since spawned effects may outlive the layers
+        val runner = emitters.takeIf(List<EffectEmitter>::isNotEmpty)?.let { list ->
+            EmitterRunner(compositeId, list, totalDuration, stableCenter, opts.follow?.withDefaults(followDefaults), opts)
+                .also(childHandles::add)
+        }
+
         val composite = CompositeEffectHandle(compositeId, name, childHandles)
         // track the composite only: layer tasks are internal and must not inflate placeholder counts
-        FXEngine.scheduler().registerComposite(composite, totalDuration, stableCenter, anchor)
+        val ttl = if (runner != null) EffectOptions.INFINITE_DURATION else totalDuration
+        FXEngine.scheduler().registerComposite(composite, ttl, stableCenter, anchor)
+        runner?.start()
         return composite
     }
 
