@@ -7,7 +7,7 @@ import org.bukkit.entity.EntityType
 import java.util.logging.Logger
 
 // parses triggers.yml: every top-level key is a trigger id
-class TriggerLoader(private val logger: Logger) {
+class TriggerLoader(private val logger: Logger, private val mythicInstalled: Boolean = false) {
 
     fun parse(root: Map<*, *>): List<TriggerDefinition> =
         root.mapNotNull { (key, value) ->
@@ -29,15 +29,22 @@ class TriggerLoader(private val logger: Logger) {
             )
             return null
         }
-        val effect = node[EFFECT_KEY]?.toString()?.trim()?.lowercase()?.takeIf(String::isNotBlank) ?: run {
-            logger.warning("Skipping trigger '$id': missing 'effect'.")
+        val effect = node[EFFECT_KEY]?.toString()?.trim()?.lowercase()?.takeIf(String::isNotBlank)
+        val skill = node[SKILL_KEY]?.toString()?.trim()?.takeIf(String::isNotBlank)
+        if (effect == null && skill == null) {
+            logger.warning("Skipping trigger '$id': missing 'effect' or 'skill'.")
             return null
         }
-        if (FXEngine.effect(effect) == null) {
+        if (effect != null && FXEngine.effect(effect) == null) {
             logger.warning("Trigger '$id' plays unknown effect '$effect'; it will do nothing until that effect exists.")
         }
 
         val filter = node[FILTER_KEY] as? Map<*, *> ?: emptyMap<Any, Any>()
+        val mythic = names(filter[MYTHIC_KEY]).mapTo(linkedSetOf(), String::lowercase)
+        val mythicAttackers = names(filter[MYTHIC_ATTACKER_KEY]).mapTo(linkedSetOf(), String::lowercase)
+        if (!mythicInstalled && (skill != null || mythic.isNotEmpty() || mythicAttackers.isNotEmpty())) {
+            logger.warning("Trigger '$id' uses MythicMobs, which is not installed; its skill and mythic filters do nothing.")
+        }
         val options = node[OPTIONS_KEY] as? Map<*, *> ?: emptyMap<Any, Any>()
         return TriggerDefinition(
             id = id,
@@ -56,6 +63,9 @@ class TriggerLoader(private val logger: Logger) {
             attackers = parseEnums(id, filter[ATTACKER_KEY], "entity type") { EntityType.valueOf(it) },
             causes = names(filter[CAUSE_KEY]).toSet(),
             items = parseEnums(id, filter[ITEM_KEY], "item") { Material.matchMaterial(it) ?: error(it) },
+            mythic = mythic,
+            mythicAttackers = mythicAttackers,
+            skill = skill,
             scale = parseExpression(id, SCALE_KEY, options[SCALE_KEY]),
             duration = parseExpression(id, DURATION_KEY, options[DURATION_KEY]),
             parameters = (options[PARAMETERS_KEY] as? Map<*, *>).orEmpty().mapNotNull { (name, value) ->
@@ -122,6 +132,9 @@ class TriggerLoader(private val logger: Logger) {
         private const val ATTACKER_KEY = "attacker"
         private const val CAUSE_KEY = "cause"
         private const val ITEM_KEY = "item"
+        private const val MYTHIC_KEY = "mythic"
+        private const val MYTHIC_ATTACKER_KEY = "mythic_attacker"
+        private const val SKILL_KEY = "skill"
         private const val OPTIONS_KEY = "options"
         private const val SCALE_KEY = "scale"
         private const val DURATION_KEY = "duration"

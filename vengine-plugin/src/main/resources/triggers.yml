@@ -5,6 +5,9 @@
 #
 # event:       hit | death | join | teleport | item_use
 # effect:      any effect from /ve list
+# skill:       MythicMobs skill to cast as well (or instead of effect). Cast by the entity of `at`;
+#              at a fixed place (death victim, teleport from, block) by the attacker/killer or player.
+#              @trigger is the other side of the event: the attacker for the victim and the other way round.
 # at:          where the effect plays (the first value is the default)
 #                hit:      victim | attacker
 #                death:    victim | killer      (victim = the spot where it died)
@@ -22,6 +25,8 @@
 #                attacker: attacker/killer types (hit, death); arrows count as their shooter
 #                cause:    damage cause (hit, death) or teleport cause, e.g. ENDER_PEARL
 #                item:     item in hand (item_use), e.g. BLAZE_ROD
+#                mythic:          MythicMobs mob type of the victim/player, e.g. [SkeletonKing]
+#                mythic_attacker: MythicMobs mob type of the attacker/killer (hit, death)
 # options:     numbers or formulas over the event variables
 #                scale, duration, parameters.<name>
 #              variables: random (0..1) for every event, plus
@@ -66,6 +71,13 @@
 #  options:
 #    scale: 0.6
 #    duration: 40
+#
+#king_fall:
+#  event: death
+#  effect: cosmic_gate
+#  skill: KingDeathCurse
+#  filter:
+#    mythic: SkeletonKing
 #
 #staff_cast:
 #  event: item_use

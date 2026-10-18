@@ -30,8 +30,10 @@ class TriggerListener(private val service: TriggerService) : Listener {
         service.fire(
             TriggerEvent.HIT,
             TriggerContext(
-                actor = actor.uniqueId,
+                actor = actor,
                 player = actor as? Player,
+                entity = victim,
+                attacker = attacker,
                 entityType = victim.type,
                 attackerType = attacker.type,
                 cause = event.cause.name,
@@ -58,8 +60,10 @@ class TriggerListener(private val service: TriggerService) : Listener {
         service.fire(
             TriggerEvent.DEATH,
             TriggerContext(
-                actor = actor.uniqueId,
+                actor = actor,
                 player = actor as? Player,
+                entity = victim,
+                attacker = killer,
                 entityType = victim.type,
                 attackerType = killer?.type,
                 cause = victim.lastDamageCause?.cause?.name,
@@ -80,7 +84,7 @@ class TriggerListener(private val service: TriggerService) : Listener {
         val player = event.player
         service.fire(
             TriggerEvent.JOIN,
-            TriggerContext(actor = player.uniqueId, player = player, entityType = player.type) {
+            TriggerContext(actor = player, player = player, entity = player, entityType = player.type) {
                 Placement(player.location, player)
             },
         )
@@ -96,8 +100,9 @@ class TriggerListener(private val service: TriggerService) : Listener {
         service.fire(
             TriggerEvent.TELEPORT,
             TriggerContext(
-                actor = player.uniqueId,
+                actor = player,
                 player = player,
+                entity = player,
                 entityType = player.type,
                 cause = event.cause.name,
                 variables = mapOf(DISTANCE to distance),
@@ -121,7 +126,7 @@ class TriggerListener(private val service: TriggerService) : Listener {
         val block = event.clickedBlock
         service.fire(
             TriggerEvent.ITEM_USE,
-            TriggerContext(actor = player.uniqueId, player = player, entityType = player.type, item = item.type) { target ->
+            TriggerContext(actor = player, player = player, entity = player, entityType = player.type, item = item.type) { target ->
                 when (target) {
                     // on top of the clicked block
                     TriggerTarget.BLOCK -> block?.let { Placement(it.location.add(0.5, 1.0, 0.5)) }

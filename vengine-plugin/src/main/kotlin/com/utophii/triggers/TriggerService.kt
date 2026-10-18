@@ -2,8 +2,10 @@ package com.utophii.triggers
 
 import com.utophii.api.EffectOptions
 import com.utophii.api.FollowOptions
+import com.utophii.api.ParticleEffect
 import com.utophii.effects.ScriptedEffect
 import com.utophii.engine.FXEngine
+import com.utophii.mythic.MythicBridge
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.entity.Entity
@@ -16,6 +18,9 @@ import java.util.concurrent.ThreadLocalRandom
 // plays the effects of triggers.yml when their events happen
 class TriggerService(private val plugin: JavaPlugin) {
     private var byEvent: Map<TriggerEvent, List<TriggerDefinition>> = emptyMap()
+
+    // set while MythicMobs is installed
+    var mythic: MythicBridge? = null
 
     // "<trigger id>:<entity uuid>" -> server tick when the cooldown ends
     private val cooldowns = HashMap<String, Int>()
@@ -48,10 +53,14 @@ class TriggerService(private val plugin: JavaPlugin) {
         if (definition.attackers.isNotEmpty() && context.attackerType !in definition.attackers) return false
         if (definition.causes.isNotEmpty() && context.cause !in definition.causes) return false
         if (definition.items.isNotEmpty() && context.item !in definition.items) return false
+        if (definition.mythic.isNotEmpty() && mobType(context.entity) !in definition.mythic) return false
+        if (definition.mythicAttackers.isNotEmpty() && mobType(context.attacker) !in definition.mythicAttackers) return false
         if (definition.permission != null && context.player?.hasPermission(definition.permission) != true) return false
         if (definition.chance < 1.0 && ThreadLocalRandom.current().nextDouble() >= definition.chance) return false
-        return definition.cooldownTicks <= 0L || acquireCooldown(definition, context.actor)
+        return definition.cooldownTicks <= 0L || acquireCooldown(definition, context.actor.uniqueId)
     }
+
+    private fun mobType(entity: Entity?): String? = entity?.let { mythic?.mobType(it)?.lowercase() }
 
     private fun acquireCooldown(definition: TriggerDefinition, actor: UUID): Boolean {
         val now = plugin.server.currentTick
@@ -68,11 +77,16 @@ class TriggerService(private val plugin: JavaPlugin) {
     }
 
     private fun play(definition: TriggerDefinition, placement: Placement, context: TriggerContext) {
-        val effect = FXEngine.effect(definition.effect) ?: return
         val entity = placement.entity
         if (entity != null && !entity.isValid) {
             return
         }
+        definition.effect?.let(FXEngine::effect)?.let { playEffect(definition, it, placement, context) }
+        definition.skill?.let { castSkill(it, placement, context) }
+    }
+
+    private fun playEffect(definition: TriggerDefinition, effect: ParticleEffect, placement: Placement, context: TriggerContext) {
+        val entity = placement.entity
         // placeholders are read for the same player the permission is checked on
         val subject = context.player
         val values = context.variables + (RANDOM_VARIABLE to ThreadLocalRandom.current().nextDouble())
@@ -94,13 +108,28 @@ class TriggerService(private val plugin: JavaPlugin) {
         }
     }
 
+    // the entity of at: casts the skill, at a fixed place the attacker or actor does it there instead.
+    // @trigger is the other side of the event: the attacker for the victim and the other way round
+    private fun castSkill(skill: String, placement: Placement, context: TriggerContext) {
+        val bridge = mythic ?: return
+        val caster = placement.entity ?: context.attacker?.takeIf(Entity::isValid) ?: context.actor
+        if (!caster.isValid) {
+            return
+        }
+        val other = if (caster == context.attacker) context.entity else context.attacker ?: context.entity
+        val trigger = other?.takeIf(Entity::isValid) ?: caster
+        bridge.castSkill(skill, caster, trigger, placement.location, listOf(trigger), listOf(placement.location))
+    }
+
     // where an effect plays, entity is null when the place must stay fixed
     data class Placement(val location: Location, val entity: Entity? = null)
 
-    // one Bukkit event as triggers see it
+    // one Bukkit event as triggers see it. entity is the victim or the player, attacker the attacker or killer
     class TriggerContext(
-        val actor: UUID,
+        val actor: Entity,
         val player: Player?,
+        val entity: Entity? = null,
+        val attacker: Entity? = null,
         val entityType: EntityType? = null,
         val attackerType: EntityType? = null,
         val cause: String? = null,

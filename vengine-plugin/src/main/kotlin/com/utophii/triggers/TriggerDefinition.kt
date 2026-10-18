@@ -28,11 +28,11 @@ enum class TriggerTarget {
     BLOCK,
 }
 
-// one entry of triggers.yml: plays effect whenever event happens and every filter matches
+// one entry of triggers.yml: plays effect and casts the MythicMobs skill whenever event happens and every filter matches
 data class TriggerDefinition(
     val id: String,
     val event: TriggerEvent,
-    val effect: String,
+    val effect: String?,
     val target: TriggerTarget,
     val permission: String? = null,
     val cooldownTicks: Long = 0L,
@@ -42,6 +42,10 @@ data class TriggerDefinition(
     val attackers: Set<EntityType> = emptySet(),
     val causes: Set<String> = emptySet(),
     val items: Set<Material> = emptySet(),
+    // lowercase MythicMobs mob types of the victim/player and of the attacker/killer
+    val mythic: Set<String> = emptySet(),
+    val mythicAttackers: Set<String> = emptySet(),
+    val skill: String? = null,
     val scale: PlaceholderExpression? = null,
     val duration: PlaceholderExpression? = null,
     val parameters: Map<String, PlaceholderExpression> = emptyMap(),

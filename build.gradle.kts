@@ -19,6 +19,10 @@ subprojects {
           url = uri("https://repo.extendedclip.com/releases/")
         }
         maven {
+          name = "lumine"
+          url = uri("https://mvn.lumine.io/repository/maven-public/")
+        }
+        maven {
           name = "codemc"
           url = uri("https://repo.codemc.io/repository/maven-releases/")
         }

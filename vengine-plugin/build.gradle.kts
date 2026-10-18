@@ -20,6 +20,7 @@ dependencies {
 
     compileOnly("io.papermc.paper:paper-api:1.21.6-R0.1-SNAPSHOT")
     compileOnly("me.clip:placeholderapi:2.12.3")
+    compileOnly("io.lumine:Mythic-Dist:5.13.0")
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")

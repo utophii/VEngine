@@ -5,6 +5,7 @@ import com.utophii.config.YamlEffectLoader
 import com.utophii.effects.packet.PacketDisplaysBootstrap
 import com.utophii.engine.EffectScheduler
 import com.utophii.engine.FXEngine
+import com.utophii.mythic.MythicHook
 import com.utophii.placeholders.PlaceholderService
 import com.utophii.triggers.TriggerListener
 import com.utophii.triggers.TriggerLoader
@@ -19,6 +20,7 @@ class VEngine : JavaPlugin() {
     private lateinit var yamlEffectLoader: YamlEffectLoader
     private val placeholders = PlaceholderService(this)
     private val triggers = TriggerService(this)
+    private var mythic: MythicHook? = null
 
     private val context = BukkitContext.Factory(this, "a98bb29a39e57b6d335a6b67b7402ff6")
         .errorTrackerService(ErrorTracker.contextAware())
@@ -37,6 +39,7 @@ class VEngine : JavaPlugin() {
             PacketDisplaysBootstrap.enable()
             logger.info("PacketEvents found: display models are sent to clients as packets.")
         }
+        hookMythicMobs()
         applyConfig()
         yamlEffectLoader = YamlEffectLoader(this)
         yamlEffectLoader.ensureDirectories()
@@ -59,6 +62,7 @@ class VEngine : JavaPlugin() {
 
     override fun onDisable() {
         placeholders.shutdown()
+        mythic?.shutdown()
         FXEngine.shutdown()
         if (server.pluginManager.isPluginEnabled(PACKETEVENTS_PLUGIN)) {
             PacketDisplaysBootstrap.disable()
@@ -82,9 +86,21 @@ class VEngine : JavaPlugin() {
             logger.warning("Could not read $TRIGGERS_FILE, triggers are disabled: ${error.message}")
             null
         }
-        val definitions = TriggerLoader(logger).parse(root.orEmpty())
+        val definitions = TriggerLoader(logger, mythicInstalled = mythic != null).parse(root.orEmpty())
         triggers.replace(definitions)
         logger.info("VEngine triggers loaded: ${definitions.size}.")
+    }
+
+    // VEngine starts before MythicMobs
+    private fun hookMythicMobs() {
+        if (server.pluginManager.getPlugin(MythicHook.PLUGIN_NAME) == null) {
+            return
+        }
+        val hook = MythicHook(this)
+        server.pluginManager.registerEvents(hook, this)
+        triggers.mythic = hook
+        mythic = hook
+        logger.info("MythicMobs found: vengine and vengine-stop mechanics are available.")
     }
 
     // reads plugin configuration and applies view-distance culling to the active scheduler
