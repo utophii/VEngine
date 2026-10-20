@@ -5,10 +5,14 @@ import com.utophii.api.EffectOptions
 import com.utophii.api.FollowOptions
 import com.utophii.engine.FXEngine
 import com.utophii.util.LegacyFormat
+import org.bukkit.Bukkit
+import org.bukkit.Location
+import org.bukkit.command.BlockCommandSender
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
+import org.bukkit.entity.Entity
 import org.bukkit.entity.Player
 
 class VEngineCommand(
@@ -48,7 +52,7 @@ class VEngineCommand(
             <gradient:#7F5AF0:#2CB67D><bold>━━━ VEngine Commands ━━━</bold></gradient>
             <gold>/ve help</gold> <gray>— show this message</gray>
             <gold>/ve list</gold> <gray>— list all registered effects</gray>
-            <gold>/ve play <effect> [scale] [duration]</gold> <gray>— spawn effect at your position</gray>
+            <gold>/ve play <effect> [x y z [world]] [scale] [duration]</gold> <gray>— spawn effect at your position or the given one</gray>
             <gold>/ve stop [all|<id>]</gold> <gray>— stop active running effect(s)</gray>
             <gold>/ve reload</gold> <gray>— reload effect YAML files</gray>
             """.trimIndent()
@@ -89,14 +93,8 @@ class VEngineCommand(
         if (!sender.hasPermission(PERM_SPAWN)) {
             noPermission(sender); return true
         }
-        if (sender !is Player) {
-            sender.sendMessage(LegacyFormat.format("<red>Only players can spawn effects.</red>"))
-            return true
-        }
         if (args.size < 2) {
-            sender.sendMessage(LegacyFormat.format(
-                "<red>Usage: <gold>/vengine play <effect> [scale] [duration]</gold></red>"
-            ))
+            sender.sendMessage(LegacyFormat.format("<red>Usage: <gold>$PLAY_USAGE</gold></red>"))
             return true
         }
 
@@ -111,36 +109,97 @@ class VEngineCommand(
             return true
         }
 
-        val scale = args.getOrNull(2)?.toDoubleOrNull() ?: DEFAULT_SCALE
+        // [x y z world] comes before scale duration, three coordinate-looking args mean a position
+        var next = 2
+        val origin = senderLocation(sender)
+        val target = if (args.size >= next + 3 && (next until next + 3).all { isCoordinate(args[it]) }) {
+            val coords = args.copyOfRange(next, next + 3)
+            next += 3
+            val worldName = args.getOrNull(next)?.takeIf { it.toDoubleOrNull() == null }
+            if (worldName != null) next++
+            parseLocation(sender, origin, coords, worldName) ?: return true
+        } else {
+            origin ?: run {
+                sender.sendMessage(LegacyFormat.format(
+                    "<red>Specify a position: <gold>$PLAY_USAGE</gold></red>"
+                ))
+                return true
+            }
+        }
+
+        val scale = args.getOrNull(next)?.toDoubleOrNull() ?: DEFAULT_SCALE
         if (scale <= 0.0) {
             sender.sendMessage(LegacyFormat.format("<red>Scale must be > 0.</red>"))
             return true
         }
 
-        val duration = args.getOrNull(3)?.toLongOrNull() ?: DEFAULT_DURATION_TICKS
+        val duration = args.getOrNull(next + 1)?.toLongOrNull() ?: DEFAULT_DURATION_TICKS
         if (duration <= 0L) {
             sender.sendMessage(LegacyFormat.format("<red>Duration must be > 0 ticks.</red>"))
             return true
         }
 
-        // effects with a `follow:` block stick to the player who played them
-        val follow = effect.followDefaults?.let { FollowOptions(sender) }
+        val player = sender as? Player
+        // effects with a follow: block stick to the player who played them
+        val positioned = next > 2
+        val follow = effect.followDefaults?.takeUnless { positioned }?.let { player?.let(::FollowOptions) }
         val opts = EffectOptions.builder()
             .scale(scale)
             .duration(duration)
             .follow(follow)
-            .subject(sender)
+            .subject(player)
             .build()
 
-        val handle = FXEngine.play(effectName, sender.location, opts)
+        val handle = FXEngine.play(effectName, target, opts)
 
-        sender.sendMessage(LegacyFormat.format(
-            "<green>Playing effect <gold>'$effectName'</gold> " +
-            "<gray>(ID: <yellow>${handle?.id ?: "unknown"}</yellow>)</gray> " +
-            "for <aqua>${duration}</aqua> ticks at scale <aqua>$scale</aqua>.</green>"
-        ))
+        // MythicMobs and command blocks run this often
+        if (player != null) {
+            sender.sendMessage(LegacyFormat.format(
+                "<green>Playing effect <gold>'$effectName'</gold> " +
+                "<gray>(ID: <yellow>${handle?.id ?: "unknown"}</yellow>)</gray> " +
+                "for <aqua>${duration}</aqua> ticks at scale <aqua>$scale</aqua>.</green>"
+            ))
+        }
         return true
     }
+
+    // where ~ is relative to: the player, the command block or the entity running the command
+    private fun senderLocation(sender: CommandSender): Location? = when (sender) {
+        is Entity -> sender.location
+        is BlockCommandSender -> sender.block.location.add(0.5, 0.0, 0.5)
+        else -> null
+    }
+
+    private fun parseLocation(sender: CommandSender, origin: Location?, coords: Array<out String>, worldName: String?): Location? {
+        val world = if (worldName != null) {
+            Bukkit.getWorld(worldName) ?: run {
+                sender.sendMessage(LegacyFormat.format("<red>Unknown world <gold>'$worldName'</gold>.</red>"))
+                return null
+            }
+        } else {
+            origin?.world ?: Bukkit.getWorlds().first()
+        }
+        val base = doubleArrayOf(origin?.x ?: 0.0, origin?.y ?: 0.0, origin?.z ?: 0.0)
+        val values = DoubleArray(3)
+        for (i in 0 until 3) {
+            val raw = coords[i]
+            if (raw.startsWith('~')) {
+                if (origin == null) {
+                    sender.sendMessage(LegacyFormat.format("<red>Relative coordinates need a position to start from.</red>"))
+                    return null
+                }
+                values[i] = base[i] + (raw.substring(1).takeIf(String::isNotEmpty)?.toDouble() ?: 0.0)
+            } else {
+                values[i] = raw.toDouble()
+            }
+        }
+        // keeps the sender's facing, effects oriented by yaw/pitch look the same as before
+        return Location(world, values[0], values[1], values[2], origin?.yaw ?: 0f, origin?.pitch ?: 0f)
+    }
+
+    private fun isCoordinate(arg: String): Boolean =
+        arg.toDoubleOrNull()?.isFinite() == true ||
+            (arg.startsWith('~') && (arg.length == 1 || arg.substring(1).toDoubleOrNull()?.isFinite() == true))
 
     private fun cmdStop(sender: CommandSender, args: Array<out String>): Boolean {
         if (!sender.hasPermission(PERM_STOP)) {
@@ -200,12 +259,30 @@ class VEngineCommand(
                 suggestions.filter { it.startsWith(args[1], ignoreCase = true) }
             }
 
-            args.size == 3 && args[0].equals("play", ignoreCase = true) ->
-                SCALE_HINTS.filter { it.startsWith(args[2]) }
+            args.size >= 3 && args[0].equals("play", ignoreCase = true) -> playHints(args)
+                .filter { it.startsWith(args.last(), ignoreCase = true) }
 
-            args.size == 4 && args[0].equals("play", ignoreCase = true) ->
-                DURATION_HINTS.filter { it.startsWith(args[3]) }
+            else -> emptyList()
+        }
+    }
 
+    // after the effect: x y z (or scale duration), then world, scale and duration once a position is typed
+    private fun playHints(args: Array<out String>): List<String> {
+        val index = args.size - 1
+        if (index < 5) {
+            return listOf("~") + when (index) {
+                2 -> SCALE_HINTS
+                3 -> DURATION_HINTS
+                else -> emptyList()
+            }
+        }
+        if (!(2 until 5).all { isCoordinate(args[it]) }) {
+            return emptyList()
+        }
+        val afterWorld = if (index > 5 && args[5].toDoubleOrNull() == null) 6 else 5
+        return when (index - afterWorld) {
+            0 -> if (afterWorld == 5) Bukkit.getWorlds().map { it.name } + SCALE_HINTS else SCALE_HINTS
+            1 -> DURATION_HINTS
             else -> emptyList()
         }
     }
@@ -224,6 +301,8 @@ class VEngineCommand(
 
         private const val DEFAULT_SCALE = 1.0
         private const val DEFAULT_DURATION_TICKS = 60L
+
+        private const val PLAY_USAGE = "/vengine play <effect> [x y z [world]] [scale] [duration]"
 
         private val SUBCOMMANDS    = listOf("help", "list", "play", "stop", "reload")
         private val SCALE_HINTS    = listOf("0.5", "1.0", "1.5", "2.0", "3.0")
