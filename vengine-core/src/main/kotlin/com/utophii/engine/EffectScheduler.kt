@@ -5,6 +5,7 @@ import com.utophii.api.EffectOptions
 import com.utophii.api.SimpleEffectHandle
 import org.bukkit.Location
 import org.bukkit.Particle
+import org.bukkit.World
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.scheduler.BukkitTask
@@ -209,29 +210,111 @@ class EffectScheduler(val plugin: JavaPlugin) {
         offsetZ: Double = DEFAULT_PARTICLE_OFFSET,
         speed: Double = DEFAULT_PARTICLE_SPEED,
     ) {
-        val world = location.world ?: return
-        val explicitReceivers = receivers.toList()
-        val candidates = if (explicitReceivers.isEmpty()) world.players.toList() else explicitReceivers
+        spawnParticles(listOf(location), particle, data, receivers, count, offsetX, offsetY, offsetZ, speed)
+    }
 
-        // near = online players of the same world within the view-distance radius
-        val near = candidates.filter { player ->
-            player.isOnline && player.world == world && player.location.distanceSquared(location) <= viewDistanceSquared
-        }
-        if (near.isEmpty()) {
+    // spawns one frame of particles with the same culling as spawnParticle.
+    // Nearby players are resolved once per frame: candidates are pre-culled against the frame's bounding box,
+    // then each particle is checked against cached player coordinates
+    fun spawnParticles(
+        locations: List<Location>,
+        particle: Particle,
+        data: Any?,
+        receivers: Iterable<Player>,
+        count: Int = DEFAULT_PARTICLE_COUNT,
+        offsetX: Double = DEFAULT_PARTICLE_OFFSET,
+        offsetY: Double = DEFAULT_PARTICLE_OFFSET,
+        offsetZ: Double = DEFAULT_PARTICLE_OFFSET,
+        speed: Double = DEFAULT_PARTICLE_SPEED,
+    ) {
+        if (locations.isEmpty()) {
             return
         }
+        val explicitReceivers = receivers.toList()
+        var viewers: FrameViewers? = null
+        locations.forEach { location ->
+            val world = location.world ?: return@forEach
+            val current = viewers?.takeIf { it.world == world }
+                ?: FrameViewers.collect(world, locations, explicitReceivers, viewDistance).also { viewers = it }
+            current.forEachNear(location, viewDistanceSquared) { player ->
+                player.spawnParticle(
+                    particle,
+                    location,
+                    count,
+                    offsetX,
+                    offsetY,
+                    offsetZ,
+                    speed,
+                    data,
+                )
+            }
+        }
+    }
 
-        near.forEach { player ->
-            player.spawnParticle(
-                particle,
-                location,
-                count,
-                offsetX,
-                offsetY,
-                offsetZ,
-                speed,
-                data,
-            )
+    // online players of one world that may see any particle of the current frame, with their positions sampled once
+    private class FrameViewers(
+        val world: World,
+        private val players: List<Player>,
+        private val coordinates: DoubleArray,
+    ) {
+        inline fun forEachNear(location: Location, radiusSquared: Double, action: (Player) -> Unit) {
+            val x = location.x
+            val y = location.y
+            val z = location.z
+            for (index in players.indices) {
+                val dx = coordinates[index * AXES] - x
+                val dy = coordinates[index * AXES + 1] - y
+                val dz = coordinates[index * AXES + 2] - z
+                if (dx * dx + dy * dy + dz * dz <= radiusSquared) {
+                    action(players[index])
+                }
+            }
+        }
+
+        companion object {
+            private const val AXES = 3
+
+            // keeps the candidates within radius of the bounding box of the frame's particles in this world
+            fun collect(world: World, locations: List<Location>, explicitReceivers: List<Player>, radius: Double): FrameViewers {
+                var minX = Double.POSITIVE_INFINITY
+                var minY = Double.POSITIVE_INFINITY
+                var minZ = Double.POSITIVE_INFINITY
+                var maxX = Double.NEGATIVE_INFINITY
+                var maxY = Double.NEGATIVE_INFINITY
+                var maxZ = Double.NEGATIVE_INFINITY
+                locations.forEach { location ->
+                    if (location.world != world) return@forEach
+                    minX = minOf(minX, location.x); maxX = maxOf(maxX, location.x)
+                    minY = minOf(minY, location.y); maxY = maxOf(maxY, location.y)
+                    minZ = minOf(minZ, location.z); maxZ = maxOf(maxZ, location.z)
+                }
+
+                val candidates = explicitReceivers.ifEmpty { world.players }
+                val players = ArrayList<Player>(candidates.size)
+                val coordinates = DoubleArray(candidates.size * AXES)
+                val radiusSquared = radius * radius
+                candidates.forEach { player ->
+                    if (!player.isOnline || player.world != world) return@forEach
+                    val position = player.location
+                    val dx = axisGap(position.x, minX, maxX)
+                    val dy = axisGap(position.y, minY, maxY)
+                    val dz = axisGap(position.z, minZ, maxZ)
+                    if (dx * dx + dy * dy + dz * dz > radiusSquared) return@forEach
+                    val offset = players.size * AXES
+                    coordinates[offset] = position.x
+                    coordinates[offset + 1] = position.y
+                    coordinates[offset + 2] = position.z
+                    players.add(player)
+                }
+                return FrameViewers(world, players, coordinates)
+            }
+
+            // distance from value to the [min, max] interval along one axis
+            private fun axisGap(value: Double, min: Double, max: Double): Double = when {
+                value < min -> min - value
+                value > max -> value - max
+                else -> 0.0
+            }
         }
     }
 

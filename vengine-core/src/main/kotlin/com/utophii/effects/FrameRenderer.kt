@@ -47,18 +47,16 @@ class FrameRenderer(private val origin: Location) {
 
     private fun spawnParticles(positions: List<Location>, opts: EffectOptions) {
         val data = AbstractParticleEffect.resolveParticleData(opts)
-        positions.forEach { location ->
-            FXEngine.scheduler().spawnParticle(
-                location = location,
-                particle = opts.particle,
-                data = data,
-                receivers = opts.receivers,
-                count = opts.count,
-                offsetX = opts.offsetX,
-                offsetY = opts.offsetY,
-                offsetZ = opts.offsetZ,
-                speed = opts.speed,
-            )
-        }
+        FXEngine.scheduler().spawnParticles(
+            locations = positions,
+            particle = opts.particle,
+            data = data,
+            receivers = opts.receivers,
+            count = opts.count,
+            offsetX = opts.offsetX,
+            offsetY = opts.offsetY,
+            offsetZ = opts.offsetZ,
+            speed = opts.speed,
+        )
     }
 }
