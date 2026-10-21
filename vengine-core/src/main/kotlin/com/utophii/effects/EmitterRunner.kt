@@ -3,9 +3,9 @@ package com.utophii.effects
 import com.utophii.api.EffectHandle
 import com.utophii.api.EffectOptions
 import com.utophii.api.FollowOptions
+import com.utophii.engine.EffectScheduler
 import com.utophii.engine.FXEngine
 import org.bukkit.Location
-import org.bukkit.scheduler.BukkitTask
 import org.bukkit.util.Vector
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -22,7 +22,7 @@ internal class EmitterRunner(
     // the parent's follow with its defaults applied
     private val follow: FollowOptions?,
     private val runtime: EffectOptions,
-) : EffectHandle {
+) : EffectHandle, EffectScheduler.Tickable {
     override val id: String = "$parentId/emitters"
     override val effectName: String = parentId
 
@@ -30,21 +30,18 @@ internal class EmitterRunner(
     private val spawned = mutableListOf<EffectHandle>()
     private val lastEmissionTick = emitters.maxOf { it.lastTick(totalDuration) }
     private var tick = 0L
-    private var task: BukkitTask? = null
 
     override val isCancelled: Boolean
         get() = cancelled.get()
 
     fun start() {
-        val plugin = FXEngine.scheduler().plugin
-        task = plugin.server.scheduler.runTaskTimer(plugin, Runnable(::step), 0L, 1L)
+        FXEngine.scheduler().register(this)
     }
 
     override fun cancel() {
         if (!cancelled.compareAndSet(false, true)) {
             return
         }
-        task?.cancel()
         FXEngine.scheduler().runOnMainThread {
             spawned.forEach(EffectHandle::cancel)
             release(spawned.size)
@@ -52,9 +49,9 @@ internal class EmitterRunner(
         }
     }
 
-    private fun step() {
+    override fun tick(): Boolean {
         if (isCancelled) {
-            return
+            return false
         }
         val before = spawned.size
         spawned.removeIf(EffectHandle::isCancelled)
@@ -69,6 +66,7 @@ internal class EmitterRunner(
         if (tick > lastEmissionTick && tick >= totalDuration && spawned.isEmpty()) {
             FXEngine.stop(parentId)
         }
+        return !isCancelled
     }
 
     private fun emit(emitter: EffectEmitter) {

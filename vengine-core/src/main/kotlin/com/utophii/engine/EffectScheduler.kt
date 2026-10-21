@@ -10,17 +10,31 @@ import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.scheduler.BukkitTask
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
+import java.util.logging.Level
 
 // owns Bukkit task scheduling, active handles and frame synchronization for VEngine effects
 class EffectScheduler(val plugin: JavaPlugin) {
 
-    private val tasks: MutableSet<BukkitTask> = ConcurrentHashMap.newKeySet()
     private val activeHandles = ConcurrentHashMap<String, EffectHandle>()
     private val running = ConcurrentHashMap<String, RunningEffect>()
     private val anchors = ConcurrentHashMap<String, FollowAnchor>()
     private val idCounter = AtomicInteger(1)
+
+    // everything the loop advances
+    private val tickables = ArrayList<Tickable>()
+    // registrations from any thread
+    private val pending = ConcurrentLinkedQueue<Tickable>()
+    // finished calculations waiting to be rendered on the server thread
+    private val completed = ConcurrentLinkedQueue<Runnable>()
+    private val calculator: ExecutorService = Executors.newFixedThreadPool(CALCULATOR_THREADS) { runnable ->
+        Thread(runnable, "VEngine-calc").apply { isDaemon = true }
+    }
+    // one server-thread loop drives every effect
+    private val loop: BukkitTask = plugin.server.scheduler.runTaskTimer(plugin, Runnable(::tick), 0L, FRAME_PERIOD_TICKS)
 
     // view-distance culling radius in blocks; particles are only sent to players within this radius of the particle location
     var viewDistance: Double = DEFAULT_VIEW_DISTANCE_BLOCKS
@@ -31,8 +45,43 @@ class EffectScheduler(val plugin: JavaPlugin) {
     private val viewDistanceSquared: Double
         get() = viewDistance * viewDistance
 
-    // schedules frame calculation asynchronously while rendering strictly monotonically on the main thread
-    // when a computed frame is dropped (stale, cancelled, or after rendering) [release] disposes it exactly once
+    // advanced once per server tick by the loop
+    internal interface Tickable {
+        fun tick(): Boolean
+
+        fun cancel()
+    }
+
+    // adds a tickable to the loop
+    internal fun register(tickable: Tickable) {
+        pending.add(tickable)
+    }
+
+    // renders the frames calculated since the last tick
+    private fun tick() {
+        while (true) {
+            val delivery = completed.poll() ?: break
+            runGuarded(delivery::run)
+        }
+        while (true) {
+            tickables += pending.poll() ?: break
+        }
+        tickables.removeIf { tickable -> !runGuarded(tickable::tick, fallback = true) }
+    }
+
+    // keeps one failing effect from breaking the loop for all others
+    private fun <R> runGuarded(action: () -> R, fallback: R): R = try {
+        action()
+    } catch (t: Throwable) {
+        plugin.logger.log(Level.SEVERE, "VEngine effect tick failed", t)
+        fallback
+    }
+
+    private fun runGuarded(action: () -> Unit) = runGuarded(action, Unit)
+
+    // calculates frames on the calculator pool and renders them on the server thread one tick later
+    // a new frame is skipped while the previous one is still being calculated, so time keeps moving under load
+    // when a computed frame is dropped release disposes it exactly once
     // onStop runs once on the server thread when the effect finishes or is cancelled
     // keepAlive is checked on the server thread every tick
     fun <T> scheduleFrames(
@@ -48,60 +97,79 @@ class EffectScheduler(val plugin: JavaPlugin) {
         anchor: FollowAnchor? = null,
     ): EffectHandle {
         val handleId = "$effectName#${idCounter.getAndIncrement()}"
-        var tick = 0L
-        val lastDeliveredFrame = AtomicLong(UNINITIALIZED_FRAME_INDEX)
-        lateinit var task: BukkitTask
-
         val handle = SimpleEffectHandle(handleId, effectName) {
-            task.cancel()
-            tasks.remove(task)
             forget(handleId)
             onStop?.let(::runOnMainThread)
         }
 
-        task = plugin.server.scheduler.runTaskTimer(plugin, Runnable {
-            if (tick >= durationTicks || handle.isCancelled || keepAlive?.invoke() == false) {
-                handle.cancel()
-                return@Runnable
-            }
-
-            val currentFrameIndex = tick
-            val currentTime = currentFrameIndex.toDouble()
-            tick++
-
-            plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
-                if (handle.isCancelled || task.isCancelled || task !in tasks) {
-                    return@Runnable
-                }
-
-                val frameResult = calculate(currentTime)
-
-                plugin.server.scheduler.runTask(plugin, Runnable {
-                    if (handle.isCancelled || task.isCancelled || task !in tasks) {
-                        release?.invoke(frameResult)
-                        return@Runnable
-                    }
-
-                    val previousDelivered = lastDeliveredFrame.get()
-                    if (currentFrameIndex > previousDelivered) {
-                        lastDeliveredFrame.set(currentFrameIndex)
-                        try {
-                            render(currentTime, frameResult)
-                        } finally {
-                            release?.invoke(frameResult)
-                        }
-                    } else {
-                        release?.invoke(frameResult)
-                    }
-                })
-            })
-        }, initialDelayTicks, FRAME_PERIOD_TICKS)
-
-        tasks.add(task)
+        register(FrameJob(handle, initialDelayTicks, durationTicks, calculate, render, release, keepAlive))
         activeHandles[handleId] = handle
         track(handle, origin, anchor)
         return handle
     }
+
+    // one effect's frame clock
+    private inner class FrameJob<T>(
+        private val handle: EffectHandle,
+        private var delayTicks: Long,
+        private val durationTicks: Long,
+        private val calculate: (Double) -> T,
+        private val render: (Double, T) -> Unit,
+        private val release: ((T) -> Unit)?,
+        private val keepAlive: (() -> Boolean)?,
+    ) : Tickable {
+        private var frameIndex = 0L
+        private var calculating = false
+
+        override fun tick(): Boolean {
+            if (handle.isCancelled) {
+                return false
+            }
+            if (delayTicks > 0) {
+                delayTicks--
+                return true
+            }
+            if (frameIndex >= durationTicks || keepAlive?.invoke() == false) {
+                handle.cancel()
+                return false
+            }
+
+            val time = (frameIndex++).toDouble()
+            if (calculating) {
+                return true
+            }
+            calculating = true
+            calculator.execute {
+                val frame = try {
+                    if (handle.isCancelled) null else Frame(calculate(time))
+                } catch (t: Throwable) {
+                    plugin.logger.log(Level.SEVERE, "VEngine effect ${handle.id} failed to calculate a frame", t)
+                    null
+                }
+                completed.add { deliver(time, frame) }
+            }
+            return true
+        }
+
+        override fun cancel() {
+            handle.cancel()
+        }
+
+        private fun deliver(time: Double, frame: Frame<T>?) {
+            calculating = false
+            frame ?: return
+            try {
+                if (!handle.isCancelled) {
+                    render(time, frame.value)
+                }
+            } finally {
+                release?.invoke(frame.value)
+            }
+        }
+    }
+
+    // boxes a calculated frame
+    private class Frame<T>(val value: T)
 
     // registers a composite or custom handle in the active handle registry
     fun registerHandle(handle: EffectHandle) {
@@ -148,7 +216,11 @@ class EffectScheduler(val plugin: JavaPlugin) {
         activeHandles.clear()
         running.clear()
         anchors.clear()
-        cancelAllTasks()
+        // detached effects are not listed in activeHandles, so stop whatever the loop still drives as well
+        runOnMainThread {
+            pending.toList().forEach(Tickable::cancel)
+            tickables.toList().forEach(Tickable::cancel)
+        }
         return count
     }
 
@@ -327,20 +399,21 @@ class EffectScheduler(val plugin: JavaPlugin) {
         }
     }
 
-    private fun cancelAllTasks() {
-        tasks.forEach(BukkitTask::cancel)
-        tasks.clear()
-    }
-
+    // stops every effect and shuts the loop and the calculator pool down for good
     fun cancelAll() {
         stopAll()
+        loop.cancel()
+        calculator.shutdownNow()
+        tickables.clear()
+        pending.clear()
+        completed.clear()
     }
 
     companion object {
         private const val INITIAL_DELAY_TICKS = 0L
         private const val FRAME_PERIOD_TICKS = 1L
         private const val MIN_COMPOSITE_TTL_TICKS = 1L
-        private const val UNINITIALIZED_FRAME_INDEX = -1L
+        private val CALCULATOR_THREADS = (Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(1)
         private const val DEFAULT_PARTICLE_COUNT = 1
         private const val DEFAULT_PARTICLE_OFFSET = 0.0
         private const val DEFAULT_PARTICLE_SPEED = 0.0
