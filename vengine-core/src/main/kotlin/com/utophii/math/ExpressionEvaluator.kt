@@ -10,16 +10,25 @@ import kotlin.math.PI
 // Formula variables are auto-detected so callers only have to supply the values for the variables
 // they used (the scanner skips exp4j's built-in functions and mathematical constants).
 class ExpressionEvaluator private constructor(
-    private val expression: Expression,
-    private val lock: Any,
+    // never mutated after compile
+    private val template: Expression,
 ) {
     // the set of variable names that must be supplied before evaluating
-    val variableNames: Set<String> = expression.variableNames
+    val variableNames: Set<String> = template.variableNames
 
-    // evaluates the formula once; missing variables fall back to the named math constants then to 0.0,
+    // evaluates the formula once on a fresh copy,
     // and extra keys in `values` are ignored
-    fun evaluate(values: Map<String, Double>): Double {
-        synchronized(lock) {
+    fun evaluate(values: Map<String, Double>): Double = fork().evaluate(values)
+
+    // a private copy for one thread
+    fun fork(): Fork = Fork(Expression(template), variableNames)
+
+    class Fork internal constructor(
+        private val expression: Expression,
+        private val variableNames: Set<String>,
+    ) {
+        // same semantics as ExpressionEvaluator.evaluate
+        fun evaluate(values: Map<String, Double>): Double {
             variableNames.forEach { name -> expression.setVariable(name, values[name] ?: CONSTANTS[name] ?: DEFAULT_MISSING_VARIABLE) }
             return expression.evaluate()
         }
@@ -64,7 +73,7 @@ class ExpressionEvaluator private constructor(
                 val expression = ExpressionBuilder(formula)
                     .variables(*variables)
                     .build()
-                val evaluator = ExpressionEvaluator(expression, Any())
+                val evaluator = ExpressionEvaluator(expression)
                 // exp4j parses leniently (e.g. `R * `) and only fails at evaluation; probe once here
                 evaluator.evaluate(evaluator.variableNames.associateWith { PROBE_VALUE })
                 evaluator

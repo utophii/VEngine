@@ -24,7 +24,7 @@ class ParametricEffect(
     override val followDefaults: FollowDefaults? = null,
 ) : AbstractParticleEffect(name) {
 
-    // compiled once per axis; the evaluator is thread-safe and shared across concurrent plays
+    // compiled once per axis and shared across concurrent plays
     private val evaluators: List<ExpressionEvaluator> = listOf(xFormula, yFormula, zFormula)
         .map { formula -> requireNotNull(ExpressionEvaluator.compile(formula)) { "Invalid formula: '$formula'" } }
 
@@ -40,10 +40,12 @@ class ParametricEffect(
         CONSTANT_NAMES.forEach { (name, value) -> params[name] = value }
         // expose the current effect time as a formula variable (0.0 default is overridden here) for live animation
         params[TIME_VARIABLE] = time
+        // per-frame copies
+        val axes = evaluators.map(ExpressionEvaluator::fork)
 
         when (variables.size) {
-            1 -> calculateCurve(buffer, center, opts, time, phase, params, samplingFor(opts))
-            else -> calculateSurface(buffer, center, opts, time, phase, params, samplingFor(opts))
+            1 -> calculateCurve(buffer, center, opts, time, phase, params, samplingFor(opts), axes)
+            else -> calculateSurface(buffer, center, opts, time, phase, params, samplingFor(opts), axes)
         }
     }
 
@@ -70,6 +72,7 @@ class ParametricEffect(
         phase: Double,
         params: MutableMap<String, Double>,
         samples: List<Int>,
+        axes: List<ExpressionEvaluator.Fork>,
     ) {
         val variable = variables[0]
         val range = ranges[0]
@@ -80,9 +83,9 @@ class ParametricEffect(
             // t = first + (i / count) * span + phase: advances the parameter across the open range
             val value = range.first + (index / count.toDouble()) * span + phase
             params[variable] = value
-            val x = evaluators[0].evaluate(params)
-            val y = evaluators[1].evaluate(params)
-            val z = evaluators[2].evaluate(params)
+            val x = axes[0].evaluate(params)
+            val y = axes[1].evaluate(params)
+            val z = axes[2].evaluate(params)
             writeParticle(buffer, index, x, y, z, center, opts, time)
         }
     }
@@ -96,6 +99,7 @@ class ParametricEffect(
         phase: Double,
         params: MutableMap<String, Double>,
         samples: List<Int>,
+        axes: List<ExpressionEvaluator.Fork>,
     ) {
         val variable0 = variables[0]
         val variable1 = variables[1]
@@ -116,9 +120,9 @@ class ParametricEffect(
                 // v = first + (j / count1) * span: latitude parameter across its range
                 val value1 = range1.first + (j / count1.toDouble()) * span1
                 params[variable1] = value1
-                val x = evaluators[0].evaluate(params)
-                val y = evaluators[1].evaluate(params)
-                val z = evaluators[2].evaluate(params)
+                val x = axes[0].evaluate(params)
+                val y = axes[1].evaluate(params)
+                val z = axes[2].evaluate(params)
                 writeParticle(buffer, index, x, y, z, center, opts, time)
                 index++
             }

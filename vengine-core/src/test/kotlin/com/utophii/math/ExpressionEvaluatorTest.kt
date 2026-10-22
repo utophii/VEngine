@@ -42,6 +42,17 @@ class ExpressionEvaluatorTest {
         assertEquals(1.5, evaluator.evaluate(mapOf("t" to 1.5, "R" to 99.0, "unused" to 3.0)), EPS)
     }
 
+    @Test
+    fun `forks evaluate independently of each other and the template`() {
+        val evaluator = requireNotNull(ExpressionEvaluator.compile("R * t"))
+        val first = evaluator.fork()
+        val second = evaluator.fork()
+        assertEquals(6.0, first.evaluate(mapOf("R" to 2.0, "t" to 3.0)), EPS)
+        assertEquals(20.0, second.evaluate(mapOf("R" to 4.0, "t" to 5.0)), EPS)
+        assertEquals(6.0, first.evaluate(mapOf("R" to 2.0, "t" to 3.0)), EPS)
+        assertEquals(0.0, evaluator.evaluate(emptyMap()), EPS)
+    }
+
     companion object {
         private const val EPS = 1.0E-6
     }
