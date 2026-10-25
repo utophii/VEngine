@@ -47,8 +47,9 @@ class ScriptedEffect(
             }
         }
 
-        layers.map { it.bind(subject) }.forEach { layer ->
-            val primitive = FXEngine.primitiveEffect(layer.effect) ?: return@forEach
+        layers.map { it.bind(subject) }.forEach { bound ->
+            val primitive = FXEngine.primitiveEffect(bound.effect) ?: return@forEach
+            val layer = withPlayParameters(bound, primitive, opts)
             val startTick = layer.startTick.coerceAtLeast(MIN_START_TICKS)
             if (startTick >= totalDuration) {
                 return@forEach
@@ -135,6 +136,15 @@ class ScriptedEffect(
         } else {
             (durationFormula?.evaluate(subject)?.toLong() ?: defaultDurationTicks).coerceAtLeast(MIN_DURATION_TICKS)
         }
+    }
+
+    // values the primitive fixes once per play, such as a random seed, join the layer's own parameters
+    private fun withPlayParameters(layer: ScriptedLayer, primitive: ParticleEffect, runtime: EffectOptions): ScriptedLayer {
+        val extra = (primitive as? AbstractParticleEffect)?.playParameters(layer.options.parameters + runtime.parameters).orEmpty()
+        if (extra.isEmpty()) {
+            return layer
+        }
+        return layer.copy(options = layer.options.toBuilder().parameters(layer.options.parameters + extra).build())
     }
 
     // a followed player stands in for an explicit subject

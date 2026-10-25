@@ -7,6 +7,7 @@ import com.utophii.api.FollowOptions
 import com.utophii.api.ParticleEffect
 import com.utophii.effects.AizawaAttractorEffect
 import com.utophii.effects.ChladniEffect
+import com.utophii.effects.CircularChladniEffect
 import com.utophii.effects.ConfiguredPrimitive
 import com.utophii.effects.HalvorsenAttractorEffect
 import com.utophii.effects.JuliaEffect
@@ -52,6 +53,7 @@ object FXEngine {
         registerPrimitive(SierpinskiEffect.carpet())
         registerPrimitive(SierpinskiEffect.mengerSponge())
         registerPrimitive(ChladniEffect())
+        registerPrimitive(CircularChladniEffect())
     }
 
     fun nextScriptedId(): Int = scriptedIdCounter.getAndIncrement()

@@ -19,10 +19,12 @@ class LSystemEffectTest {
         growth: Double = 0.0,
         anchorCenter: Boolean = false,
         points: Int = 4096,
+        stochastic: Map<Char, List<LSystemEffect.Production>> = emptyMap(),
+        seed: Long? = null,
     ) = LSystemEffect(
         name = "lsystem",
         axiom = axiom,
-        rules = rules,
+        rules = rules.mapValues { (_, successor) -> listOf(LSystemEffect.Production(successor)) } + stochastic,
         iterations = iterations,
         angleDegrees = angle,
         size = 2.0,
@@ -31,6 +33,7 @@ class LSystemEffectTest {
         growthTicks = growth,
         anchorCenter = anchorCenter,
         angularSpeed = 0.0,
+        seed = seed,
     )
 
     private fun frame(effect: LSystemEffect, time: Double = 0.0, parameters: Map<String, Double> = emptyMap()): ParticleBuffer {
@@ -98,5 +101,35 @@ class LSystemEffectTest {
         val effect = lsystem("F", mapOf('F' to "FFFFFFFFFF"), iterations = 10, points = 10)
         assertTrue(effect.appliedIterations < 10)
         assertEquals(6, effect.appliedIterations, "10^6 symbols still fit, 10^7 do not")
+    }
+
+    @Test
+    fun `stochastic rules grow a different plant per seed`() {
+        val branch = mapOf('F' to listOf(LSystemEffect.Production("F[+F]F"), LSystemEffect.Production("F[-F]F")))
+        val effect = lsystem("F", emptyMap(), iterations = 4, angle = 25.0, stochastic = branch)
+        fun shape(seed: Double) = frame(effect, parameters = mapOf("seed" to seed)).list().map { it.x to it.y }
+        assertEquals(shape(1.0), shape(1.0))
+        assertTrue(shape(1.0) != shape(2.0))
+    }
+
+    @Test
+    fun `productions are picked in proportion to their weights`() {
+        // 1000 symbols, each drawing a segment (F) with weight 3 or moving without drawing (f) with weight 1;
+        // the spacing is far coarser than a segment, so every drawn segment is one particle
+        val coin = mapOf('A' to listOf(LSystemEffect.Production("F", 3.0), LSystemEffect.Production("f", 1.0)))
+        val effect = lsystem("A".repeat(1000), emptyMap(), iterations = 1, stochastic = coin, seed = 7)
+        val drawn = frame(effect).list().size
+        // expected 750, standard deviation √(1000 · 0.75 · 0.25) ≈ 14
+        assertTrue(drawn in 690..810, "drew $drawn segments")
+    }
+
+    @Test
+    fun `every play rolls a seed unless one is fixed`() {
+        val branch = mapOf('F' to listOf(LSystemEffect.Production("F[+F]F"), LSystemEffect.Production("F[-F]F")))
+        val random = lsystem("F", emptyMap(), iterations = 2, stochastic = branch)
+        assertTrue("seed" in random.playParameters(emptyMap()))
+        assertTrue(random.playParameters(mapOf("seed" to 5.0)).isEmpty(), "a seed set by the layer wins")
+        assertTrue(lsystem("F", emptyMap(), iterations = 2, stochastic = branch, seed = 3).playParameters(emptyMap()).isEmpty())
+        assertTrue(lsystem("F", mapOf('F' to "F+F"), iterations = 2).playParameters(emptyMap()).isEmpty())
     }
 }

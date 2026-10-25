@@ -140,6 +140,7 @@ class VEngine : JavaPlugin() {
         saveIfMissing("effects/julia_portal.yml")
         saveIfMissing("effects/sierpinski_pyramid.yml")
         saveIfMissing("effects/chladni_plate.yml")
+        saveIfMissing("effects/chladni_disc.yml")
         saveIfMissing("effects/metaballs.yml")
         saveIfMissing("effects/gyroid_orb.yml")
         saveIfMissing("effects/sdf_core.yml")
@@ -147,6 +148,7 @@ class VEngine : JavaPlugin() {
         saveIfMissing("effects/bush.yml")
         saveIfMissing("effects/koch_snowflake.yml")
         saveIfMissing("effects/living_tree.yml")
+        saveIfMissing("effects/wild_weed.yml")
     }
 
     private fun saveIfMissing(path: String) {

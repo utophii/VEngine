@@ -3,7 +3,9 @@ package com.utophii.effects
 import com.utophii.api.EffectOptions
 import com.utophii.api.FollowDefaults
 import org.bukkit.Location
+import java.util.SplittableRandom
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ThreadLocalRandom
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.sin
@@ -16,12 +18,14 @@ import kotlin.math.sin
 // Any other symbol only takes part in the rewriting. The turtle starts at the origin heading up (+Y), so
 // planar systems (only + and -) lie in the vertical XY plane. The drawing is scaled so its largest extent is
 // size blocks and anchored at the bottom center (or the center). Every particle knows its distance from the
-// root along the branches: the plant grows outwards in that order, all branches at once, and it is the gradient value
+// root along the branches: the plant grows outwards in that order, all branches at once, and it is the gradient value.
+// A symbol with several productions is stochastic: every occurrence picks one at random, in proportion to the
+// weights. Without a fixed seed every play rolls its own, so each play grows a different plant
 class LSystemEffect(
     name: String,
-    axiom: String,
-    rules: Map<Char, String>,
-    iterations: Int,
+    private val axiom: String,
+    private val rules: Map<Char, List<Production>>,
+    private val iterations: Int,
     private val angleDegrees: Double,
     private val size: Double,
     private val spacing: Double,
@@ -30,44 +34,44 @@ class LSystemEffect(
     private val anchorCenter: Boolean,
     private val angularSpeed: Double,
     override val followDefaults: FollowDefaults? = null,
+    // fixes the random choices of stochastic rules
+    private val seed: Long? = null,
 ) : AbstractParticleEffect(name), ConfiguredPrimitive {
 
-    // the rewritten string, expanded once
-    private val program: String
+    // one possible replacement of a symbol
+    data class Production(val successor: String, val weight: Double = 1.0)
+
+    private val stochastic = rules.values.any { it.size > 1 }
+    private val totalWeights = rules.mapValues { (_, productions) -> productions.sumOf(Production::weight) }
+
+    // the rewritten string of the configured seed, expanded once
+    private val baseProgram = expand(seed ?: DEFAULT_SEED)
 
     // how many rewriting steps fit under MAX_SYMBOLS
-    val appliedIterations: Int
+    val appliedIterations: Int = baseProgram.iterations
 
-    init {
-        var current = axiom
-        var applied = 0
-        while (applied < iterations) {
-            val next = StringBuilder()
-            var tooLong = false
-            for (symbol in current) {
-                next.append(rules[symbol] ?: symbol)
-                if (next.length > MAX_SYMBOLS) {
-                    tooLong = true
-                    break
-                }
-            }
-            if (tooLong) break
-            current = next.toString()
-            applied++
+    // rewritten strings of other seeds
+    private val programs = ConcurrentHashMap<Long, Program>()
+
+    // drawings per seed and turning angle
+    private val drawings = ConcurrentHashMap<DrawingKey, Drawing>()
+
+    override fun playParameters(configured: Map<String, Double>): Map<String, Double> {
+        if (!stochastic || seed != null || SEED_PARAM in configured) {
+            return emptyMap()
         }
-        program = current
-        appliedIterations = applied
+        return mapOf(SEED_PARAM to ThreadLocalRandom.current().nextInt(Int.MAX_VALUE).toDouble())
     }
-
-    // drawings per turning angle
-    private val drawings = ConcurrentHashMap<Double, Drawing>()
 
     override fun calculateInto(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
         val angle = opts.parameters[ANGLE_PARAM] ?: angleDegrees
-        val drawing = drawings[angle] ?: draw(angle).also { drawn ->
-            // an animated angle could otherwise grow the cache without bound
+        // the seed only matters when some rule is stochastic
+        val playSeed = if (stochastic) opts.parameters[SEED_PARAM]?.toLong() ?: seed ?: DEFAULT_SEED else DEFAULT_SEED
+        val key = DrawingKey(playSeed, angle)
+        val drawing = drawings[key] ?: draw(program(playSeed), angle).also { drawn ->
+            // an animated angle or many seeds could otherwise grow the cache without bound
             if (drawings.size >= MAX_CACHED_DRAWINGS) drawings.clear()
-            drawings[angle] = drawn
+            drawings[key] = drawn
         }
         // progress = t / growth, or set directly
         val growth = opts.parameters[GROWTH_PARAM] ?: growthTicks
@@ -87,10 +91,57 @@ class LSystemEffect(
         }
     }
 
+    private fun program(playSeed: Long): String {
+        if (playSeed == (seed ?: DEFAULT_SEED)) {
+            return baseProgram.symbols
+        }
+        return (programs[playSeed] ?: expand(playSeed).also { expanded ->
+            if (programs.size >= MAX_CACHED_PROGRAMS) programs.clear()
+            programs[playSeed] = expanded
+        }).symbols
+    }
+
+    // rewrites the axiom iterations times, stops early before the string outgrows MAX_SYMBOLS
+    private fun expand(playSeed: Long): Program {
+        val random = SplittableRandom(playSeed)
+        var current = axiom
+        var applied = 0
+        while (applied < iterations) {
+            val next = StringBuilder()
+            var tooLong = false
+            for (symbol in current) {
+                val productions = rules[symbol]
+                when {
+                    productions == null -> next.append(symbol)
+                    productions.size == 1 -> next.append(productions[0].successor)
+                    else -> next.append(pick(productions, totalWeights.getValue(symbol), random))
+                }
+                if (next.length > MAX_SYMBOLS) {
+                    tooLong = true
+                    break
+                }
+            }
+            if (tooLong) break
+            current = next.toString()
+            applied++
+        }
+        return Program(current, applied)
+    }
+
+    // roulette wheel: production i wins with probability weightᵢ / Σ weight
+    private fun pick(productions: List<Production>, total: Double, random: SplittableRandom): String {
+        var target = random.nextDouble() * total
+        for (production in productions) {
+            target -= production.weight
+            if (target < 0.0) return production.successor
+        }
+        return productions.last().successor
+    }
+
     // walks the turtle over the program and samples particles along the drawn segments
-    private fun draw(angleDegrees: Double): Drawing {
+    private fun draw(program: String, angleDegrees: Double): Drawing {
         val turn = Math.toRadians(angleDegrees)
-        val segments = walk(turn)
+        val segments = walk(program, turn)
         val segmentCount = segments.size / SEGMENT_STRIDE
         if (segmentCount == 0) {
             return Drawing(DoubleArray(0), 0.0)
@@ -150,7 +201,7 @@ class LSystemEffect(
     }
 
     // runs the turtle, returns per drawn segment: start xyz, end xyz, root distance at the start
-    private fun walk(turn: Double): DoubleArray {
+    private fun walk(program: String, turn: Double): DoubleArray {
         var segments = DoubleArray(INITIAL_SEGMENTS * SEGMENT_STRIDE)
         var segmentCount = 0
         // state: position (3), heading H (3), left L (3), up U (3), root distance (1)
@@ -222,6 +273,10 @@ class LSystemEffect(
         return sorted
     }
 
+    private class Program(val symbols: String, val iterations: Int)
+
+    private data class DrawingKey(val seed: Long, val angle: Double)
+
     // particle points (x, y, z, root distance) sorted by root distance
     private class Drawing(val points: DoubleArray, val maxDistance: Double) {
         val count = points.size / STRIDE
@@ -232,10 +287,13 @@ class LSystemEffect(
         private const val GROWTH_PARAM = "growth"
         private const val PROGRESS_PARAM = "progress"
         private const val ANGULAR_SPEED_PARAM = "angularSpeed"
+        private const val SEED_PARAM = "seed"
+        private const val DEFAULT_SEED = 0L
 
         // longest rewritten string
         const val MAX_SYMBOLS = 1_000_000
         private const val MAX_CACHED_DRAWINGS = 32
+        private const val MAX_CACHED_PROGRAMS = 4
         private const val MAX_STACK_DEPTH = 4096
         private const val INITIAL_SEGMENTS = 256
 

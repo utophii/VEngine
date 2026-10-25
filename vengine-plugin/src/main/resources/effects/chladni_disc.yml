@@ -1,0 +1,30 @@
+# Sand on a round vibrating plate: two nodal diameters and a circle, then a second mode fades in and the sand follows.
+# chladni_circle parameters: n (nodal diameters), m (nodal circles), whole numbers; n2, m2 a second mode added with
+# weight mix (0 = off, large values let the second mode take over); size (radius in blocks), points, settle,
+# period, jitter, angularSpeed
+id: chladni_disc
+duration: 240
+layers:
+  - effect: chladni_circle
+    particle: DUST
+    dustSize: 0.6
+    # colored by how strongly the plate vibrated where the grain started
+    gradient: ["#e0fbfc", "#98c1d9", "#3d5a80"]
+    parameters:
+      size: 1.8
+      points: 900
+      settle: 50
+      n: 2
+      m: 1
+      n2: 5
+      m2: 2
+      mix: 0
+    animation:
+      tracks:
+        - target: parameters.mix
+          keyframes:
+            - tick: 70
+              value: 0.0
+            - tick: 170
+              value: 4.0
+              easing: easeInOutSine

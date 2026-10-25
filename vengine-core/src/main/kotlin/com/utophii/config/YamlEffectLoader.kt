@@ -185,14 +185,18 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             plugin.logger.warning("Skipping lsystem effect '$fileName': missing 'axiom'.")
             return null
         }
-        // rules: one symbol -> its replacement
+        // rules: one symbol -> its replacement, or a list of replacements picked at random
         val rules = (block[RULES_KEY] as? Map<*, *>).orEmpty().mapNotNull { (symbol, replacement) ->
             val key = symbol?.toString()
-            if (key == null || key.length != 1 || replacement == null) {
-                plugin.logger.warning("In '$fileName': ignoring lsystem rule '$symbol' (a rule maps one symbol to a string).")
+            val productions = parseProductions(replacement, fileName, symbol)
+            if (key == null || key.length != 1 || productions.isNullOrEmpty()) {
+                plugin.logger.warning(
+                    "In '$fileName': ignoring lsystem rule '$symbol' " +
+                        "(a rule maps one symbol to a string or to a list of strings / { to, weight } entries).",
+                )
                 return@mapNotNull null
             }
-            key[0] to replacement.toString().filterNot(Char::isWhitespace)
+            key[0] to productions
         }.toMap()
         val iterations = block[ITERATIONS_KEY]?.number()?.toInt()?.coerceAtLeast(0) ?: DEFAULT_LSYSTEM_ITERATIONS
         val anchor = block[ANCHOR_KEY]?.toString()?.lowercase()
@@ -212,6 +216,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             anchorCenter = anchor == ANCHOR_CENTER,
             angularSpeed = block[ANGULAR_SPEED_KEY]?.number() ?: DEFAULT_ANGULAR_SPEED,
             followDefaults = parseFollow(raw[FOLLOW_KEY], fileName),
+            seed = block[SEED_KEY]?.number()?.toLong(),
         )
         if (effect.appliedIterations < iterations) {
             plugin.logger.warning(
@@ -220,6 +225,29 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             )
         }
         return effect
+    }
+
+    // "F[+F]F" is one production, ["F[+F]F", "F[-F]F"] are equally likely; [{ to: "F[+F]F", weight: 2 }, ...] are weighted
+    private fun parseProductions(value: Any?, fileName: String, symbol: Any?): List<LSystemEffect.Production>? = when (value) {
+        null -> null
+        is List<*> -> value.mapNotNull { entry ->
+            when (entry) {
+                is Map<*, *> -> {
+                    val successor = entry[TO_KEY]?.toString()
+                    val weight = entry[WEIGHT_KEY]?.number() ?: DEFAULT_PRODUCTION_WEIGHT
+                    if (successor == null || weight <= 0.0) {
+                        plugin.logger.warning("In '$fileName': ignoring a production of lsystem rule '$symbol' (needs 'to' and a positive 'weight').")
+                        null
+                    } else {
+                        LSystemEffect.Production(successor.filterNot(Char::isWhitespace), weight)
+                    }
+                }
+                null -> null
+                else -> LSystemEffect.Production(entry.toString().filterNot(Char::isWhitespace))
+            }
+        }
+        is Map<*, *> -> null
+        else -> listOf(LSystemEffect.Production(value.toString().filterNot(Char::isWhitespace)))
     }
 
     // builds a parametric formula effect from a `curve`/`surface` YAML block
@@ -737,6 +765,10 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private const val SPACING_KEY = "spacing"
         private const val GROWTH_KEY = "growth"
         private const val ANCHOR_KEY = "anchor"
+        private const val SEED_KEY = "seed"
+        private const val TO_KEY = "to"
+        private const val WEIGHT_KEY = "weight"
+        private const val DEFAULT_PRODUCTION_WEIGHT = 1.0
         private const val ANCHOR_BASE = "base"
         private const val ANCHOR_CENTER = "center"
         private const val DEFAULT_LSYSTEM_ITERATIONS = 4

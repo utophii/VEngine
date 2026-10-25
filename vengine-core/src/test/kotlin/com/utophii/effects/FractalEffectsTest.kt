@@ -117,6 +117,28 @@ class FractalEffectsTest {
         }
     }
 
+    @Test
+    fun `round plate sand settles on the nodal circle of mode (0, 1)`() {
+        // J₀(k r) with k = j₁,₁ (the peak of J₀ after its first zero) has its node at r = j₀,₁ / j₁,₁
+        val node = 2.404825557695773 / 3.831705970207512
+        val parameters = mapOf("n" to 0.0, "m" to 1.0, "size" to 1.0, "jitter" to 0.0, "settle" to 20.0)
+        val settled = frame(CircularChladniEffect(), parameters, time = 20.0)
+        val onCircle = settled.list().count { abs(sqrt(it.x * it.x + it.z * it.z) - node) < 1e-3 }
+        assertTrue(onCircle > settled.list().size * 95 / 100, "only $onCircle grains settled")
+        settled.list().forEach { point -> assertTrue(sqrt(point.x * point.x + point.z * point.z) <= 1.0 + EPS) }
+    }
+
+    @Test
+    fun `round plate sand settles on the nodal diameter of mode (1, 0)`() {
+        // J₁(k r) cos θ vanishes on the diameter θ = ±π/2, the line x = 0
+        val parameters = mapOf("n" to 1.0, "m" to 0.0, "size" to 1.0, "jitter" to 0.0, "settle" to 20.0)
+        val start = frame(CircularChladniEffect(), parameters, time = 0.0)
+        val settled = frame(CircularChladniEffect(), parameters, time = 20.0)
+        assertTrue(start.list().count { abs(it.x) < 1e-3 } < start.list().size / 10, "grains must start spread out")
+        val onLine = settled.list().count { abs(it.x) < 1e-3 }
+        assertTrue(onLine > settled.list().size * 95 / 100, "only $onLine grains settled")
+    }
+
     companion object {
         private const val EPS = 1e-9
         private const val LOOSE_EPS = 1e-6

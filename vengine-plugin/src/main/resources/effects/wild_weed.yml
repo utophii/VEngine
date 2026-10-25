@@ -1,0 +1,26 @@
+# A stochastic L-system: every X picks one of five branchings and every F sometimes doubles, so each /ve play
+# grows a different tree. A rule maps a symbol to a string, to a list of strings (equally likely, e.g.
+# X: ["F[+X]FX", "F[-X]FX"]) or to a list of { to, weight } entries; weights are relative.
+# Set `seed: <number>` in the lsystem block to grow the same tree every time; layers can also pass a `seed` parameter
+id: wild_weed
+lsystem:
+  axiom: X
+  rules:
+    X:
+      - { to: "F[+X]F[-X]X", weight: 2 }
+      - { to: "F[+X]FX", weight: 1 }
+      - { to: "F[-X]FX", weight: 1 }
+      - { to: "F[++X][-X]X", weight: 1 }
+      - { to: "F[+X][--X]X", weight: 1 }
+    F:
+      - { to: "F", weight: 3 }
+      - { to: "FF", weight: 1 }
+  iterations: 6
+  angle: 25
+  size: 2.5
+  spacing: 0.06
+  points: 1800
+  growth: 80
+particle: DUST
+dustSize: 0.6
+gradient: ["#6b4f2a", "#606c38", "#a3b18a", "#dde5b6"]

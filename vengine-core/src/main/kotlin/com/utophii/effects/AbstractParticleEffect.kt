@@ -19,17 +19,19 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
 
     // plays the effect through the pooled render buffer, writing positions per frame without new allocations
     override fun play(center: Location, opts: EffectOptions): EffectHandle {
+        val extra = playParameters(opts.parameters)
+        val played = if (extra.isEmpty()) opts else opts.toBuilder().parameters(opts.parameters + extra).build()
         val stableCenter = center.clone()
         val renderer = FrameRenderer(stableCenter)
-        val anchor = opts.follow?.let { follow -> FollowAnchor(follow.withDefaults(followDefaults), stableCenter) }
+        val anchor = played.follow?.let { follow -> FollowAnchor(follow.withDefaults(followDefaults), stableCenter) }
         return FXEngine.scheduler().scheduleFrames(
             effectName = name,
-            durationTicks = opts.duration.coerceAtLeast(MIN_DURATION_TICKS),
+            durationTicks = played.duration.coerceAtLeast(MIN_DURATION_TICKS),
             origin = stableCenter,
             calculate = { time ->
                 val buffer = ParticleBufferPool.obtain(stableCenter)
                 try {
-                    calculateInto(buffer, stableCenter, opts, time)
+                    calculateInto(buffer, stableCenter, played, time)
                     buffer
                 } catch (t: Throwable) {
                     ParticleBufferPool.release(buffer)
@@ -38,7 +40,7 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
             },
             render = { time, buffer ->
                 anchor?.apply(buffer.list())
-                renderer.render(buffer, opts, time, anchor)
+                renderer.render(buffer, played, time, anchor)
             },
             release = { buffer -> ParticleBufferPool.release(buffer) },
             onStop = renderer::dispose,
@@ -59,6 +61,10 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
             ParticleBufferPool.release(buffer)
         }
     }
+
+    // parameters fixed once when a play starts,
+    // configured holds the parameters the play already has, which take precedence
+    open fun playParameters(configured: Map<String, Double>): Map<String, Double> = emptyMap()
 
     // writes the effect's particle positions for `time` into the pooled buffer
     // subclasses override this to avoid allocating a fresh location per particle per frame
