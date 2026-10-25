@@ -9,3 +9,6 @@ sdf:
   angularSpeed: 0.02
   parameters:
     k: 4.0
+particle: DUST
+dustSize: 0.5
+gradient: ["#ffd166", "#ef476f", "#3a0ca3"]

@@ -11,3 +11,6 @@ lsystem:
   points: 1200
   anchor: center
   angularSpeed: 0.03
+particle: DUST
+dustSize: 0.6
+gradient: ["#caf0f8", "#48cae4", "#0077b6"]

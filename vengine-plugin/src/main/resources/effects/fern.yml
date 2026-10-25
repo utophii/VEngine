@@ -15,3 +15,6 @@ lsystem:
   points: 1600        # particle cap; spacing widens to fit
   growth: 80
   anchor: base        # base: root at the effect position; center: drawing centered on it
+particle: DUST
+dustSize: 0.7
+gradient: ["#5c3d2e", "#8a6a3b", "#6a994e", "#a7c957"]

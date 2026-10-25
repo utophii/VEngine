@@ -12,3 +12,6 @@ lsystem:
   spacing: 0.06
   points: 1800
   growth: 100
+particle: DUST
+dustSize: 0.6
+gradient: ["#5c3d2e", "#386641", "#f2e8cf"]

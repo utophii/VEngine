@@ -76,6 +76,8 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
                     )
                 }
                 FXEngine.registerPrimitive(effect)
+                // played on its own, the atom renders with the particle/color/gradient written next to its block
+                FXEngine.registerScripted(standaloneAtom(effect, raw))
                 loaded += effect
             }
         }
@@ -129,6 +131,14 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
 
     private fun effectId(raw: Map<String, Any?>, file: File): String =
         raw[ID_KEY]?.toString()?.takeIf(String::isNotBlank) ?: file.nameWithoutExtension
+
+    // wraps an atom into a one-layer effect carrying the file's top-level options, layers of other
+    // effects still reference the bare primitive and bring their own options
+    private fun standaloneAtom(atom: AbstractParticleEffect, raw: Map<String, Any?>): ScriptedEffect {
+        val duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS) ?: DEFAULT_DURATION_TICKS
+        val layer = ScriptedLayer(effect = atom.name.lowercase(), startTick = DEFAULT_START_TICKS, durationTicks = null, options = parseOptions(raw))
+        return ScriptedEffect(atom.name, duration, listOf(layer), atom.followDefaults)
+    }
 
     // builds a formula atom
     private fun parseAtom(id: String, raw: Map<String, Any?>, fileName: String): AbstractParticleEffect? = when {
