@@ -73,8 +73,11 @@ class LSystemEffectTest {
         val effect = lsystem("F[+F]F", emptyMap(), iterations = 0, growth = 100.0)
         val half = frame(effect, time = 50.0)
         val full = frame(effect, time = 100.0)
-        assertTrue(half.list().size < full.list().size)
-        half.list().indices.forEach { assertTrue(half.valueAt(it) <= 0.5 + 1e-9) }
+        // the same number of particles every tick, nearest to the root first
+        assertEquals(full.list().size / 2, half.list().size)
+        val shown = half.list().indices.map(half::valueAt)
+        assertEquals(shown.sorted(), shown)
+        assertTrue(shown.max() < 1.0)
         assertEquals(full.list().size, frame(effect, time = 0.0, parameters = mapOf("progress" to 1.0)).list().size)
     }
 

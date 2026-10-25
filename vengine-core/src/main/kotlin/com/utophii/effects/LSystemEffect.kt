@@ -16,7 +16,7 @@ import kotlin.math.sin
 // Any other symbol only takes part in the rewriting. The turtle starts at the origin heading up (+Y), so
 // planar systems (only + and -) lie in the vertical XY plane. The drawing is scaled so its largest extent is
 // size blocks and anchored at the bottom center (or the center). Every particle knows its distance from the
-// root along the branches: the plant grows by that distance, all branches at once, and it is the gradient value
+// root along the branches: the plant grows outwards in that order, all branches at once, and it is the gradient value
 class LSystemEffect(
     name: String,
     axiom: String,
@@ -75,8 +75,7 @@ class LSystemEffect(
         val phase = time * (opts.parameters[ANGULAR_SPEED_PARAM] ?: angularSpeed)
 
         // the points are sorted by root distance
-        val reach = progress * drawing.maxDistance
-        val visible = drawing.visibleCount(reach)
+        val visible = (progress * drawing.count).toInt()
         buffer.acquire(visible)
         for (index in 0 until visible) {
             val offset = index * STRIDE
@@ -225,18 +224,7 @@ class LSystemEffect(
 
     // particle points (x, y, z, root distance) sorted by root distance
     private class Drawing(val points: DoubleArray, val maxDistance: Double) {
-        private val count = points.size / STRIDE
-
-        // how many points lie within reach of the root
-        fun visibleCount(reach: Double): Int {
-            var low = 0
-            var high = count
-            while (low < high) {
-                val middle = (low + high) ushr 1
-                if (points[middle * STRIDE + DISTANCE_OFFSET] <= reach) low = middle + 1 else high = middle
-            }
-            return low
-        }
+        val count = points.size / STRIDE
     }
 
     companion object {
