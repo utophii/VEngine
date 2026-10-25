@@ -6,12 +6,15 @@ import com.utophii.api.EffectProvider
 import com.utophii.api.FollowOptions
 import com.utophii.api.ParticleEffect
 import com.utophii.effects.AizawaAttractorEffect
+import com.utophii.effects.ChladniEffect
+import com.utophii.effects.ConfiguredPrimitive
 import com.utophii.effects.HalvorsenAttractorEffect
+import com.utophii.effects.JuliaEffect
 import com.utophii.effects.LorenzAttractorEffect
-import com.utophii.effects.ParametricEffect
 import com.utophii.effects.RosslerAttractorEffect
 import com.utophii.effects.ThomasAttractorEffect
 import com.utophii.effects.RK4TrajectoryEffect
+import com.utophii.effects.SierpinskiEffect
 import com.utophii.effects.SphereEffect
 import org.bukkit.Location
 import org.bukkit.plugin.java.JavaPlugin
@@ -43,6 +46,12 @@ object FXEngine {
         registerPrimitive(ThomasAttractorEffect())
         registerPrimitive(RosslerAttractorEffect())
         registerPrimitive(HalvorsenAttractorEffect())
+        registerPrimitive(JuliaEffect())
+        registerPrimitive(SierpinskiEffect.triangle())
+        registerPrimitive(SierpinskiEffect.tetrahedron())
+        registerPrimitive(SierpinskiEffect.carpet())
+        registerPrimitive(SierpinskiEffect.mengerSponge())
+        registerPrimitive(ChladniEffect())
     }
 
     fun nextScriptedId(): Int = scriptedIdCounter.getAndIncrement()
@@ -76,9 +85,9 @@ object FXEngine {
         scriptedEffects.clear()
     }
 
-    // removes formula-based primitives that were refreshed from YAML, keeping bundled Kotlin primitives intact
+    // removes the primitives that were refreshed from YAML, keeping bundled Kotlin primitives intact
     fun clearParametricPrimitives() {
-        primitiveEffects.filterValues { it is ParametricEffect }.keys.forEach(primitiveEffects::remove)
+        primitiveEffects.filterValues { it is ConfiguredPrimitive }.keys.forEach(primitiveEffects::remove)
     }
 
     // returns a primitive effect by registry name

@@ -1,0 +1,32 @@
+# Sand on a vibrating plate: grains slide onto the nodal lines, then the mode (n, m) morphs and they follow.
+# chladni parameters: n, m (mode numbers, fractional values morph), mix (-1 and 1 are the two classic families),
+# size (half-edge in blocks), points, settle (ticks to settle), period (restart every N ticks, 0 = never),
+# jitter (how hard grains bounce off vibrating spots), angularSpeed
+id: chladni_plate
+duration: 240
+layers:
+  - effect: chladni
+    particle: DUST
+    dustSize: 0.6
+    # colored by how strongly the plate vibrated where the grain started
+    gradient: ["#f4e3b1", "#e9c46a", "#e76f51"]
+    parameters:
+      size: 1.8
+      points: 900
+      settle: 50
+    animation:
+      tracks:
+        - target: parameters.n
+          keyframes:
+            - tick: 70
+              value: 3.0
+            - tick: 150
+              value: 4.0
+              easing: easeInOutSine
+        - target: parameters.m
+          keyframes:
+            - tick: 70
+              value: 5.0
+            - tick: 150
+              value: 7.0
+              easing: easeInOutSine

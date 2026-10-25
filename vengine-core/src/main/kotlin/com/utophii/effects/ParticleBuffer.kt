@@ -11,6 +11,10 @@ import java.util.concurrent.ConcurrentLinkedQueue
 class ParticleBuffer(private var base: Location) {
     private val locations = ArrayList<Location>(INITIAL_CAPACITY)
     private var count = 0
+
+    // optional per-particle scalar in 0..1 that picks the particle's gradient color
+    private var values = DoubleArray(INITIAL_CAPACITY)
+    private var valued = false
     private var boundWorld: World? = null
 
     // rebinds the buffer to a new effect center (pool reuse across plays)
@@ -23,6 +27,7 @@ class ParticleBuffer(private var base: Location) {
     fun acquire(size: Int) {
         ensureCapacity(size)
         count = size
+        valued = false
         bindWorld()
     }
 
@@ -35,7 +40,23 @@ class ParticleBuffer(private var base: Location) {
         location.y = y
         location.z = z
         count++
+        if (valued) values[index] = NO_VALUE
     }
+
+    // assigns the gradient value of the particle at index
+    fun value(index: Int, value: Double) {
+        if (!valued) {
+            valued = true
+            values.fill(NO_VALUE, 0, count)
+        }
+        values[index] = value
+    }
+
+    // true once the effect assigned at least one value this frame
+    fun hasValues(): Boolean = valued
+
+    // gradient value at index
+    fun valueAt(index: Int): Double = if (valued) values[index] else NO_VALUE
 
     // returns the reusable Location at the given logical index
     fun location(index: Int): Location = locations[index]
@@ -49,11 +70,15 @@ class ParticleBuffer(private var base: Location) {
     // releases the buffer back to the pool, retaining the Location objects for reuse
     fun release() {
         count = 0
+        valued = false
     }
 
     private fun ensureCapacity(size: Int) {
         while (locations.size < size) {
             locations.add(Location(base.world, 0.0, 0.0, 0.0, base.yaw, base.pitch))
+        }
+        if (values.size < size) {
+            values = values.copyOf(maxOf(size, values.size * 2))
         }
     }
 
@@ -69,6 +94,7 @@ class ParticleBuffer(private var base: Location) {
 
     companion object {
         private const val INITIAL_CAPACITY = 32
+        private const val NO_VALUE = Double.NaN
     }
 }
 

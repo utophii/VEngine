@@ -1,0 +1,11 @@
+# A gyroid (a triply periodic minimal surface) carved to a ball. Formulas without `time` are projected once and cached,
+# so static surfaces cost nothing per frame. `value` (0..1) picks each particle's gradient color, here its distance from the center
+id: gyroid_orb
+sdf:
+  f: "smax(sin(k * x) * cos(k * y) + sin(k * y) * cos(k * z) + sin(k * z) * cos(k * x), sdSphere(x, y, z, 1.3), 0.1)"
+  value: "sqrt(x * x + y * y + z * z) / 1.3"
+  bounds: 1.4
+  points: 900
+  angularSpeed: 0.02
+  parameters:
+    k: 4.0

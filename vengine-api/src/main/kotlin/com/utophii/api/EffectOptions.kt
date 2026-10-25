@@ -12,6 +12,10 @@ import org.bukkit.util.Vector
 * @property particle : Bukkit particle type
 * @property color : Primary color (for DUST and starting color for DUST_COLOR_TRANSITION)
 * @property toColor : End color for DUST_COLOR_TRANSITION
+* @property gradient : Color stops for per-particle coloring (empty - every particle uses [color]).
+*   Each particle picks its color by the value its effect assigns (e.g. escape time of a fractal),
+*   or by its index along the shape when the effect assigns none. Applies to DUST, DUST_COLOR_TRANSITION,
+*   ENTITY_EFFECT and PIXEL displays
 * @property dustSize : Dust particle size (default 1.0)
 * @property material : Material for block (BLOCK, FALLING_DUST) and item (ITEM) particles
 * @property count : Number of particles spawned at each point (default 1)
@@ -37,6 +41,7 @@ data class EffectOptions(
     val particle: Particle = Particle.FLAME,
     val color: Color? = null,
     val toColor: Color? = null,
+    val gradient: List<Color> = emptyList(),
     val dustSize: Float = DEFAULT_DUST_SIZE,
     val material: Material? = null,
     val count: Int = DEFAULT_PARTICLE_COUNT,
@@ -64,6 +69,7 @@ data class EffectOptions(
         .count(count)
         .offset(offsetX, offsetY, offsetZ)
         .speed(speed)
+        .gradient(gradient)
         .scale(scale)
         .rotationYaw(rotationYaw)
         .rotationPitch(rotationPitch)
@@ -87,6 +93,7 @@ data class EffectOptions(
         private var particle: Particle = Particle.FLAME
         private var color: Color? = null
         private var toColor: Color? = null
+        private var gradient: List<Color> = emptyList()
         private var dustSize: Float = DEFAULT_DUST_SIZE
         private var material: Material? = null
         private var count: Int = DEFAULT_PARTICLE_COUNT
@@ -111,6 +118,7 @@ data class EffectOptions(
         fun particle(value: Particle) = apply { particle = value }
         fun color(value: Color) = apply { color = value }
         fun toColor(value: Color) = apply { toColor = value }
+        fun gradient(value: List<Color>) = apply { gradient = value.toList() }
         fun dustSize(value: Float) = apply { dustSize = value }
         fun material(value: Material) = apply { material = value }
         fun count(value: Int) = apply { count = value.coerceAtLeast(1) }
@@ -140,6 +148,7 @@ data class EffectOptions(
             particle = particle,
             color = color,
             toColor = toColor,
+            gradient = gradient,
             dustSize = dustSize,
             material = material,
             count = count,

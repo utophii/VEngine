@@ -1,0 +1,17 @@
+# L-system plant drawn by a turtle. Symbols: F/G draw forward, f moves without drawing, + - turn, & ^ pitch,
+# \ / roll, | turns around, [ ] push/pop the turtle; other symbols only rewrite. The plant grows from the root
+# over `growth` ticks (all branches at once); runtime parameters `angle`, `growth` and `progress` (0..1) can be animated.
+# Particle colors run from the root (0) to the tips (1)
+id: fern
+lsystem:
+  axiom: X
+  rules:
+    X: "F+[[X]-X]-F[-FX]+X"
+    F: FF
+  iterations: 5
+  angle: 25
+  size: 3.5           # largest extent in blocks
+  spacing: 0.07       # blocks between particles along branches
+  points: 1600        # particle cap; spacing widens to fit
+  growth: 80
+  anchor: base        # base: root at the effect position; center: drawing centered on it

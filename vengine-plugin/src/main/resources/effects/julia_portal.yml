@@ -1,0 +1,18 @@
+# Julia set boundary z² + c, traced by inverse iteration. c circles around -0.8 + 0.156i, so the set keeps morphing.
+# julia parameters: cRe, cIm, cOrbit (radius of c's circle), cSpeed (rad/tick), points, depth (inverse steps),
+# radius (blocks for |z| = 2), colorMode (0 = along the boundary, 1 = outwards), angularSpeed (in-plane spin)
+id: julia_portal
+duration: 200
+layers:
+  - effect: julia
+    particle: DUST
+    dustSize: 0.7
+    # per-particle colors, picked by each particle's position along the boundary
+    gradient: ["#3a0ca3", "#7209b7", "#f72585", "#ffbe0b"]
+    parameters:
+      radius: 1.8
+      points: 700
+      cRe: -0.8
+      cIm: 0.156
+      cOrbit: 0.06
+      cSpeed: 0.03

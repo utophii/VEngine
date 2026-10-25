@@ -58,6 +58,21 @@ class ParticleBufferTest {
     }
 
     @Test
+    fun `values are reset by every acquire`() {
+        val buffer = ParticleBuffer(location(0.0, 0.0, 0.0))
+        buffer.acquire(3)
+        assertTrue(!buffer.hasValues())
+        buffer.value(1, 0.25)
+        assertTrue(buffer.hasValues())
+        assertEquals(0.25, buffer.valueAt(1), EPS)
+        assertTrue(buffer.valueAt(0).isNaN(), "unassigned particles have no value")
+
+        buffer.acquire(3)
+        assertTrue(!buffer.hasValues())
+        assertTrue(buffer.valueAt(1).isNaN(), "a new frame must not inherit the previous frame's values")
+    }
+
+    @Test
     fun `pool hands out fresh buffer when empty and returns it`() {
         val base = location(0.0, 0.0, 0.0)
         val a = ParticleBufferPool.obtain(base)

@@ -1,0 +1,14 @@
+# 3D bush from "The Algorithmic Beauty of Plants" (fig. 1.25): branches pitch out (&) and roll (/) around the stem
+id: bush
+lsystem:
+  axiom: A
+  rules:
+    A: "[&FL!A]/////[&FL!A]///////[&FL!A]"
+    F: "S/////F"
+    S: FL
+  iterations: 6
+  angle: 22.5
+  size: 3.0
+  spacing: 0.06
+  points: 1800
+  growth: 100

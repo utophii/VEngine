@@ -6,7 +6,10 @@ import com.utophii.api.EffectModifier
 import com.utophii.api.FollowDefaults
 import com.utophii.api.FollowRotation
 import com.utophii.api.ParticleEffect
+import com.utophii.effects.AbstractParticleEffect
 import com.utophii.effects.EffectEmitter
+import com.utophii.effects.ImplicitEffect
+import com.utophii.effects.LSystemEffect
 import com.utophii.effects.NumericAnimation
 import com.utophii.effects.NumericKeyframe
 import com.utophii.effects.NumericTrack
@@ -64,8 +67,8 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
 
         // pass 1: register every formula atom so scripted layers can reference them regardless of file names
         parsedFiles.forEach { (file, raw) ->
-            if (isParametric(raw)) {
-                val effect = parseParametric(effectId(raw, file), raw, file.name) ?: return@forEach
+            if (isAtom(raw)) {
+                val effect = parseAtom(effectId(raw, file), raw, file.name) ?: return@forEach
                 if (raw.containsKey(EMITTERS_KEY) || raw.containsKey(THEN_KEY)) {
                     plugin.logger.warning(
                         "'${file.name}' is a formula effect; its emitters/then are ignored. " +
@@ -79,7 +82,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
 
         // pass 2: layered scripted effects; all YAML atoms are guaranteed to be resolvable now
         parsedFiles.forEach { (file, raw) ->
-            if (!isParametric(raw)) {
+            if (!isAtom(raw)) {
                 // a duration formula is only known at play time, so layer timing falls back to the default
                 val duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS)
                     ?: DEFAULT_DURATION_TICKS
@@ -114,8 +117,8 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
     fun load(file: File): ParticleEffect? {
         val raw = readRaw(file) ?: return null
         val duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS) ?: DEFAULT_DURATION_TICKS
-        return if (isParametric(raw)) {
-            parseParametric(effectId(raw, file), raw, file.name)
+        return if (isAtom(raw)) {
+            parseAtom(effectId(raw, file), raw, file.name)
         } else {
             loadScripted(effectId(raw, file), duration, raw, file.name)
         }
@@ -126,6 +129,88 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
 
     private fun effectId(raw: Map<String, Any?>, file: File): String =
         raw[ID_KEY]?.toString()?.takeIf(String::isNotBlank) ?: file.nameWithoutExtension
+
+    // builds a formula atom
+    private fun parseAtom(id: String, raw: Map<String, Any?>, fileName: String): AbstractParticleEffect? = when {
+        raw.containsKey(SDF_KEY) -> parseImplicit(id, raw, fileName)
+        raw.containsKey(LSYSTEM_KEY) -> parseLSystem(id, raw, fileName)
+        else -> parseParametric(id, raw, fileName)
+    }
+
+    // builds an implicit surface effect from an sdf YAML block
+    private fun parseImplicit(id: String, raw: Map<String, Any?>, fileName: String): ImplicitEffect? {
+        val block = raw[SDF_KEY] as? Map<*, *> ?: run {
+            plugin.logger.warning("Skipping sdf effect '$fileName': 'sdf' must be a block with an 'f' formula.")
+            return null
+        }
+        val formula = block[F_KEY]?.toString()?.takeIf(String::isNotBlank) ?: run {
+            plugin.logger.warning("Skipping sdf effect '$fileName': missing 'f' formula.")
+            return null
+        }
+        val value = block[VALUE_KEY]?.toString()?.takeIf(String::isNotBlank)
+        val invalid = listOfNotNull(formula, value).firstOrNull { ExpressionEvaluator.compile(it) == null }
+        if (invalid != null) {
+            plugin.logger.warning("Skipping sdf effect '$fileName': invalid formula '$invalid'.")
+            return null
+        }
+        return ImplicitEffect(
+            name = id,
+            formula = formula,
+            valueFormula = value,
+            bounds = block[BOUNDS_KEY]?.number()?.takeIf { it > 0.0 } ?: DEFAULT_SDF_BOUNDS,
+            defaultPoints = block[POINTS_KEY]?.number()?.toInt() ?: DEFAULT_SDF_POINTS,
+            defaults = parseParameters(block[PARAMETERS_KEY]),
+            angularSpeed = block[ANGULAR_SPEED_KEY]?.number() ?: DEFAULT_ANGULAR_SPEED,
+            followDefaults = parseFollow(raw[FOLLOW_KEY], fileName),
+        )
+    }
+
+    // builds a turtle-drawn L-system from an lsystem YAML block
+    private fun parseLSystem(id: String, raw: Map<String, Any?>, fileName: String): LSystemEffect? {
+        val block = raw[LSYSTEM_KEY] as? Map<*, *> ?: run {
+            plugin.logger.warning("Skipping lsystem effect '$fileName': 'lsystem' must be a block with 'axiom' and 'rules'.")
+            return null
+        }
+        val axiom = block[AXIOM_KEY]?.toString()?.takeIf(String::isNotBlank) ?: run {
+            plugin.logger.warning("Skipping lsystem effect '$fileName': missing 'axiom'.")
+            return null
+        }
+        // rules: one symbol -> its replacement
+        val rules = (block[RULES_KEY] as? Map<*, *>).orEmpty().mapNotNull { (symbol, replacement) ->
+            val key = symbol?.toString()
+            if (key == null || key.length != 1 || replacement == null) {
+                plugin.logger.warning("In '$fileName': ignoring lsystem rule '$symbol' (a rule maps one symbol to a string).")
+                return@mapNotNull null
+            }
+            key[0] to replacement.toString().filterNot(Char::isWhitespace)
+        }.toMap()
+        val iterations = block[ITERATIONS_KEY]?.number()?.toInt()?.coerceAtLeast(0) ?: DEFAULT_LSYSTEM_ITERATIONS
+        val anchor = block[ANCHOR_KEY]?.toString()?.lowercase()
+        if (anchor != null && anchor != ANCHOR_BASE && anchor != ANCHOR_CENTER) {
+            plugin.logger.warning("In '$fileName': unknown lsystem anchor '$anchor'; expected '$ANCHOR_BASE' or '$ANCHOR_CENTER'.")
+        }
+        val effect = LSystemEffect(
+            name = id,
+            axiom = axiom.filterNot(Char::isWhitespace),
+            rules = rules,
+            iterations = iterations,
+            angleDegrees = block[ANGLE_KEY]?.number() ?: DEFAULT_LSYSTEM_ANGLE,
+            size = block[SIZE_KEY]?.number()?.takeIf { it > 0.0 } ?: DEFAULT_LSYSTEM_SIZE,
+            spacing = block[SPACING_KEY]?.number()?.takeIf { it > 0.0 } ?: DEFAULT_LSYSTEM_SPACING,
+            maxPoints = block[POINTS_KEY]?.number()?.toInt()?.coerceIn(1, MAX_LSYSTEM_POINTS) ?: DEFAULT_LSYSTEM_POINTS,
+            growthTicks = block[GROWTH_KEY]?.number()?.coerceAtLeast(0.0) ?: 0.0,
+            anchorCenter = anchor == ANCHOR_CENTER,
+            angularSpeed = block[ANGULAR_SPEED_KEY]?.number() ?: DEFAULT_ANGULAR_SPEED,
+            followDefaults = parseFollow(raw[FOLLOW_KEY], fileName),
+        )
+        if (effect.appliedIterations < iterations) {
+            plugin.logger.warning(
+                "In '$fileName': lsystem stopped after ${effect.appliedIterations} of $iterations iterations " +
+                    "(more than ${LSystemEffect.MAX_SYMBOLS} symbols).",
+            )
+        }
+        return effect
+    }
 
     // builds a parametric formula effect from a `curve`/`surface` YAML block
     private fun parseParametric(id: String, raw: Map<String, Any?>, fileName: String): ParametricEffect? {
@@ -146,11 +231,12 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         val z = block[Z_KEY]?.toString()?.takeIf(String::isNotBlank) ?: DEFAULT_FORMULA_Z
         val defaults = parseParameters(block[PARAMETERS_KEY])
         val angularSpeed = block[ANGULAR_SPEED_KEY]?.number() ?: DEFAULT_ANGULAR_SPEED
+        val value = block[VALUE_KEY]?.toString()?.takeIf(String::isNotBlank)
 
         // fail fast on a malformed formula so the user sees a clear message instead of a silent no-op
-        val valid = listOf(x, y, z).all { formula -> ExpressionEvaluator.compile(formula) != null }
+        val valid = listOfNotNull(x, y, z, value).all { formula -> ExpressionEvaluator.compile(formula) != null }
         if (!valid) {
-            plugin.logger.warning("Skipping parametric effect '${fileName}': one of the x/y/z formulas is invalid.")
+            plugin.logger.warning("Skipping parametric effect '${fileName}': one of the x/y/z/value formulas is invalid.")
             return null
         }
         return ParametricEffect(
@@ -164,6 +250,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             defaults = defaults,
             angularSpeed = angularSpeed,
             followDefaults = parseFollow(raw[FOLLOW_KEY], fileName),
+            valueFormula = value,
         )
     }
 
@@ -232,8 +319,10 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         return FollowDefaults(offset, rotation, stopWithEntity)
     }
 
-    private fun isParametric(raw: Map<String, Any?>): Boolean {
-        val hasBlock = raw.containsKey(CURVE_KEY) || raw.containsKey(SURFACE_KEY)
+    // formula atoms
+    private fun isAtom(raw: Map<String, Any?>): Boolean {
+        val hasBlock = raw.containsKey(CURVE_KEY) || raw.containsKey(SURFACE_KEY) || raw.containsKey(SDF_KEY) ||
+            raw.containsKey(LSYSTEM_KEY)
         val type = raw[TYPE_KEY]?.toString()?.lowercase()
         return hasBlock || type in PARAMETRIC_TYPES
     }
@@ -346,6 +435,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
 
         parseColor(raw[COLOR_KEY])?.let(builder::color)
         parseColor(raw[TO_COLOR_KEY] ?: raw[TRANSITION_COLOR_KEY])?.let(builder::toColor)
+        (raw[GRADIENT_KEY] as? List<*>)?.mapNotNull(::parseColor)?.takeIf { it.isNotEmpty() }?.let(builder::gradient)
         raw[DUST_SIZE_KEY]?.number()?.toFloat()?.let(builder::dustSize)
 
         parseMaterial(raw[MATERIAL_KEY])?.let(builder::material)
@@ -623,6 +713,28 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private const val LAYERS_KEY = "layers"
         private const val CURVE_KEY = "curve"
         private const val SURFACE_KEY = "surface"
+        private const val SDF_KEY = "sdf"
+        private const val F_KEY = "f"
+        private const val POINTS_KEY = "points"
+        private const val BOUNDS_KEY = "bounds"
+        private const val DEFAULT_SDF_BOUNDS = 1.5
+        private const val DEFAULT_SDF_POINTS = 600
+        private const val LSYSTEM_KEY = "lsystem"
+        private const val AXIOM_KEY = "axiom"
+        private const val RULES_KEY = "rules"
+        private const val ITERATIONS_KEY = "iterations"
+        private const val ANGLE_KEY = "angle"
+        private const val SPACING_KEY = "spacing"
+        private const val GROWTH_KEY = "growth"
+        private const val ANCHOR_KEY = "anchor"
+        private const val ANCHOR_BASE = "base"
+        private const val ANCHOR_CENTER = "center"
+        private const val DEFAULT_LSYSTEM_ITERATIONS = 4
+        private const val DEFAULT_LSYSTEM_ANGLE = 25.0
+        private const val DEFAULT_LSYSTEM_SIZE = 3.0
+        private const val DEFAULT_LSYSTEM_SPACING = 0.08
+        private const val DEFAULT_LSYSTEM_POINTS = 1500
+        private const val MAX_LSYSTEM_POINTS = 4096
         private const val VARIABLES_KEY = "variables"
         private const val SAMPLES_KEY = "samples"
         private const val SAMPLES_X_KEY = "samplesX"
@@ -683,6 +795,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private const val PIVOT_OFFSET_KEY = "pivotOffset"
         private const val EASING_KEY = "easing"
         private const val TO_COLOR_KEY = "toColor"
+        private const val GRADIENT_KEY = "gradient"
         private const val TRANSITION_COLOR_KEY = "transitionColor"
         private const val DUST_SIZE_KEY = "dustSize"
         private const val MATERIAL_KEY = "material"

@@ -25,13 +25,21 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
     private var lastPositions = DoubleArray(0)
     private var look: DisplayOptions? = null
 
-    // pixel color last applied to the entities
-    private var pixelColor: Int? = null
+    // ARGB pixel color last applied to each entity
+    private var lastColors = IntArray(0)
     private val scratch = Location(null, 0.0, 0.0, 0.0)
 
     // matches the entity set to positions
     // frameRotation turns every model with a followed entity (see [com.utophii.engine.FollowAnchor.frameRotation])
-    fun sync(positions: List<Location>, opts: EffectOptions, display: DisplayOptions, time: Double, frameRotation: Quaternionf? = null) {
+    // colors, when given, holds one ARGB color per position for PIXEL models
+    fun sync(
+        positions: List<Location>,
+        opts: EffectOptions,
+        display: DisplayOptions,
+        time: Double,
+        frameRotation: Quaternionf? = null,
+        colors: IntArray? = null,
+    ) {
         val previous = look
         if (previous != null && previous.type != display.type) {
             clear()
@@ -45,28 +53,30 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         if (lookChanged) {
             entities.forEachIndexed { index, entity -> applyLook(entity, display, index) }
         }
-        val color = if (display.type == DisplayOptions.Type.PIXEL) display.pixelColor(opts) else null
-        if (color != pixelColor) {
-            pixelColor = color
-            if (color != null) entities.forEach { entity -> (entity as? TextDisplay)?.backgroundColor = Color.fromARGB(color) }
-        }
+        val pixel = display.type == DisplayOptions.Type.PIXEL
+        val uniformColor = if (pixel) display.pixelColor(opts) else 0
 
         val interpolation = display.interpolationTicks.coerceIn(0, DisplayOptions.MAX_INTERPOLATION_TICKS)
         for (index in 0 until target) {
             val position = positions[index]
             val transform = modelTransformation(display, opts, index, time, frameRotation)
+            val color = colors?.get(index) ?: uniformColor
             if (index >= entities.size) {
-                spawn(position, display, transform, index, opts) ?: return
+                spawn(position, display, transform, index, opts, color) ?: return
                 continue
             }
             val entity = entities[index]
             if (!entity.isValid) {
                 // killed externally
                 entity.remove()
-                respawn(index, position, display, transform, opts)
+                respawn(index, position, display, transform, opts, color)
                 continue
             }
             moveIfChanged(entity, index, position)
+            if (pixel && (lookChanged || lastColors[index] != color)) {
+                (entity as? TextDisplay)?.backgroundColor = Color.fromARGB(color)
+                lastColors[index] = color
+            }
             if (transform != lastTransforms[index]) {
                 entity.interpolationDuration = interpolation
                 entity.interpolationDelay = 0
@@ -82,25 +92,33 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         entities.clear()
         lastTransforms.clear()
         look = null
-        pixelColor = null
     }
 
-    private fun spawn(position: Location, display: DisplayOptions, transform: Transformation, index: Int, opts: EffectOptions): Display? {
-        val entity = create(position, display, transform, index, opts) ?: return null
+    private fun spawn(position: Location, display: DisplayOptions, transform: Transformation, index: Int, opts: EffectOptions, color: Int): Display? {
+        val entity = create(position, display, transform, index, opts, color) ?: return null
         entities.add(entity)
         lastTransforms.add(transform)
         rememberPosition(index, position)
+        lastColors[index] = color
         return entity
     }
 
-    private fun respawn(index: Int, position: Location, display: DisplayOptions, transform: Transformation, opts: EffectOptions) {
-        val entity = create(position, display, transform, index, opts) ?: return
+    private fun respawn(index: Int, position: Location, display: DisplayOptions, transform: Transformation, opts: EffectOptions, color: Int) {
+        val entity = create(position, display, transform, index, opts, color) ?: return
         entities[index] = entity
         lastTransforms[index] = transform
         rememberPosition(index, position)
+        lastColors[index] = color
     }
 
-    private fun create(position: Location, display: DisplayOptions, transform: Transformation, index: Int, opts: EffectOptions): Display? {
+    private fun create(
+        position: Location,
+        display: DisplayOptions,
+        transform: Transformation,
+        index: Int,
+        opts: EffectOptions,
+        color: Int,
+    ): Display? {
         val world = position.world ?: return null
         val type = when (display.type) {
             DisplayOptions.Type.ITEM -> ItemDisplay::class.java
@@ -114,7 +132,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
             entity.transformation = transform
             applyLook(entity, display, index)
             if (entity is TextDisplay && display.type == DisplayOptions.Type.PIXEL) {
-                entity.backgroundColor = Color.fromARGB(display.pixelColor(opts))
+                entity.backgroundColor = Color.fromARGB(color)
             }
             if (opts.receivers.isNotEmpty()) {
                 entity.isVisibleByDefault = false
@@ -195,6 +213,9 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
     private fun ensurePositionCapacity(size: Int) {
         if (lastPositions.size < size * 3) {
             lastPositions = lastPositions.copyOf(size * 3)
+        }
+        if (lastColors.size < size) {
+            lastColors = lastColors.copyOf(size)
         }
     }
 

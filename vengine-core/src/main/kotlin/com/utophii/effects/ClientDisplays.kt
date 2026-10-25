@@ -10,7 +10,8 @@ import java.util.concurrent.ConcurrentHashMap
 // display models of one running effect that exist only on the clients.
 // A followed effect's models ride its entity as passengers
 interface ClientDisplays {
-    fun sync(positions: List<Location>, opts: EffectOptions, display: DisplayOptions, time: Double, anchor: FollowAnchor?)
+    // colors, when given, holds one ARGB color per position for PIXEL models
+    fun sync(positions: List<Location>, opts: EffectOptions, display: DisplayOptions, time: Double, anchor: FollowAnchor?, colors: IntArray? = null)
 
     fun clear()
 

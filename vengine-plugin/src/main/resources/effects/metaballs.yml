@@ -1,0 +1,14 @@
+# Signed distance field: two spheres orbit a torus and melt into it with a smooth union.
+# f(x, y, z) = 0 is the surface; sdSphere(x,y,z,r), sdBox(x,y,z,bx,by,bz), sdTorus(x,y,z,R,r) (ring in XZ),
+# smin(a,b,k) (smooth union) and smax(a,b,k) (smooth intersection; smax(a, -b, k) subtracts b) are built in.
+# `time` (ticks) animates the shape. Particles are spread over the cube [-bounds, bounds]³ and pulled onto the surface.
+# As a formula atom it draws with default particles; give it colors as a layer (see sdf_core.yml)
+id: metaballs
+sdf:
+  f: "smin(smin(sdTorus(x, y, z, 1.0, 0.18), sdSphere(x - orbit * cos(time * speed), y, z - orbit * sin(time * speed), 0.45), blend), sdSphere(x + orbit * cos(time * speed), y, z + orbit * sin(time * speed), 0.45), blend)"
+  bounds: 1.6
+  points: 700
+  parameters:
+    orbit: 1.0
+    speed: 0.05
+    blend: 0.35

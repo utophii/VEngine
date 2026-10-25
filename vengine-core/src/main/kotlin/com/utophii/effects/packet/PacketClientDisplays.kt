@@ -52,15 +52,22 @@ class PacketClientDisplays(
     // client view range sent with the models, grows when the effect spreads further from its reference point
     private var sentViewRange = 0f
 
-    // pixel color sent with the models
-    private var sentPixelColor: Int? = null
+    // ARGB pixel color sent with each model
+    private var sentColors = IntArray(0)
 
     // viewer -> world the models were spawned in
     private val viewers = ConcurrentHashMap<UUID, UUID>()
 
     override fun idsFor(viewer: UUID): IntArray = if (viewers.containsKey(viewer)) ids else EMPTY
 
-    override fun sync(positions: List<Location>, opts: EffectOptions, display: DisplayOptions, time: Double, anchor: FollowAnchor?) {
+    override fun sync(
+        positions: List<Location>,
+        opts: EffectOptions,
+        display: DisplayOptions,
+        time: Double,
+        anchor: FollowAnchor?,
+        colors: IntArray?,
+    ) {
         val entity = anchor?.entity
         if (entity != null && !entity.isValid) {
             return
@@ -99,9 +106,10 @@ class PacketClientDisplays(
         if (previousCount == 0 || viewRangeGrew) {
             sentViewRange = viewRange
         }
-        val pixelColor = if (display.type == DisplayOptions.Type.PIXEL) display.pixelColor(opts) else null
-        val pixelColorChanged = previousCount > 0 && pixelColor != sentPixelColor
-        sentPixelColor = pixelColor
+        val pixel = display.type == DisplayOptions.Type.PIXEL
+        val uniformColor = if (pixel) display.pixelColor(opts) else 0
+        val frameColors = IntArray(target) { index -> colors?.get(index) ?: uniformColor }
+        val previousColors = sentColors
 
         val current = if (entity != null) ridingViewers(entity, opts) else nearbyViewers(reference, extent, opts)
         viewers.keys.filter { it !in current }.forEach { uuid ->
@@ -117,21 +125,22 @@ class PacketClientDisplays(
             val world = player.world.uid
             if (viewers[player.uniqueId] != world) {
                 viewers[player.uniqueId] = world
-                for (index in 0 until target) spawn(player, index, display, opts, transforms[index], reference)
+                for (index in 0 until target) spawn(player, index, display, transforms[index], reference, frameColors[index])
                 entity?.let { sendPassengers(player, it) }
                 return@forEach
             }
             if (removed.isNotEmpty()) {
                 send(player, WrapperPlayServerDestroyEntities(*removed))
             }
-            for (index in previousCount until target) spawn(player, index, display, opts, transforms[index], reference)
+            for (index in previousCount until target) spawn(player, index, display, transforms[index], reference, frameColors[index])
             if (entity != null && target != previousCount) {
                 sendPassengers(player, entity)
             }
             for (index in 0 until minOf(previousCount, target)) {
                 val data = if (transforms[index] != sent[index]) transformData(transforms[index], interpolation) else null
                 val range = if (viewRangeGrew) EntityData(INDEX_VIEW_RANGE, EntityDataTypes.FLOAT, sentViewRange) else null
-                val color = if (pixelColorChanged && pixelColor != null) EntityData(INDEX_TEXT_BACKGROUND, EntityDataTypes.INT, pixelColor) else null
+                val colorChanged = pixel && index < previousColors.size && frameColors[index] != previousColors[index]
+                val color = if (colorChanged) EntityData(INDEX_TEXT_BACKGROUND, EntityDataTypes.INT, frameColors[index]) else null
                 if (data != null || range != null || color != null) {
                     send(player, WrapperPlayServerEntityMetadata(ids[index], listOfNotNull(range, color) + data.orEmpty()))
                 }
@@ -141,6 +150,7 @@ class PacketClientDisplays(
         for (index in 0 until target) {
             if (index < sent.size) sent[index] = transforms[index] else sent.add(transforms[index])
         }
+        sentColors = frameColors
     }
 
     override fun clear() {
@@ -156,7 +166,7 @@ class PacketClientDisplays(
         vehicleId = NO_VEHICLE
         look = null
         sentViewRange = 0f
-        sentPixelColor = null
+        sentColors = IntArray(0)
         ids = EMPTY
         uuids.clear()
         sent.clear()
@@ -217,9 +227,9 @@ class PacketClientDisplays(
         player: Player,
         index: Int,
         display: DisplayOptions,
-        opts: EffectOptions,
         transform: Transformation,
         reference: Location,
+        color: Int,
     ) {
         val type = when (display.type) {
             DisplayOptions.Type.ITEM -> EntityTypes.ITEM_DISPLAY
@@ -230,7 +240,7 @@ class PacketClientDisplays(
             ids[index], Optional.of(uuids[index]), type,
             Vector3d(reference.x, reference.y, reference.z), 0f, 0f, 0f, 0, Optional.empty(),
         ))
-        send(player, WrapperPlayServerEntityMetadata(ids[index], lookData(display, index, opts) + transformData(transform, interpolationTicks(display))))
+        send(player, WrapperPlayServerEntityMetadata(ids[index], lookData(display, index, color) + transformData(transform, interpolationTicks(display))))
     }
 
     // passengers packets replace the whole list on the client
@@ -256,7 +266,7 @@ class PacketClientDisplays(
     }
 
     // static appearance, mirroring what DisplayEntityPool sets through the Bukkit API
-    private fun lookData(display: DisplayOptions, index: Int, opts: EffectOptions): List<EntityData<*>> {
+    private fun lookData(display: DisplayOptions, index: Int, pixelColor: Int): List<EntityData<*>> {
         val brightness = if (display.blockLight != null || display.skyLight != null) {
             ((display.blockLight ?: MAX_LIGHT).coerceIn(0, MAX_LIGHT) shl 4) or ((display.skyLight ?: MAX_LIGHT).coerceIn(0, MAX_LIGHT) shl 20)
         } else {
@@ -283,7 +293,7 @@ class PacketClientDisplays(
             DisplayOptions.Type.PIXEL -> {
                 // no default-background flag
                 data += EntityData(INDEX_CONTENT, EntityDataTypes.ADV_COMPONENT, Component.text(DisplayEntityPool.PIXEL_TEXT))
-                data += EntityData(INDEX_TEXT_BACKGROUND, EntityDataTypes.INT, sentPixelColor ?: display.pixelColor(opts))
+                data += EntityData(INDEX_TEXT_BACKGROUND, EntityDataTypes.INT, pixelColor)
                 data += EntityData(INDEX_TEXT_FLAGS, EntityDataTypes.BYTE, 0.toByte())
             }
             DisplayOptions.Type.TEXT -> {

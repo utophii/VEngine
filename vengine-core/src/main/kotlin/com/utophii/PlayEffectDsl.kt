@@ -84,6 +84,9 @@ class EffectConfig {
 
     fun toColor(color: Color) = builder.toColor(color)
 
+    // per-particle colors
+    fun gradient(vararg stops: Color) = builder.gradient(stops.toList())
+
     fun dustSize(value: Float) = builder.dustSize(value)
 
     fun material(material: Material) = builder.material(material)

@@ -1,0 +1,17 @@
+# Sierpinski tetrahedron whose copies breathe apart and together.
+# sierpinski_triangle / sierpinski_tetrahedron / sierpinski_carpet / menger_sponge parameters:
+# points, depth (levels), radius, pulse (how far the copies drift apart), pulseSpeed, angularSpeed
+id: sierpinski_pyramid
+duration: 160
+layers:
+  - effect: sierpinski_tetrahedron
+    particle: DUST
+    dustSize: 0.6
+    # each of the four corner copies gets its own color band
+    gradient: ["#00f5d4", "#00bbf9", "#9b5de5", "#f15bb5"]
+    parameters:
+      radius: 1.6
+      points: 900
+      pulse: 0.12
+      pulseSpeed: 0.08
+      angularSpeed: 0.02

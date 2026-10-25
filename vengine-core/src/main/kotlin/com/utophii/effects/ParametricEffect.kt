@@ -22,10 +22,12 @@ class ParametricEffect(
     private val defaults: Map<String, Double>,
     private val angularSpeed: Double,
     override val followDefaults: FollowDefaults? = null,
-) : AbstractParticleEffect(name) {
+    // optional 0..1 gradient value of each sample
+    private val valueFormula: String? = null,
+) : AbstractParticleEffect(name), ConfiguredPrimitive {
 
     // compiled once per axis and shared across concurrent plays
-    private val evaluators: List<ExpressionEvaluator> = listOf(xFormula, yFormula, zFormula)
+    private val evaluators: List<ExpressionEvaluator> = listOfNotNull(xFormula, yFormula, zFormula, valueFormula)
         .map { formula -> requireNotNull(ExpressionEvaluator.compile(formula)) { "Invalid formula: '$formula'" } }
 
     // writes the sampled parametric positions into the pooled buffer
@@ -87,6 +89,7 @@ class ParametricEffect(
             val y = axes[1].evaluate(params)
             val z = axes[2].evaluate(params)
             writeParticle(buffer, index, x, y, z, center, opts, time)
+            axes.getOrNull(VALUE_AXIS)?.let { value -> buffer.value(index, value.evaluate(params)) }
         }
     }
 
@@ -124,6 +127,7 @@ class ParametricEffect(
                 val y = axes[1].evaluate(params)
                 val z = axes[2].evaluate(params)
                 writeParticle(buffer, index, x, y, z, center, opts, time)
+                axes.getOrNull(VALUE_AXIS)?.let { value -> buffer.value(index, value.evaluate(params)) }
                 index++
             }
         }
@@ -131,6 +135,7 @@ class ParametricEffect(
 
     companion object {
         private const val MIN_SAMPLES = 4
+        private const val VALUE_AXIS = 3
         private const val SAMPLES_PARAM = "samples"
         private const val POINTS_PARAM = "points"
         private const val ANGULAR_SPEED_PARAM = "angularSpeed"

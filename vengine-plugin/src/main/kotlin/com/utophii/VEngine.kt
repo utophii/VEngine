@@ -137,6 +137,16 @@ class VEngine : JavaPlugin() {
         saveIfMissing("effects/parametric_rose.yml")
         saveIfMissing("effects/parametric_torus.yml")
         saveIfMissing("effects/traveling_comet.yml")
+        saveIfMissing("effects/julia_portal.yml")
+        saveIfMissing("effects/sierpinski_pyramid.yml")
+        saveIfMissing("effects/chladni_plate.yml")
+        saveIfMissing("effects/metaballs.yml")
+        saveIfMissing("effects/gyroid_orb.yml")
+        saveIfMissing("effects/sdf_core.yml")
+        saveIfMissing("effects/fern.yml")
+        saveIfMissing("effects/bush.yml")
+        saveIfMissing("effects/koch_snowflake.yml")
+        saveIfMissing("effects/living_tree.yml")
     }
 
     private fun saveIfMissing(path: String) {

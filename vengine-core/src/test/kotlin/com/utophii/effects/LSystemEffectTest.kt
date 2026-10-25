@@ -1,0 +1,99 @@
+package com.utophii.effects
+
+import com.utophii.api.EffectOptions
+import org.bukkit.Location
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import kotlin.math.abs
+
+class LSystemEffectTest {
+
+    private fun center(): Location = Location(null, 0.0, 0.0, 0.0)
+
+    private fun lsystem(
+        axiom: String,
+        rules: Map<Char, String>,
+        iterations: Int,
+        angle: Double = 90.0,
+        growth: Double = 0.0,
+        anchorCenter: Boolean = false,
+        points: Int = 4096,
+    ) = LSystemEffect(
+        name = "lsystem",
+        axiom = axiom,
+        rules = rules,
+        iterations = iterations,
+        angleDegrees = angle,
+        size = 2.0,
+        spacing = 0.05,
+        maxPoints = points,
+        growthTicks = growth,
+        anchorCenter = anchorCenter,
+        angularSpeed = 0.0,
+    )
+
+    private fun frame(effect: LSystemEffect, time: Double = 0.0, parameters: Map<String, Double> = emptyMap()): ParticleBuffer {
+        val buffer = ParticleBuffer(center())
+        effect.calculateInto(buffer, center(), EffectOptions(parameters = parameters), time)
+        return buffer
+    }
+
+    @Test
+    fun `koch curve is planar and fitted to the size`() {
+        val buffer = frame(lsystem("F", mapOf('F' to "F+F--F+F"), iterations = 2, angle = 60.0, anchorCenter = true))
+        val points = buffer.list()
+        assertTrue(points.isNotEmpty())
+        points.forEach { assertEquals(0.0, it.z, 1e-9) }
+        val width = points.maxOf { it.x } - points.minOf { it.x }
+        val height = points.maxOf { it.y } - points.minOf { it.y }
+        assertEquals(2.0, maxOf(width, height), 0.06)
+    }
+
+    @Test
+    fun `base anchor puts the root at the origin`() {
+        val buffer = frame(lsystem("FF", emptyMap(), iterations = 0))
+        val points = buffer.list()
+        assertTrue(points.all { abs(it.x) < 1e-9 && it.y >= 0.0 })
+        assertEquals(2.0, points.maxOf { it.y }, 1e-9)
+    }
+
+    @Test
+    fun `branches measure their distance from the root`() {
+        // trunk of 1, a side branch of 1 starting at height 1, and a trunk continuation of 1: the deepest point is 2 away
+        val buffer = frame(lsystem("F[+F]F", emptyMap(), iterations = 0))
+        val values = buffer.list().indices.map(buffer::valueAt)
+        assertEquals(1.0, values.max(), 1e-9)
+        val tips = buffer.list().filterIndexed { index, _ -> values[index] > 1.0 - 1e-9 }
+        assertEquals(2, tips.size, "both the branch tip and the trunk top are at the full root distance")
+    }
+
+    @Test
+    fun `growth reveals the plant from the root outwards`() {
+        val effect = lsystem("F[+F]F", emptyMap(), iterations = 0, growth = 100.0)
+        val half = frame(effect, time = 50.0)
+        val full = frame(effect, time = 100.0)
+        assertTrue(half.list().size < full.list().size)
+        half.list().indices.forEach { assertTrue(half.valueAt(it) <= 0.5 + 1e-9) }
+        assertEquals(full.list().size, frame(effect, time = 0.0, parameters = mapOf("progress" to 1.0)).list().size)
+    }
+
+    @Test
+    fun `pitch leaves the plane`() {
+        val buffer = frame(lsystem("F&F", emptyMap(), iterations = 0))
+        assertTrue(buffer.list().any { abs(it.z) > 0.1 })
+    }
+
+    @Test
+    fun `point cap thins the samples`() {
+        val buffer = frame(lsystem("F", mapOf('F' to "F+F--F+F"), iterations = 4, angle = 60.0, points = 100))
+        assertTrue(buffer.list().size <= 100)
+    }
+
+    @Test
+    fun `rewriting stops before the string explodes`() {
+        val effect = lsystem("F", mapOf('F' to "FFFFFFFFFF"), iterations = 10, points = 10)
+        assertTrue(effect.appliedIterations < 10)
+        assertEquals(6, effect.appliedIterations, "10^6 symbols still fit, 10^7 do not")
+    }
+}

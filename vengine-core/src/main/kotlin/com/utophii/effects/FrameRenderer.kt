@@ -10,26 +10,30 @@ import org.bukkit.Location
 class FrameRenderer(private val origin: Location) {
     private var displays: DisplayEntityPool? = null
     private var client: ClientDisplays? = null
+    private val gradient = GradientColors()
 
     // anchor is set for followed effects
-    fun render(positions: List<Location>, opts: EffectOptions, time: Double, anchor: FollowAnchor? = null) {
+    fun render(buffer: ParticleBuffer, opts: EffectOptions, time: Double, anchor: FollowAnchor? = null) {
+        val positions = buffer.list()
+        val colored = gradient.resolve(buffer, opts)
         val display = opts.display
         if (display == null) {
             clearDisplays()
-            spawnParticles(positions, opts)
+            spawnParticles(positions, opts, colored)
             return
         }
+        val colors = if (colored) gradient.argb() else null
         // with PacketEvents the models exist only on the clients
         val clientPool = client ?: PacketDisplays.create(origin)?.also { client = it }
         if (clientPool != null) {
             displays?.clear()
-            clientPool.sync(positions, opts, display, time, anchor)
+            clientPool.sync(positions, opts, display, time, anchor, colors)
         } else {
             val pool = displays ?: DisplayEntityPool(FXEngine.scheduler()).also { displays = it }
-            pool.sync(positions, opts, display, time, anchor?.frameRotation())
+            pool.sync(positions, opts, display, time, anchor?.frameRotation(), colors)
         }
         if (display.withParticles) {
-            spawnParticles(positions, opts)
+            spawnParticles(positions, opts, colored)
         }
     }
 
@@ -45,7 +49,7 @@ class FrameRenderer(private val origin: Location) {
         client?.clear()
     }
 
-    private fun spawnParticles(positions: List<Location>, opts: EffectOptions) {
+    private fun spawnParticles(positions: List<Location>, opts: EffectOptions, colored: Boolean) {
         val data = AbstractParticleEffect.resolveParticleData(opts)
         FXEngine.scheduler().spawnParticles(
             locations = positions,
@@ -57,6 +61,7 @@ class FrameRenderer(private val origin: Location) {
             offsetY = opts.offsetY,
             offsetZ = opts.offsetZ,
             speed = opts.speed,
+            dataAt = if (colored && gradient.colorsParticles()) gradient::dataAt else null,
         )
     }
 }

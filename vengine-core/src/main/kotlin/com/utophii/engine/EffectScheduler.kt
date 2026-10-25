@@ -288,6 +288,7 @@ class EffectScheduler(val plugin: JavaPlugin) {
     // spawns one frame of particles with the same culling as spawnParticle.
     // Nearby players are resolved once per frame: candidates are pre-culled against the frame's bounding box,
     // then each particle is checked against cached player coordinates
+    // dataAt, when given, supplies the payload of each particle by index
     fun spawnParticles(
         locations: List<Location>,
         particle: Particle,
@@ -298,16 +299,18 @@ class EffectScheduler(val plugin: JavaPlugin) {
         offsetY: Double = DEFAULT_PARTICLE_OFFSET,
         offsetZ: Double = DEFAULT_PARTICLE_OFFSET,
         speed: Double = DEFAULT_PARTICLE_SPEED,
+        dataAt: ((Int) -> Any?)? = null,
     ) {
         if (locations.isEmpty()) {
             return
         }
         val explicitReceivers = receivers.toList()
         var viewers: FrameViewers? = null
-        locations.forEach { location ->
-            val world = location.world ?: return@forEach
+        locations.forEachIndexed { index, location ->
+            val world = location.world ?: return@forEachIndexed
             val current = viewers?.takeIf { it.world == world }
                 ?: FrameViewers.collect(world, locations, explicitReceivers, viewDistance).also { viewers = it }
+            val payload = if (dataAt != null) dataAt(index) else data
             current.forEachNear(location, viewDistanceSquared) { player ->
                 player.spawnParticle(
                     particle,
@@ -317,7 +320,7 @@ class EffectScheduler(val plugin: JavaPlugin) {
                     offsetY,
                     offsetZ,
                     speed,
-                    data,
+                    payload,
                 )
             }
         }

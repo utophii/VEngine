@@ -1,0 +1,15 @@
+# Layered showcase of the sdf atoms with per-particle gradients.
+id: sdf_core
+duration: 200
+layers:
+  - effect: gyroid_orb
+    particle: DUST
+    dustSize: 0.5
+    gradient: ["#ffd166", "#ef476f", "#3a0ca3"]
+    scale: 0.8
+  - effect: metaballs
+    particle: DUST
+    dustSize: 0.6
+    # without a value formula the gradient runs bottom to top
+    gradient: ["#06d6a0", "#118ab2"]
+    scale: 1.4

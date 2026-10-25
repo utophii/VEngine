@@ -38,7 +38,7 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
             },
             render = { time, buffer ->
                 anchor?.apply(buffer.list())
-                renderer.render(buffer.list(), opts, time, anchor)
+                renderer.render(buffer, opts, time, anchor)
             },
             release = { buffer -> ParticleBufferPool.release(buffer) },
             onStop = renderer::dispose,

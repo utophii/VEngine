@@ -89,7 +89,7 @@ class ScriptedEffect(
                 },
                 render = { time, frame ->
                     anchor?.apply(frame.positions.list())
-                    renderer.render(frame.positions.list(), frame.options, time, anchor)
+                    renderer.render(frame.positions, frame.options, time, anchor)
                 },
                 release = { frame -> ParticleBufferPool.release(frame.positions) },
                 onStop = renderer::dispose,
@@ -198,6 +198,7 @@ data class ScriptedLayer(
 
         runtime.color?.let(builder::color)
         runtime.toColor?.let(builder::toColor)
+        if (runtime.gradient.isNotEmpty()) builder.gradient(runtime.gradient)
         runtime.material?.let(builder::material)
         runtime.display?.let(builder::display)
 

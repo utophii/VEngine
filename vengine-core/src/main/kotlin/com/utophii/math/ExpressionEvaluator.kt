@@ -2,7 +2,12 @@ package com.utophii.math
 
 import net.objecthunter.exp4j.Expression
 import net.objecthunter.exp4j.ExpressionBuilder
+import net.objecthunter.exp4j.function.Function
 import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sqrt
 
 // Thread-safe wrapper around the exp4j expression engine.
 // exp4j parses a formula into a reusable AST and evaluates it against a set of variables; it is a
@@ -29,9 +34,23 @@ class ExpressionEvaluator private constructor(
     ) {
         // same semantics as ExpressionEvaluator.evaluate
         fun evaluate(values: Map<String, Double>): Double {
-            variableNames.forEach { name -> expression.setVariable(name, values[name] ?: CONSTANTS[name] ?: DEFAULT_MISSING_VARIABLE) }
+            bind(values)
             return expression.evaluate()
         }
+
+        // sets every variable from values, for hot loops that then
+        // change only a few variables with set and call evaluate
+        fun bind(values: Map<String, Double>) {
+            variableNames.forEach { name -> expression.setVariable(name, values[name] ?: CONSTANTS[name] ?: DEFAULT_MISSING_VARIABLE) }
+        }
+
+        // sets one variable if the formula uses it
+        fun set(name: String, value: Double) {
+            if (name in variableNames) expression.setVariable(name, value)
+        }
+
+        // evaluates with the variables as last bound/set
+        fun evaluate(): Double = expression.evaluate()
     }
 
     companion object {
@@ -45,9 +64,57 @@ class ExpressionEvaluator private constructor(
             "sinh", "cosh", "tanh", "log", "log10", "log2",
             "exp", "sqrt", "cbrt", "abs", "ceil", "floor", "round", "signum",
             "pow", "min", "max",
+            // signed distance helpers
+            "sdSphere", "sdBox", "sdTorus", "smin", "smax",
             // built-in constants
             "pi", "e", "π", "ε",
         )
+
+        // signed distance functions, for implicit (sdf) effects and any other formula
+        // https://iquilezles.org/articles/distfunctions/
+        private val SDF_FUNCTIONS = listOf(
+            // sdSphere(x, y, z, r) = |p| - r
+            object : Function("sdSphere", 4) {
+                override fun apply(vararg args: Double): Double = sqrt(args[0] * args[0] + args[1] * args[1] + args[2] * args[2]) - args[3]
+            },
+            // sdBox(x, y, z, bx, by, bz): q = |p| - b, distance = |max(q, 0)| + min(max(qx, qy, qz), 0)
+            object : Function("sdBox", 6) {
+                override fun apply(vararg args: Double): Double {
+                    val qx = abs(args[0]) - args[3]
+                    val qy = abs(args[1]) - args[4]
+                    val qz = abs(args[2]) - args[5]
+                    val ox = max(qx, 0.0)
+                    val oy = max(qy, 0.0)
+                    val oz = max(qz, 0.0)
+                    return sqrt(ox * ox + oy * oy + oz * oz) + min(max(qx, max(qy, qz)), 0.0)
+                }
+            },
+            // sdTorus(x, y, z, R, r) = |(|p.xz| - R, p.y)| - r, ring in the XZ plane
+            object : Function("sdTorus", 5) {
+                override fun apply(vararg args: Double): Double {
+                    val ring = sqrt(args[0] * args[0] + args[2] * args[2]) - args[3]
+                    return sqrt(ring * ring + args[1] * args[1]) - args[4]
+                }
+            },
+            // smin(a, b, k): polynomial smooth union, h = max(k - |a - b|, 0) / k, min(a, b) - h² k / 4
+            object : Function("smin", 3) {
+                override fun apply(vararg args: Double): Double = smoothMin(args[0], args[1], args[2])
+            },
+            // smax(a, b, k) = -smin(-a, -b, k): smooth intersection, or subtraction as smax(a, -b, k)
+            object : Function("smax", 3) {
+                override fun apply(vararg args: Double): Double = -smoothMin(-args[0], -args[1], args[2])
+            },
+        )
+
+        private fun smoothMin(a: Double, b: Double, k: Double): Double {
+            if (k <= 0.0) {
+                return min(a, b)
+            }
+            val h = max(k - abs(a - b), 0.0) / k
+            return min(a, b) - h * h * k * QUARTER
+        }
+
+        private const val QUARTER = 0.25
 
         private val IDENTIFIER_PATTERN = Regex("[A-Za-z_][A-Za-z0-9_]*")
 
@@ -71,6 +138,7 @@ class ExpressionEvaluator private constructor(
             val variables = (extractIdentifiers(formula) - RESERVED_NAMES).toTypedArray()
             return try {
                 val expression = ExpressionBuilder(formula)
+                    .functions(SDF_FUNCTIONS)
                     .variables(*variables)
                     .build()
                 val evaluator = ExpressionEvaluator(expression)

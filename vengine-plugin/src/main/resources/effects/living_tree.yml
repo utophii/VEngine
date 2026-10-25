@@ -1,0 +1,15 @@
+# The fern grows from bark to leaf colors while a bush sprouts in front of it.
+id: living_tree
+duration: 220
+layers:
+  - effect: fern
+    particle: DUST
+    dustSize: 0.7
+    gradient: ["#5c3d2e", "#8a6a3b", "#6a994e", "#a7c957"]
+  - effect: bush
+    start: 30
+    particle: DUST
+    dustSize: 0.6
+    gradient: ["#5c3d2e", "#386641", "#f2e8cf"]
+    scale: 0.7
+    rotationYaw: 1.2

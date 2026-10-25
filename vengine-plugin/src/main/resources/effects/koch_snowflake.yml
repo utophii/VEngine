@@ -1,0 +1,13 @@
+# Koch snowflake: every edge F becomes four edges with a 60° spike
+id: koch_snowflake
+lsystem:
+  axiom: "F--F--F"
+  rules:
+    F: "F+F--F+F"
+  iterations: 4
+  angle: 60
+  size: 3.0
+  spacing: 0.05
+  points: 1200
+  anchor: center
+  angularSpeed: 0.03
