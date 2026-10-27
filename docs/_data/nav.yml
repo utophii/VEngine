@@ -1,0 +1,21 @@
+# Sidebar order, also used for the previous / next links at the bottom of each page
+- group: Server owners
+  pages:
+    - title: Home
+      url: /
+    - title: Commands and permissions
+      url: /commands-and-permissions/
+    - title: Placeholders
+      url: /placeholders/
+    - title: Writing effects
+      url: /writing-effects/
+    - title: Display entities
+      url: /display-entities/
+    - title: Parametric effects
+      url: /parametric-effects/
+- group: Developers
+  pages:
+    - title: For developers
+      url: /for-developers/
+    - title: Developer guide
+      url: /developer-guide/

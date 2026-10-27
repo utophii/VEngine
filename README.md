@@ -14,7 +14,7 @@ ones by editing plain text files, no coding required.
 > **Before you download:** VEngine is an engine, not a plug-and-play plugin, and it is not trying
 > to be user-friendly. The bundled effects work out of the box, but creating your own effects
 > means writing math formulas (basic trigonometry, parametric curves, angles in radians) in YAML
-> files, and reading the wiki when something is unclear. If you want a plugin with hundreds of
+> files, and reading the docs when something is unclear. If you want a plugin with hundreds of
 > ready-made effects and an in-game editor, VEngine is not the right tool for you.
 
 It is:
@@ -28,9 +28,9 @@ It is:
 * **free** - available for download and usage at no cost, and open source so it can remain free.
 
 ## Useful links
-The plugin has [documentation available on the wiki](https://github.com/utophii/VEngine/wiki). Please use the resources there before coming to us directly for support.
+The plugin has [documentation available on the docs site](https://utophii.github.io/VEngine/). Please use the resources there before coming to us directly for support.
 
-Support for the plugin is provided on [Discord](https://discord.gg/NAWsxe3J3R). If you have a question which cannot be answered by reading the wiki, the best place to ask it is there.
+Support for the plugin is provided on [Discord](https://discord.gg/NAWsxe3J3R). If you have a question which cannot be answered by reading the docs, the best place to ask it is there.
 
 If you would like to report a bug, please [open a ticket on GitHub](https://github.com/utophii/VEngine/issues).
 

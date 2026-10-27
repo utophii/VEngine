@@ -1,0 +1,29 @@
+title: VEngine
+description: Animated particle effect engine for Minecraft servers. Effects are plain YAML files.
+repository: utophii/VEngine
+discord: https://discord.gg/NAWsxe3J3R
+
+url: https://utophii.github.io
+baseurl: /VEngine
+permalink: pretty
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  # the pages are hard-wrapped at ~100 columns, single newlines must not become <br>
+  hard_wrap: false
+  syntax_highlighter: rouge
+
+plugins:
+  - jekyll-relative-links
+
+# lets pages link to each other as plain .md files, so they also work when browsed on GitHub
+relative_links:
+  enabled: true
+  collections: false
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default

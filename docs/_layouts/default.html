@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if page.url == "/" %}{{ site.title }} docs{% else %}{{ page.title }} · {{ site.title }}{% endif %}</title>
+  <meta name="description" content="{{ page.lede | default: site.description | escape }}">
+  <script>
+    // applied before first paint so a stored theme never flashes and the mobile menu starts closed
+    document.documentElement.classList.add("js");
+    try { var t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=PT+Serif:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="{{ '/assets/css/site.css' | relative_url }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23b02f63'/><path d='M8 9l8 15 8-15' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+</head>
+<body>
+{%- assign flat = "" | split: "" -%}
+{%- for group in site.data.nav -%}{%- for item in group.pages -%}{%- assign flat = flat | push: item -%}{%- endfor -%}{%- endfor -%}
+{%- assign current = -1 -%}
+{%- for item in flat -%}{%- if item.url == page.url -%}{%- assign current = forloop.index0 -%}{%- endif -%}{%- endfor -%}
+<a class="skip" href="#content">Skip to content</a>
+<div class="page">
+  <aside class="rail">
+    <div class="rail-top">
+      <a class="brand" href="{{ '/' | relative_url }}">VEngine<span>docs</span></a>
+      <button class="menu-btn" type="button" aria-expanded="false" aria-controls="sitenav">Menu</button>
+    </div>
+    <nav class="sitenav" id="sitenav" aria-label="Documentation">
+      {%- for group in site.data.nav %}
+      <p class="grp">{{ group.group }}</p>
+      <ol>
+        {%- for item in group.pages %}
+        <li{% if item.url == page.url %} class="current"{% endif %}>
+          <a href="{{ item.url | relative_url }}"{% if item.url == page.url %} aria-current="page"{% endif %}>{{ item.title }}</a>
+          {%- if item.url == page.url %}<ol class="toc" aria-label="On this page"></ol>{% endif %}
+        </li>
+        {%- endfor %}
+      </ol>
+      {%- endfor %}
+      <div class="rail-foot">
+        <a href="https://github.com/{{ site.repository }}">GitHub</a>
+        <a href="{{ site.discord }}">Discord</a>
+        <button class="theme-btn" type="button" aria-label="Toggle color theme">Theme</button>
+      </div>
+    </nav>
+  </aside>
+
+  <main id="content">
+    <header class="hero">
+      <p class="eyebrow">VEngine · {{ page.section }}</p>
+      <h1>{{ page.heading | default: page.title }}</h1>
+      {%- if page.lede %}
+      <p class="lede">{{ page.lede }}</p>
+      {%- endif %}
+      {%- if page.hero_media %}
+      <figure class="hero-media">
+        <video src="{{ '/assets/img/demo.mp4' | relative_url }}" poster="{{ '/assets/img/demo-poster.jpg' | relative_url }}" autoplay muted loop playsinline preload="metadata" aria-label="VEngine effects playing in a Minecraft world"></video>
+      </figure>
+      {%- endif %}
+    </header>
+
+    <article class="content">
+{{ content }}
+    </article>
+
+    <footer class="pager">
+      {%- if current > 0 %}
+      {%- assign prev_i = current | minus: 1 %}{% assign prev = flat[prev_i] %}
+      <a class="prev" href="{{ prev.url | relative_url }}"><span>Previous</span>{{ prev.title }}</a>
+      {%- else %}<span></span>{% endif %}
+      {%- assign next_i = current | plus: 1 %}
+      {%- if current >= 0 and next_i < flat.size %}{% assign next = flat[next_i] %}
+      <a class="next" href="{{ next.url | relative_url }}"><span>Next</span>{{ next.title }}</a>
+      {%- endif %}
+    </footer>
+    <p class="edit"><a href="https://github.com/{{ site.repository }}/edit/main/docs/{{ page.path }}">Edit this page on GitHub</a></p>
+  </main>
+</div>
+<script src="{{ '/assets/js/site.js' | relative_url }}" defer></script>
+</body>
+</html>
