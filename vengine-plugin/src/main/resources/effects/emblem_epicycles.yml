@@ -1,0 +1,18 @@
+# An SVG outline drawn by a chain of rotating circles: the outline's Fourier series.
+# All subpaths are joined into one loop; the pen is lifted on the jumps between them.
+# Runtime parameters: epicycles (circles in the chain), period (ticks per loop), trail (share of the loop kept
+# behind the pen, 1 = the whole drawing), spacing (blocks between particles of arms and circles), and
+# trace / arms / circles (1 shows, 0 hides that part, so layers can color the parts differently)
+id: emblem_epicycles
+duration: 400
+shape:
+  svg: emblem.svg
+  mode: fourier
+  size: 3.5
+  samples: 1024       # points the outline is resampled at; more keeps sharp corners
+  epicycles: 100
+  period: 200
+  trail: 1
+particle: DUST
+dustSize: 0.5
+gradient: ["#ffbe0b", "#fb5607", "#ff006e"]

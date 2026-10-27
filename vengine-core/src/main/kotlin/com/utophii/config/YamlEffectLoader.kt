@@ -8,6 +8,7 @@ import com.utophii.api.FollowRotation
 import com.utophii.api.ParticleEffect
 import com.utophii.effects.AbstractParticleEffect
 import com.utophii.effects.EffectEmitter
+import com.utophii.effects.FourierEffect
 import com.utophii.effects.ImplicitEffect
 import com.utophii.effects.LSystemEffect
 import com.utophii.effects.NumericAnimation
@@ -17,6 +18,7 @@ import com.utophii.effects.ParamRange
 import com.utophii.effects.ParametricEffect
 import com.utophii.effects.ScriptedEffect
 import com.utophii.effects.ScriptedLayer
+import com.utophii.effects.ShapeEffect
 import com.utophii.engine.FXEngine
 import com.utophii.engine.PlaceholderExpression
 import com.utophii.engine.Placeholders
@@ -27,6 +29,15 @@ import com.utophii.modifiers.MotionModifier
 import com.utophii.modifiers.RotationModifier
 import com.utophii.modifiers.TurbulenceModifier
 import com.utophii.modifiers.VortexModifier
+import com.utophii.shapes.FourierSeries
+import com.utophii.shapes.ImageShape
+import com.utophii.shapes.ObjShape
+import com.utophii.shapes.Outlines
+import com.utophii.shapes.ShapeException
+import com.utophii.shapes.ShapeFiles
+import com.utophii.shapes.ShapeVariants
+import com.utophii.shapes.SvgShape
+import com.utophii.shapes.TextShape
 import org.bukkit.Color
 import org.bukkit.Material
 import org.bukkit.Particle
@@ -34,15 +45,17 @@ import org.bukkit.entity.Display
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.util.Vector
 import org.yaml.snakeyaml.Yaml
+import java.awt.Shape
 import java.io.File
 
 // loads effect descriptions from YAML without recompilation
 class YamlEffectLoader(private val plugin: JavaPlugin) {
     private val yaml = Yaml()
 
-    // ensures the effects directory exists
+    // ensures the effects and shapes directories exist
     fun ensureDirectories() {
         effectsDirectory().mkdirs()
+        shapesDirectory().mkdirs()
     }
 
     // loads and registers all YAML effects from plugins/VEngine/effects
@@ -144,6 +157,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
     private fun parseAtom(id: String, raw: Map<String, Any?>, fileName: String): AbstractParticleEffect? = when {
         raw.containsKey(SDF_KEY) -> parseImplicit(id, raw, fileName)
         raw.containsKey(LSYSTEM_KEY) -> parseLSystem(id, raw, fileName)
+        raw.containsKey(SHAPE_KEY) -> parseShape(id, raw, fileName)
         else -> parseParametric(id, raw, fileName)
     }
 
@@ -226,6 +240,147 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         }
         return effect
     }
+
+    // builds an imported shape from a shape YAML block: exactly one of image, text, obj or svg
+    private fun parseShape(id: String, raw: Map<String, Any?>, fileName: String): AbstractParticleEffect? {
+        val block = raw[SHAPE_KEY] as? Map<*, *> ?: run {
+            plugin.logger.warning("Skipping shape effect '$fileName': 'shape' must be a block with an image, text, obj or svg source.")
+            return null
+        }
+        val sources = SHAPE_SOURCES.filter(block::containsKey)
+        if (sources.size != 1) {
+            plugin.logger.warning("Skipping shape effect '$fileName': 'shape' needs exactly one of ${SHAPE_SOURCES.joinToString()}.")
+            return null
+        }
+        val anchor = block[ANCHOR_KEY]?.toString()?.lowercase()
+        if (anchor != null && anchor != ANCHOR_BASE && anchor != ANCHOR_CENTER) {
+            plugin.logger.warning("In '$fileName': unknown shape anchor '$anchor'; expected '$ANCHOR_BASE' or '$ANCHOR_CENTER'.")
+        }
+        val settings = ShapeSettings(
+            size = block[SIZE_KEY].number()?.takeIf { it > 0.0 } ?: DEFAULT_SHAPE_SIZE,
+            points = block[POINTS_KEY].number()?.toInt()?.coerceIn(1, MAX_SHAPE_POINTS) ?: DEFAULT_SHAPE_POINTS,
+            anchorBase = anchor == ANCHOR_BASE,
+            growth = block[GROWTH_KEY].number()?.coerceAtLeast(0.0) ?: 0.0,
+            angularSpeed = block[ANGULAR_SPEED_KEY].number() ?: 0.0,
+            mode = block[MODE_KEY]?.toString()?.trim()?.lowercase(),
+        )
+        val source = sources.single()
+        return try {
+            when (source) {
+                IMAGE_KEY -> parseImageShape(id, block, settings, raw, fileName)
+                OBJ_KEY -> parseObjShape(id, block, settings, raw, fileName)
+                SVG_KEY -> {
+                    val path = SvgShape.load(ShapeFiles.resolve(shapesDirectory(), block[SVG_KEY].toString()))
+                    parseOutlineShape(id, block, settings, raw, fileName, template = null) { path }
+                }
+                else -> {
+                    val text = block[TEXT_KEY]?.toString()?.takeIf(String::isNotBlank)
+                        ?: throw ShapeException("'text' is empty")
+                    val glyphs = TextShape(TextShape.font(block[FONT_KEY]?.toString(), block[STYLE_KEY]?.toString(), shapesDirectory()))
+                    parseOutlineShape(id, block, settings, raw, fileName, template = text, glyphs::outline)
+                }
+            }
+        } catch (error: ShapeException) {
+            plugin.logger.warning("Skipping shape effect '$fileName': ${error.message}.")
+            null
+        } catch (error: Exception) {
+            plugin.logger.warning("Skipping shape effect '$fileName': $error")
+            null
+        } catch (error: LinkageError) {
+            // AWT font support missing on a headless server
+            plugin.logger.warning("Skipping shape effect '$fileName': $error")
+            null
+        }
+    }
+
+    private fun parseImageShape(id: String, block: Map<*, *>, settings: ShapeSettings, raw: Map<String, Any?>, fileName: String): ShapeEffect {
+        val colors = block[COLORS_KEY]?.toString()?.lowercase() ?: COLORS_IMAGE
+        if (colors != COLORS_IMAGE && colors != COLORS_GRADIENT) {
+            plugin.logger.warning("In '$fileName': unknown shape colors '$colors'; expected '$COLORS_IMAGE' or '$COLORS_GRADIENT'.")
+        }
+        val cloud = ImageShape.load(
+            ShapeFiles.resolve(shapesDirectory(), block[IMAGE_KEY].toString()),
+            settings.points,
+            alpha = block[ALPHA_KEY].number() ?: DEFAULT_IMAGE_ALPHA,
+            background = parseColor(block[BACKGROUND_KEY])?.asRGB(),
+            tolerance = block[TOLERANCE_KEY].number() ?: DEFAULT_IMAGE_TOLERANCE,
+        )
+        return ShapeEffect(
+            id, ShapeVariants.fixed(cloud.fitted(settings.size, settings.anchorBase)), settings.growth, settings.angularSpeed,
+            sourceColors = colors != COLORS_GRADIENT, followDefaults = parseFollow(raw[FOLLOW_KEY], fileName),
+        )
+    }
+
+    private fun parseObjShape(id: String, block: Map<*, *>, settings: ShapeSettings, raw: Map<String, Any?>, fileName: String): ShapeEffect {
+        val mode = ObjShape.Mode.entries.firstOrNull { it.name.equals(settings.mode ?: OBJ_DEFAULT_MODE, ignoreCase = true) } ?: run {
+            plugin.logger.warning("In '$fileName': unknown obj mode '${settings.mode}'; expected vertices, edges or surface.")
+            ObjShape.Mode.SURFACE
+        }
+        val cloud = ObjShape.load(ShapeFiles.resolve(shapesDirectory(), block[OBJ_KEY].toString())).cloud(mode, settings.points)
+        return ShapeEffect(
+            id, ShapeVariants.fixed(cloud.fitted(settings.size, settings.anchorBase)), settings.growth, settings.angularSpeed,
+            sourceColors = false, followDefaults = parseFollow(raw[FOLLOW_KEY], fileName),
+        )
+    }
+
+    // svg and text: an outline traced by particles, filled with them, or drawn by epicycles
+    // template is the text with placeholders
+    private fun parseOutlineShape(
+        id: String,
+        block: Map<*, *>,
+        settings: ShapeSettings,
+        raw: Map<String, Any?>,
+        fileName: String,
+        template: String?,
+        outline: (String) -> Shape,
+    ): AbstractParticleEffect {
+        val follow = parseFollow(raw[FOLLOW_KEY], fileName)
+        val contours = { text: String -> Outlines.contours(outline(text)) }
+        fun <T : Any> variants(build: (String) -> T): ShapeVariants<T> =
+            if (template == null) ShapeVariants.fixed(build("")) else ShapeVariants.text(template, build)
+
+        return when (settings.mode ?: MODE_OUTLINE) {
+            MODE_FOURIER -> {
+                val samples = block[SAMPLES_KEY].number()?.toInt()?.coerceIn(MIN_FOURIER_SAMPLES, MAX_FOURIER_SAMPLES)
+                    ?: DEFAULT_FOURIER_SAMPLES
+                val series = variants { text -> FourierSeries.of(Outlines.fitted(contours(text), settings.size, settings.anchorBase), samples) }
+                FourierEffect(
+                    name = id,
+                    series = series,
+                    defaultEpicycles = block[EPICYCLES_KEY].number()?.toInt()?.coerceAtLeast(1) ?: DEFAULT_EPICYCLES,
+                    periodTicks = block[PERIOD_KEY].number()?.coerceAtLeast(1.0) ?: DEFAULT_FOURIER_PERIOD,
+                    trail = block[TRAIL_KEY].number()?.coerceIn(0.0, 1.0) ?: 1.0,
+                    spacing = block[SPACING_KEY].number()?.takeIf { it > 0.0 } ?: DEFAULT_FOURIER_SPACING,
+                    angularSpeed = settings.angularSpeed,
+                    followDefaults = follow,
+                )
+            }
+            MODE_FILL -> {
+                val evenOdd = block[FILL_RULE_KEY]?.toString()?.lowercase() == FILL_RULE_EVEN_ODD
+                val shape = variants { text ->
+                    Outlines.fill(Outlines.path(outline(text), evenOdd), settings.points).fitted(settings.size, settings.anchorBase)
+                }
+                ShapeEffect(id, shape, settings.growth, settings.angularSpeed, sourceColors = false, followDefaults = follow)
+            }
+            else -> {
+                if (settings.mode != MODE_OUTLINE) {
+                    plugin.logger.warning("In '$fileName': unknown shape mode '${settings.mode}'; expected outline, fill or fourier.")
+                }
+                val shape = variants { text -> Outlines.outline(contours(text), settings.points).fitted(settings.size, settings.anchorBase) }
+                ShapeEffect(id, shape, settings.growth, settings.angularSpeed, sourceColors = false, followDefaults = follow)
+            }
+        }
+    }
+
+    // options every shape source shares
+    private class ShapeSettings(
+        val size: Double,
+        val points: Int,
+        val anchorBase: Boolean,
+        val growth: Double,
+        val angularSpeed: Double,
+        val mode: String?,
+    )
 
     // "F[+F]F" is one production, ["F[+F]F", "F[-F]F"] are equally likely; [{ to: "F[+F]F", weight: 2 }, ...] are weighted
     private fun parseProductions(value: Any?, fileName: String, symbol: Any?): List<LSystemEffect.Production>? = when (value) {
@@ -360,7 +515,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
     // formula atoms
     private fun isAtom(raw: Map<String, Any?>): Boolean {
         val hasBlock = raw.containsKey(CURVE_KEY) || raw.containsKey(SURFACE_KEY) || raw.containsKey(SDF_KEY) ||
-            raw.containsKey(LSYSTEM_KEY)
+            raw.containsKey(LSYSTEM_KEY) || raw.containsKey(SHAPE_KEY)
         val type = raw[TYPE_KEY]?.toString()?.lowercase()
         return hasBlock || type in PARAMETRIC_TYPES
     }
@@ -727,6 +882,8 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
 
     private fun effectsDirectory(): File = File(plugin.dataFolder, EFFECTS_DIRECTORY)
 
+    private fun shapesDirectory(): File = File(plugin.dataFolder, ShapeFiles.DIRECTORY)
+
     private fun Any?.number(): Double? = when (this) {
         is Number -> toDouble()
         is String -> toDoubleOrNull()
@@ -777,6 +934,38 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private const val DEFAULT_LSYSTEM_SPACING = 0.08
         private const val DEFAULT_LSYSTEM_POINTS = 1500
         private const val MAX_LSYSTEM_POINTS = 4096
+        private const val SHAPE_KEY = "shape"
+        private const val IMAGE_KEY = "image"
+        private const val OBJ_KEY = "obj"
+        private const val SVG_KEY = "svg"
+        private val SHAPE_SOURCES = listOf(IMAGE_KEY, TEXT_KEY, OBJ_KEY, SVG_KEY)
+        private const val MODE_OUTLINE = "outline"
+        private const val MODE_FILL = "fill"
+        private const val MODE_FOURIER = "fourier"
+        private const val OBJ_DEFAULT_MODE = "surface"
+        private const val FONT_KEY = "font"
+        private const val STYLE_KEY = "style"
+        private const val FILL_RULE_KEY = "fillRule"
+        private const val FILL_RULE_EVEN_ODD = "evenodd"
+        private const val COLORS_KEY = "colors"
+        private const val COLORS_IMAGE = "image"
+        private const val COLORS_GRADIENT = "gradient"
+        private const val ALPHA_KEY = "alpha"
+        private const val TOLERANCE_KEY = "tolerance"
+        private const val EPICYCLES_KEY = "epicycles"
+        private const val PERIOD_KEY = "period"
+        private const val TRAIL_KEY = "trail"
+        private const val DEFAULT_SHAPE_SIZE = 3.0
+        private const val DEFAULT_SHAPE_POINTS = 1200
+        private const val MAX_SHAPE_POINTS = 4096
+        private const val DEFAULT_IMAGE_ALPHA = 0.5
+        private const val DEFAULT_IMAGE_TOLERANCE = 0.1
+        private const val DEFAULT_EPICYCLES = 100
+        private const val DEFAULT_FOURIER_PERIOD = 200.0
+        private const val DEFAULT_FOURIER_SPACING = 0.12
+        private const val DEFAULT_FOURIER_SAMPLES = 1024
+        private const val MIN_FOURIER_SAMPLES = 64
+        private const val MAX_FOURIER_SAMPLES = 4096
         private const val VARIABLES_KEY = "variables"
         private const val SAMPLES_KEY = "samples"
         private const val SAMPLES_X_KEY = "samplesX"

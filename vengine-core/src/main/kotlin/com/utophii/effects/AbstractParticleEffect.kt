@@ -11,6 +11,7 @@ import org.bukkit.Color
 import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.Particle
+import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemStack
 import org.bukkit.util.Vector
 
@@ -19,7 +20,7 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
 
     // plays the effect through the pooled render buffer, writing positions per frame without new allocations
     override fun play(center: Location, opts: EffectOptions): EffectHandle {
-        val extra = playParameters(opts.parameters)
+        val extra = playParameters(opts.parameters, opts.subject ?: opts.follow?.entity as? Player)
         val played = if (extra.isEmpty()) opts else opts.toBuilder().parameters(opts.parameters + extra).build()
         val stableCenter = center.clone()
         val renderer = FrameRenderer(stableCenter)
@@ -64,7 +65,7 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
 
     // parameters fixed once when a play starts,
     // configured holds the parameters the play already has, which take precedence
-    open fun playParameters(configured: Map<String, Double>): Map<String, Double> = emptyMap()
+    open fun playParameters(configured: Map<String, Double>, subject: Player? = null): Map<String, Double> = emptyMap()
 
     // writes the effect's particle positions for `time` into the pooled buffer
     // subclasses override this to avoid allocating a fresh location per particle per frame

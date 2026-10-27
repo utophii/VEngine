@@ -149,6 +149,14 @@ class VEngine : JavaPlugin() {
         saveIfMissing("effects/koch_snowflake.yml")
         saveIfMissing("effects/living_tree.yml")
         saveIfMissing("effects/wild_weed.yml")
+        saveIfMissing("effects/sun_picture.yml")
+        saveIfMissing("effects/text_banner.yml")
+        saveIfMissing("effects/wire_icosahedron.yml")
+        saveIfMissing("effects/emblem_epicycles.yml")
+        saveIfMissing("effects/fourier_emblem.yml")
+        saveIfMissing("shapes/sun.png")
+        saveIfMissing("shapes/emblem.svg")
+        saveIfMissing("shapes/icosahedron.obj")
     }
 
     private fun saveIfMissing(path: String) {

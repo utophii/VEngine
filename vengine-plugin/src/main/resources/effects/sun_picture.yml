@@ -1,0 +1,14 @@
+# A picture imported from plugins/VEngine/shapes: one particle per visible pixel, in the pixel's own color.
+# Pictures with more visible pixels than `points` are shrunk first. Transparent pixels (alpha <= 0.5) are left out;
+# for pictures without transparency set `background: "#ffffff"` (and `tolerance`, 0..1) to drop the backdrop.
+# colors: image (pixel colors) or gradient (pixel brightness picks the gradient color)
+id: sun_picture
+duration: 120
+shape:
+  image: sun.png
+  size: 3             # largest side in blocks
+  points: 1500        # particle cap
+  anchor: center      # center: picture centered on the effect position; base: standing on it
+  growth: 30          # ticks until every pixel has appeared
+particle: DUST
+dustSize: 0.6

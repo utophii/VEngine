@@ -9,7 +9,7 @@ fun interface PlaceholderResolver {
     fun resolve(player: Player?, placeholder: String): String
 }
 
-// numeric placeholder values for effect formulas
+// placeholder values for effect formulas and texts
 object Placeholders {
     @Volatile
     var resolver: PlaceholderResolver? = null
@@ -34,6 +34,25 @@ object Placeholders {
         }
     }
 
+    fun containsPlaceholders(text: String): Boolean = PATTERN.containsMatchIn(text)
+
+    // replaces every %placeholder% in text, call on the server thread
+    fun text(player: Player?, text: String): String {
+        if (!containsPlaceholders(text)) {
+            return text
+        }
+        val current = resolver ?: run {
+            warnOnce("Placeholders in '$text' are used, but PlaceholderAPI is not installed; they are left as written.")
+            return text
+        }
+        return PATTERN.replace(text) { match ->
+            runCatching { current.resolve(player, match.value) }.getOrElse { error ->
+                warnOnce("Placeholder ${match.value} failed (${error.message}); it is left as written.")
+                match.value
+            }
+        }
+    }
+
     fun resetWarnings() {
         warned.clear()
     }
@@ -48,5 +67,8 @@ object Placeholders {
         runCatching { FXEngine.scheduler().plugin.logger }.getOrElse { Logger.getLogger(LOGGER_NAME) }
 
     private const val MISSING_VALUE = 0.0
+
+    // starts with a letter, as in PlaceholderExpression
+    private val PATTERN = Regex("%[A-Za-z][A-Za-z0-9_:.]*%")
     private const val LOGGER_NAME = "VEngine"
 }

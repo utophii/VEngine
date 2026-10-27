@@ -15,6 +15,9 @@ object Hash {
         return z xor (z ushr 31)
     }
 
+    // uniform in [0, 1) from the top 53 bits of a hash
+    fun unit(hash: Long): Double = (hash ushr 11) * DOUBLE_UNIT
+
     // uniform in [-1, 1) from the top 53 bits of a hash
     fun signedUnit(hash: Long): Double = (hash ushr 11) * DOUBLE_UNIT * 2.0 - 1.0
 }

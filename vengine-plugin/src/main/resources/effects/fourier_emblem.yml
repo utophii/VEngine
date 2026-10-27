@@ -1,0 +1,19 @@
+# The epicycles of emblem_epicycles.yml in two layers: faint machinery and a bright trace
+id: fourier_emblem
+duration: 400
+layers:
+  - effect: emblem_epicycles
+    particle: DUST
+    dustSize: 0.35
+    # values run from the largest circle (0) to the smallest (1)
+    gradient: ["#4361ee", "#4cc9f0"]
+    parameters:
+      trace: 0
+      spacing: 0.15   # sparser machinery
+  - effect: emblem_epicycles
+    particle: DUST
+    dustSize: 0.7
+    gradient: ["#ffbe0b", "#fb5607", "#ff006e"]
+    parameters:
+      arms: 0
+      circles: 0

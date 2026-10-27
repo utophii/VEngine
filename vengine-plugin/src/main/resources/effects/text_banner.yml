@@ -1,0 +1,18 @@
+# Text drawn by particles. `font` is an installed font family (or Serif, SansSerif, Monospaced) or a .ttf / .otf
+# file in plugins/VEngine/shapes; `style` is plain, bold, italic or bold_italic. "\n" starts a new line.
+# PlaceholderAPI placeholders such as %player_name% are filled in for the player of every play.
+# mode: outline (particles along the glyph outlines), fill (a grid inside the glyphs) or fourier (see fourier_emblem.yml)
+id: text_banner
+duration: 100
+shape:
+  text: "VEngine"
+  font: SansSerif
+  style: bold
+  mode: outline
+  size: 4
+  points: 1200
+  growth: 40          # the outline is drawn glyph by glyph
+particle: DUST
+dustSize: 0.6
+# outline colors run along the text, from its start (0) to its end (1)
+gradient: ["#4cc9f0", "#7209b7", "#f72585"]

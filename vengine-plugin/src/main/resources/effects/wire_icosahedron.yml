@@ -1,0 +1,14 @@
+# A Wavefront OBJ model from plugins/VEngine/shapes (v, f and l lines are read). Models are y-up, like Minecraft.
+# mode: vertices, edges (wireframe) or surface (points spread over the faces by area)
+id: wire_icosahedron
+duration: 160
+shape:
+  obj: icosahedron.obj
+  mode: edges
+  size: 2.5
+  points: 900
+  angularSpeed: 0.03  # spin around the vertical axis, rad/tick
+particle: DUST
+dustSize: 0.6
+# colors run from the bottom (0) of the model to its top (1)
+gradient: ["#06d6a0", "#118ab2"]

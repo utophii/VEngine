@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- VEngine example: a heart with a star inside. Two subpaths, so the epicycles lift the pen between them -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <path d="M100 178 C 60 146 18 116 18 72 A 41 41 0 0 1 100 52 A 41 41 0 0 1 182 72 C 182 116 140 146 100 178 Z"/>
+  <polygon points="100,62 109,88 136,88 114,104 122,130 100,114 78,130 86,104 64,88 91,88"/>
+</svg>

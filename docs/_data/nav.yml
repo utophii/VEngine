@@ -13,6 +13,8 @@
       url: /display-entities/
     - title: Parametric effects
       url: /parametric-effects/
+    - title: Imported shapes
+      url: /imported-shapes/
 - group: Developers
   pages:
     - title: For developers

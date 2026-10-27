@@ -15,6 +15,10 @@ class ParticleBuffer(private var base: Location) {
     // optional per-particle scalar in 0..1 that picks the particle's gradient color
     private var values = DoubleArray(INITIAL_CAPACITY)
     private var valued = false
+
+    // optional per-particle RGB that overrides the gradient
+    private var colors = IntArray(INITIAL_CAPACITY)
+    private var colored = false
     private var boundWorld: World? = null
 
     // rebinds the buffer to a new effect center (pool reuse across plays)
@@ -28,6 +32,7 @@ class ParticleBuffer(private var base: Location) {
         ensureCapacity(size)
         count = size
         valued = false
+        colored = false
         bindWorld()
     }
 
@@ -41,6 +46,7 @@ class ParticleBuffer(private var base: Location) {
         location.z = z
         count++
         if (valued) values[index] = NO_VALUE
+        if (colored) colors[index] = NO_COLOR
     }
 
     // assigns the gradient value of the particle at index
@@ -58,6 +64,21 @@ class ParticleBuffer(private var base: Location) {
     // gradient value at index
     fun valueAt(index: Int): Double = if (valued) values[index] else NO_VALUE
 
+    // assigns the RGB color (0xRRGGBB) of the particle at index
+    fun color(index: Int, rgb: Int) {
+        if (!colored) {
+            colored = true
+            colors.fill(NO_COLOR, 0, count)
+        }
+        colors[index] = rgb and RGB_MASK
+    }
+
+    // true once the effect assigned at least one color this frame
+    fun hasColors(): Boolean = colored
+
+    // RGB at index, or -1 when the particle has none
+    fun colorAt(index: Int): Int = if (colored) colors[index] else NO_COLOR
+
     // returns the reusable Location at the given logical index
     fun location(index: Int): Location = locations[index]
 
@@ -71,6 +92,7 @@ class ParticleBuffer(private var base: Location) {
     fun release() {
         count = 0
         valued = false
+        colored = false
     }
 
     private fun ensureCapacity(size: Int) {
@@ -79,6 +101,9 @@ class ParticleBuffer(private var base: Location) {
         }
         if (values.size < size) {
             values = values.copyOf(maxOf(size, values.size * 2))
+        }
+        if (colors.size < size) {
+            colors = colors.copyOf(maxOf(size, colors.size * 2))
         }
     }
 
@@ -95,6 +120,8 @@ class ParticleBuffer(private var base: Location) {
     companion object {
         private const val INITIAL_CAPACITY = 32
         private const val NO_VALUE = Double.NaN
+        const val NO_COLOR = -1
+        private const val RGB_MASK = 0xFFFFFF
     }
 }
 

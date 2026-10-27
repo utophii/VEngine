@@ -3,6 +3,7 @@ package com.utophii.effects
 import com.utophii.api.EffectOptions
 import com.utophii.api.FollowDefaults
 import org.bukkit.Location
+import org.bukkit.entity.Player
 import java.util.SplittableRandom
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ThreadLocalRandom
@@ -56,7 +57,7 @@ class LSystemEffect(
     // drawings per seed and turning angle
     private val drawings = ConcurrentHashMap<DrawingKey, Drawing>()
 
-    override fun playParameters(configured: Map<String, Double>): Map<String, Double> {
+    override fun playParameters(configured: Map<String, Double>, subject: Player?): Map<String, Double> {
         if (!stochastic || seed != null || SEED_PARAM in configured) {
             return emptyMap()
         }

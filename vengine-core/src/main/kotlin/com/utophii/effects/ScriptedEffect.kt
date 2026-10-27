@@ -49,7 +49,7 @@ class ScriptedEffect(
 
         layers.map { it.bind(subject) }.forEach { bound ->
             val primitive = FXEngine.primitiveEffect(bound.effect) ?: return@forEach
-            val layer = withPlayParameters(bound, primitive, opts)
+            val layer = withPlayParameters(bound, primitive, opts, subject)
             val startTick = layer.startTick.coerceAtLeast(MIN_START_TICKS)
             if (startTick >= totalDuration) {
                 return@forEach
@@ -139,8 +139,8 @@ class ScriptedEffect(
     }
 
     // values the primitive fixes once per play, such as a random seed, join the layer's own parameters
-    private fun withPlayParameters(layer: ScriptedLayer, primitive: ParticleEffect, runtime: EffectOptions): ScriptedLayer {
-        val extra = (primitive as? AbstractParticleEffect)?.playParameters(layer.options.parameters + runtime.parameters).orEmpty()
+    private fun withPlayParameters(layer: ScriptedLayer, primitive: ParticleEffect, runtime: EffectOptions, subject: Player?): ScriptedLayer {
+        val extra = (primitive as? AbstractParticleEffect)?.playParameters(layer.options.parameters + runtime.parameters, subject).orEmpty()
         if (extra.isEmpty()) {
             return layer
         }
