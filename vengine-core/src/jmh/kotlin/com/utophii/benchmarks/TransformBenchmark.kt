@@ -1,5 +1,6 @@
 package com.utophii.benchmarks
 
+import com.utophii.math.FrameTransform
 import com.utophii.math.MathUtils
 import org.bukkit.Location
 import org.bukkit.util.Vector
@@ -16,7 +17,8 @@ import org.openjdk.jmh.infra.Blackhole
 import java.util.concurrent.TimeUnit
 
 // one frame of POINTS particles through the per-particle transform, scores are per particle.
-// transformInto writes into retained Locations, transform is the allocating version it replaced
+// transformInto writes into retained Locations, transform is the allocating version it replaced,
+// frameMatrix is the path writeParticle takes: a matrix built once per frame, checked per particle
 @State(Scope.Thread)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
@@ -33,6 +35,7 @@ open class TransformBenchmark {
     private val zs = DoubleArray(POINTS)
     private val locals = arrayOfNulls<Vector>(POINTS)
     private val outputs = Array(POINTS) { Location(null, 0.0, 0.0, 0.0) }
+    private val frame = FrameTransform()
 
     private var yaw = 0.0
     private var pitch = 0.0
@@ -64,6 +67,17 @@ open class TransformBenchmark {
         for (index in 0 until POINTS) {
             val out = outputs[index]
             MathUtils.transformInto(out, xs[index], ys[index], zs[index], center, SCALE, yaw, tiltAxis, tiltAngle, pitch, roll)
+            blackhole.consume(out)
+        }
+    }
+
+    @Benchmark
+    @OperationsPerInvocation(POINTS)
+    fun frameMatrix(blackhole: Blackhole) {
+        for (index in 0 until POINTS) {
+            val out = outputs[index]
+            frame.prepare(SCALE, yaw, tiltAxis, tiltAngle, pitch, roll)
+            frame.applyInto(out, xs[index], ys[index], zs[index], center)
             blackhole.consume(out)
         }
     }

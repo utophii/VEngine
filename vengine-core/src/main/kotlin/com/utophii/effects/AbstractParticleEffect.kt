@@ -6,7 +6,6 @@ import com.utophii.api.EffectHandle
 import com.utophii.api.ParticleEffect
 import com.utophii.engine.FXEngine
 import com.utophii.engine.FollowAnchor
-import com.utophii.math.MathUtils
 import org.bukkit.Color
 import org.bukkit.Location
 import org.bukkit.Material
@@ -120,7 +119,9 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
         yaw: Double = opts.rotationYaw,
     ) {
         val out = buffer.location(index)
-        MathUtils.transformInto(out, x, y, z, center, opts.scale, yaw, opts.tiltAxis, opts.tiltAngle, opts.rotationPitch, opts.rotationRoll)
+        val transform = buffer.transform
+        transform.prepare(opts.scale, yaw, opts.tiltAxis, opts.tiltAngle, opts.rotationPitch, opts.rotationRoll)
+        transform.applyInto(out, x, y, z, center)
         applyModifiersInto(out, opts, time, context)
     }
 

@@ -1,5 +1,6 @@
 package com.utophii.effects
 
+import com.utophii.math.FrameTransform
 import org.bukkit.Location
 import org.bukkit.World
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -20,6 +21,9 @@ class ParticleBuffer(private var base: Location) {
     private var colors = IntArray(INITIAL_CAPACITY)
     private var colored = false
     private var boundWorld: World? = null
+
+    // rotation matrix of the frame being written, rebuilt only when the effect's orientation changes
+    val transform = FrameTransform()
 
     // rebinds the buffer to a new effect center (pool reuse across plays)
     fun rebind(newBase: Location) {
