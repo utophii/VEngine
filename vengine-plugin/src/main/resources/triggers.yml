@@ -58,7 +58,7 @@
 #
 #vip_join:
 #  event: join
-#  effect: nova
+#  effect: cosmic_gate
 #  permission: true
 #  delay: 20
 #
