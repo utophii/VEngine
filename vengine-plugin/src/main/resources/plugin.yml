@@ -40,3 +40,6 @@ permissions:
     default: op
     children:
       vengine.use: true
+  vengine.trigger.*:
+    description: "Allows firing every trigger with permission: true, vengine.trigger.<id> is registered for each one"
+    default: op

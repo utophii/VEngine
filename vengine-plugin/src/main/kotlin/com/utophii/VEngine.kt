@@ -8,12 +8,15 @@ import com.utophii.engine.FXEngine
 import com.utophii.engine.ParticleBudget
 import com.utophii.mythic.MythicHook
 import com.utophii.placeholders.PlaceholderService
+import com.utophii.triggers.TriggerDefinition
 import com.utophii.triggers.TriggerListener
 import com.utophii.triggers.TriggerLoader
 import com.utophii.triggers.TriggerService
 import dev.faststats.ErrorTracker
 import dev.faststats.bukkit.BukkitContext
 import dev.faststats.data.Metric
+import org.bukkit.permissions.Permission
+import org.bukkit.permissions.PermissionDefault
 import org.bukkit.plugin.java.JavaPlugin
 import org.yaml.snakeyaml.Yaml
 import java.util.Locale
@@ -23,6 +26,8 @@ class VEngine : JavaPlugin() {
     private val placeholders = PlaceholderService(this)
     private val triggers = TriggerService(this)
     private var mythic: MythicHook? = null
+    // vengine.trigger.<id> nodes registered for the current triggers.yml
+    private val triggerPermissions = mutableSetOf<String>()
 
     private val context = BukkitContext.Factory(this, "a98bb29a39e57b6d335a6b67b7402ff6")
         .errorTrackerService(ErrorTracker.contextAware())
@@ -63,6 +68,7 @@ class VEngine : JavaPlugin() {
     }
 
     override fun onDisable() {
+        registerTriggerPermissions(emptyList())
         placeholders.shutdown()
         mythic?.shutdown()
         FXEngine.shutdown()
@@ -90,7 +96,33 @@ class VEngine : JavaPlugin() {
         }
         val definitions = TriggerLoader(logger, mythicInstalled = mythic != null).parse(root.orEmpty())
         triggers.replace(definitions)
+        registerTriggerPermissions(definitions)
         logger.info("VEngine triggers loaded: ${definitions.size}.")
+    }
+
+    // declares vengine.trigger.<id> under vengine.trigger.* so permission plugins list it and the wildcard grants it.
+    // Custom nodes are left alone, another plugin may own them
+    private fun registerTriggerPermissions(definitions: List<TriggerDefinition>) {
+        val manager = server.pluginManager
+        val wanted = definitions.mapNotNullTo(linkedSetOf()) { definition ->
+            definition.permission?.takeIf { it.startsWith(TriggerLoader.PERMISSION_PREFIX) }
+        }
+        val wildcard = manager.getPermission(TRIGGER_WILDCARD_PERMISSION)
+        val stale = triggerPermissions - wanted
+        stale.forEach { name ->
+            manager.removePermission(name)
+            wildcard?.children?.remove(name)
+        }
+        triggerPermissions.removeAll(stale)
+        wildcard?.recalculatePermissibles()
+
+        wanted.filter { manager.getPermission(it) == null }.forEach { name ->
+            val trigger = name.removePrefix(TriggerLoader.PERMISSION_PREFIX)
+            val permission = Permission(name, "Allows firing the VEngine trigger '$trigger'", PermissionDefault.OP)
+            manager.addPermission(permission)
+            permission.addParent(TRIGGER_WILDCARD_PERMISSION, true)
+            triggerPermissions += name
+        }
     }
 
     // VEngine starts before MythicMobs
@@ -161,6 +193,7 @@ class VEngine : JavaPlugin() {
         private const val AUTO_QUALITY_SECTION = "$BUDGET_SECTION.auto-quality"
         private const val PERCENT = 100
         private const val TRIGGERS_FILE = "triggers.yml"
+        private const val TRIGGER_WILDCARD_PERMISSION = "vengine.trigger.*"
         private const val PACKETEVENTS_PLUGIN = "packetevents"
     }
 
