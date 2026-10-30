@@ -61,6 +61,6 @@ and can be used as layer bases in scripted YAML effects.
 
 - Works on Paper and Spigot, 1.21.6 - 26.x. VEngine uses only the stable Bukkit API surface -
   no NMS, so your integration does not care about server versions either.
-- Frame math runs async; `spawnParticle` is the only synchronous step. Your `ParticleEffect.play`
+- Frame math runs async, `spawnParticle` is the only synchronous step. Your `ParticleEffect.play`
   implementation is called from scheduler threads - keep it allocation-light and avoid touching
   the world.

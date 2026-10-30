@@ -41,7 +41,7 @@ Try it with `/ve play crystal_ward`.
 |---|---|---|
 | `type` | `item` | `item`, `block` or `text` |
 | `material` | `AMETHYST_SHARD` (item) / `AMETHYST_BLOCK` (block) | Item model or block state. A non-item / non-block material falls back to the default |
-| `text` | - | `text` only. A string or a list of [MiniMessage](https://docs.advntr.dev/minimessage/format.html) lines; point `i` shows `text[i % size]` |
+| `text` | - | `text` only. A string or a list of [MiniMessage](https://docs.advntr.dev/minimessage/format.html) lines, point `i` shows `text[i % size]` |
 | `size` | `0.5` | Model scale in blocks: a number, or `{x, y, z}` per axis. Multiplied by the layer `scale` |
 | `rotation` | `{x: 0, y: 0, z: 0}` | Base local rotation of each model, radians (applied X, then Y, then Z) |
 | `spin` | `{x: 0, y: 0, z: 0}` | Local angular velocity, radians per tick around each axis |
@@ -60,10 +60,10 @@ Try it with `/ve play crystal_ward`.
 Tips:
 
 - **Count = atom points.** One entity per point, so set `points` (or `samples`) low - `4..32` is
-  typical. A layer is hard-capped at **256** entities; extra points are ignored.
+  typical. A layer is hard-capped at **256** entities, extra points are ignored.
 - **Blocks rotate around their center.** VEngine offsets block models so `spin` and `rotation`
   turn them in place instead of around a corner.
-- **`spin` vs `angularSpeed`.** `angularSpeed` on the atom moves the points around the shape;
+- **`spin` vs `angularSpeed`.** `angularSpeed` on the atom moves the points around the shape,
   `spin` turns each model in place. Combine them for orbiting, self-rotating pieces.
 - **Mixing.** Use `particles: true` to draw particles on top of the same points, or add a separate
   particle layer (as `crystal_ward` does) for an aura.
@@ -104,5 +104,9 @@ These targets do nothing on a layer without `display:`.
 - If something kills an entity mid-effect, VEngine respawns it on the next frame.
 - When an effect is played for an explicit audience (`receivers(...)` in the DSL), the entities are
   hidden from everyone else.
-- Display entities are real entities. A few hundred are fine; thousands across many concurrent
+- Display entities are real entities. A few hundred are fine, but thousands across many concurrent
   effects will cost server ticks and client FPS. Prefer particles for dense clouds.
+- With [PacketEvents](https://modrinth.com/plugin/packetevents) installed, models exist only on the
+  clients as packets, with no server-side entities, and models of followed effects ride the entity.
+  See [Following entities](following-entities.md#display-models-and-packetevents).
+- Display models are not limited by the particle budget.

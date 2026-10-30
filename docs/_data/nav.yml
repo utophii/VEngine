@@ -7,14 +7,24 @@
       url: /commands-and-permissions/
     - title: Placeholders
       url: /placeholders/
+    - title: Triggers
+      url: /triggers/
+    - title: MythicMobs
+      url: /mythicmobs/
     - title: Writing effects
       url: /writing-effects/
+    - title: Following entities
+      url: /following-entities/
     - title: Display entities
       url: /display-entities/
     - title: Parametric effects
       url: /parametric-effects/
+    - title: SDF surfaces and L-systems
+      url: /sdf-and-lsystems/
     - title: Imported shapes
       url: /imported-shapes/
+    - title: Built-in primitives
+      url: /built-in-primitives/
 - group: Developers
   pages:
     - title: For developers

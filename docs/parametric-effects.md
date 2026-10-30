@@ -21,10 +21,10 @@ This is the core of "engine-ness": the bundled effects (`helix`, `torus`, `loren
 
 Supported:
 
-- operators `+ - * / % ^`, parentheses;
-- functions `sin cos tan asin acos atan sinh cosh tanh log log10 log2 exp sqrt cbrt abs ceil floor round`;
-- constants `pi` (≈3.1416), `e` (≈2.718), plus `tau`, `TAU` (≈6.2832), `PI`;
-- variables you declare (`t`, `theta`, `phi`, …) and any named parameters (`R`, `r`, …);
+- operators `+ - * / % ^`, parentheses
+- functions `sin cos tan asin acos atan sinh cosh tanh log log10 log2 exp sqrt cbrt abs ceil floor round`
+- constants `pi` (≈3.1416), `e` (≈2.718), plus `tau`, `TAU` (≈6.2832), `PI`
+- variables you declare (`t`, `theta`, `phi`, …) and any named parameters (`R`, `r`, …)
 - the **magic variable `time`** - the current effect time (in ticks). It is available in every formula
   and lets you animate the shape directly (e.g. a wave) independently of `angularSpeed`.
 
@@ -119,9 +119,9 @@ player.location.playParametric("ring") {
 ```
 
 The `ParametricConfig` builder:
-- `variables(...)`, `samples(...)`, `range(...)`, `ranges(...)`;
-- `x(...)`, `y(...)`, `z(...)`, `angularSpeed(...)`;
-- `default(key, value)`, `defaults(map)`;
+- `variables(...)`, `samples(...)`, `range(...)`, `ranges(...)`
+- `x(...)`, `y(...)`, `z(...)`, `angularSpeed(...)`
+- `default(key, value)`, `defaults(map)`
 - `render { EffectConfig.() -> Unit }` - the same common settings as in `playEffect`.
 
 ## 4. Tips

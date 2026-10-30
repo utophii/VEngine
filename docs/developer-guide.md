@@ -4,8 +4,8 @@ section: Developers
 lede: "The type-safe Kotlin DSL: EffectConfig reference, atoms, modifiers, handles and the SPI."
 ---
 
-> **Requirements:** Paper or Spigot **1.21.6 - 26.x**, Java 21+ (servers on 26.x run Java 25;
-> the plugin itself is built for Java 21 bytecode, so one jar covers the whole range).
+> **Requirements:** Paper or Spigot **1.21.6 - 26.x**, Java 21+ (servers on 26.x run Java 25,
+> but the plugin itself is built for Java 21 bytecode, so one jar covers the whole range).
 
 The DSL is the recommended way to spawn effects from plugin code. Instead of assembling `EffectOptions`
 by hand and calling `FXEngine.play(...)`, you get a readable, self-documenting configuration block that
@@ -66,6 +66,7 @@ All methods configure an effect and its **common** properties. The full table is
 | `particle()` | `Particle` | Bukkit particle type. | `particle(Particle.FLAME)` |
 | `color()` | `Color` | Primary color (start color for `DUST_COLOR_TRANSITION`). | `color(Color.fromRGB(0, 255, 160))` |
 | `toColor()` | `Color` | End color for `DUST_COLOR_TRANSITION`. | `toColor(Color.BLUE)` |
+| `gradient()` | `Color...` | Per-particle colors sampled from these stops, see [Gradients](writing-effects.md#gradients). | `gradient(Color.PURPLE, Color.ORANGE)` |
 | `dustSize()` | `Float` | Dust particle size. | `dustSize(1.4f)` |
 | `material()` | `Material` | Material for `BLOCK`/`FALLING_DUST` and `ITEM`. | `material(Material.AMETHYST_BLOCK)` |
 | `count()` | `Int` | Number of particles per point (min 1). | `count(4)` |
@@ -107,15 +108,15 @@ player.location.playEffect("helix") {
 |---|---|---|
 | `type` | `ITEM` | `ITEM`, `BLOCK` or `TEXT`. |
 | `material` | `AMETHYST_SHARD` | Item model (`ITEM`) or block state (`BLOCK`). |
-| `text` | empty | MiniMessage lines for `TEXT`; point `i` shows `text[i % text.size]`. |
+| `text` | empty | MiniMessage lines for `TEXT`, point `i` shows `text[i % text.size]`. |
 | `size` | `(0.5, 0.5, 0.5)` | Per-axis model scale in blocks, multiplied by `scale`. |
 | `rotation` / `spin` | zero | Base local rotation (radians, X→Y→Z) and angular velocity (radians/tick). |
 | `phase` | `0.0` | Spin offset in ticks between consecutive points. |
 | `billboard` | `null` | `null` = `FIXED` for item/block, `CENTER` for text. |
-| `blockLight` / `skyLight` | `null` | Forced light `0..15`; `null` = world light. |
-| `glowColor` | `null` | Outline glow color; `null` = no glow. |
+| `blockLight` / `skyLight` | `null` | Forced light `0..15`, `null` = world light. |
+| `glowColor` | `null` | Outline glow color, `null` = no glow. |
 | `interpolationTicks` | `2` | Client interpolation for movement and transformation (`0..59`). |
-| `viewRange` | `null` | Render distance multiplier (`1.0` = 64 blocks); `null` = engine view distance. |
+| `viewRange` | `null` | Render distance multiplier (`1.0` = 64 blocks), `null` = engine view distance. |
 | `shadowRadius` / `shadowStrength` | `0.0` / `1.0` | Ground shadow. |
 | `textBackground` / `textShadow` / `seeThrough` | `null` / `false` / `false` | `TEXT` styling. |
 | `withParticles` | `false` | Also spawn the effect's particles at the same points. |
@@ -174,6 +175,10 @@ Orientation notes:
 | `duration()` | `Long` | Duration in **ticks** (20 t = 1 s). | `duration(120L)` |
 | `receivers(vararg)` | `Player...` | Restrict to an explicit audience. Empty = everyone nearby. | `receivers(player, staff)` |
 | `receivers(list)` | `Iterable<Player>` | Same, from a collection. | `receivers(onlinePlayers)` |
+| `follow()` | `Entity, Vector?, FollowRotation?, Boolean?` | Bind the effect to an entity. `null` arguments use the effect's `follow:` block. See [Following entities](following-entities.md). | `follow(player, rotation = FollowRotation.BODY)` |
+| `subject()` | `Player?` | Player whose PlaceholderAPI values fill `%placeholders%` in the effect's YAML. Defaults to the followed player. | `subject(player)` |
+| `budgetExempt()` | `Boolean` | Ignore the particle limits and auto-quality, like `budget: exempt` in YAML. | `budgetExempt()` |
+| `lod()` | `Boolean` | `false` keeps full density at any distance, like `lod: false`. | `lod(false)` |
 | `modifiers { }` | lambda | Nested [modifier DSL](#4-modifiers). | `modifiers { vortex() }` |
 | `parameter()` | `String, Double/Int` | Effect-specific numeric parameter. | `parameter("majorRadius", 1.4)` |
 | `parameters()` | `Map<String, Double>` | Several parameters at once. | `parameters(mapOf(...))` |
@@ -183,28 +188,37 @@ Orientation notes:
 The default `duration` is `1` tick (`EffectOptions.DEFAULT_DURATION_TICKS`). Always set it explicitly
 if you want a live, animated effect.
 
+`Entity.playEffect(name, offset, rotation) { ... }` is a shortcut that calls `follow()` for the
+entity:
+
+```kotlin
+player.playEffect("wings", offset = Vector(0.0, 1.2, -0.3), rotation = FollowRotation.BODY) {
+    duration(EffectOptions.INFINITE_DURATION)
+}
+arrow.playEffect("comet_trail", rotation = FollowRotation.VELOCITY)
+```
+
 ## 3. Primitive atoms and their parameters
 
 VEngine is an **engine for creating effects**, not a "catalog of ready-made ones". Everything is built
 on **atoms**: a small set of building blocks from which you compose effects (YAML layers, formulas,
-modifiers, DSL). Most atoms are **formulas** (see [Parametric Effects](parametric-effects.md)); only the
+modifiers, DSL). Most atoms are **formulas** (see [Parametric Effects](parametric-effects.md)). Only the
 irreducible ones - a uniform sphere and numerically integrated systems - remain as code.
 
-### Irreducible atoms (Kotlin)
-| Name | Parameters | Why code |
-|---|---|---|
-| `sphere` | `radius` (1.5), `points` (160), `angularSpeed` (0.04) | Uniform Fibonacci sphere distribution (not a θ/φ grid). |
-| `rk4_trajectory` | `steps`, `timeStep`, `initialX/Y/Z`, `initialVelocityX/Y/Z`, `gravityX/Y/Z`, `drag`, `curlStrength`, `curlFrequency`, `curlOctaves`, `curlEpsilon` | Numerical ODE integration. |
-| `lorenz` | `sigma` (10), `rho` (28), `beta` (8/3), `dt` (0.015), `steps` (220), `angularSpeed` (0.03) | Numerical attractor integration. |
-| `aizawa` | `alpha` (0.06), `beta` (0.235), `gamma` (12.47), `dt` (0.015), `steps` (220), `angularSpeed` (0.03) | Numerical attractor integration. |
-| `thomas` | `b` (0.211), `dt` (0.025), `steps` (220), `angularSpeed` (0.03) | Numerical attractor integration. |
-| `rossler` | `a` (0.1), `b` (0.2), `c` (5.7), `dt` (0.02), `steps` (220), `angularSpeed` (0.03) | Numerical attractor integration. |
-| `halvorsen` | `a` (1.1), `dt` (0.01), `steps` (220), `angularSpeed` (0.03) | Numerical attractor integration. |
+### Built-in atoms (Kotlin)
+`sphere`, `rk4_trajectory`, the strange attractors (`lorenz`, `aizawa`, `thomas`, `rossler`,
+`halvorsen`), the fractals (`julia`, `sierpinski_triangle`, `sierpinski_tetrahedron`,
+`sierpinski_carpet`, `menger_sponge`) and the Chladni plates (`chladni`, `chladni_circle`) are
+always registered. Every parameter with its default is listed in
+[Built-in primitives](built-in-primitives.md).
 
-The attractors draw one particle per integration step (`steps` = particle count) and spin around
-the vertical axis at `angularSpeed`. `dt` stretches or shortens the visible trajectory; small
-parameter changes can turn a strange attractor into a fixed point or a blow-up, so tweak in small
-increments.
+```kotlin
+location.playEffect("julia") {
+    duration(200)
+    parameter("radius", 1.8)
+    parameter("cOrbit", 0.06)
+}
+```
 
 ### Formula atoms (YAML in `effects/`)
 Atoms defined by formulas. Their parameters are the formula variables (via `parameter`/`parameters`).
@@ -306,7 +320,7 @@ modifiers:
 
 Notes:
 - Displacement is recomputed every frame, so view-distance culling follows the moving effect.
-- `mode: loop` jumps back to the spawn point each cycle (handy for patrol-like paths);
+- `mode: loop` jumps back to the spawn point each cycle (handy for patrol-like paths),
   `ping_pong` travels the path back and forth smoothly.
 - Because motion is an `EffectModifier`, it composes with every primitive, formula atom and scripted
   layer, and stacks with `rotation`, `vortex`, etc.
@@ -444,7 +458,7 @@ Yes, but the old API remains. `playEffect` internally just calls
 - Pattern: extension function + `@DslMarker` annotation (`@VEngineDsl`).
 - `Location.playEffect` creates an `EffectConfig`, applies the config block, builds `EffectOptions`
   via `build()` and hands it to `FXEngine.play(...)`.
-- `EffectConfig` wraps `EffectOptions.builder()`; all its methods delegate to the builder.
+- `EffectConfig` wraps `EffectOptions.builder()`, and all its methods delegate to the builder.
 - `ModifierConfig` collects a `List<EffectModifier>` in call order.
 - `@VEngineDsl` forbids referencing an outer DSL receiver from a nested block - preventing accidental
   "invisible" calls to the parent config's methods.

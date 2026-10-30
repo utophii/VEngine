@@ -1,7 +1,7 @@
 ---
 title: Commands and permissions
 section: Server owners
-lede: "Every /ve command, the permission nodes behind them and the one config key."
+lede: "Every /ve command, the permission nodes behind them and the config.yml keys."
 ---
 
 All commands live under `/vengine`, alias `/ve`. They default to operators.
@@ -14,14 +14,14 @@ All commands live under `/vengine`, alias `/ve`. They default to operators.
 | `/ve list` | Registered effects, plus currently running instances with their IDs | `/ve list` |
 | `/ve play <name> [x y z [world]] [scale] [duration]` | Plays an effect at your position, or at the given coordinates. `scale` multiplies the size, `duration` overrides the effect's duration in ticks (20 ticks = 1 s) | `/ve play torus 2.0 200` |
 | `/ve stop [all\|<id>]` | Stops one running effect by ID, or everything with `all` | `/ve stop torus#3` |
-| `/ve reload` | Reloads `config.yml` and every file in `plugins/VEngine/effects/` | `/ve reload` |
+| `/ve reload` | Reloads `config.yml`, every file in `plugins/VEngine/effects/` and `triggers.yml` | `/ve reload` |
 
 Notes:
 
 - Without coordinates the effect spawns at the caller (a player, an entity or a command block).
   Coordinates accept `~` relative values (`/ve play helix ~ ~2 ~`). The console has no position,
-  so it needs absolute coordinates; without a world name the first loaded world is used.
-- Running effects finish by themselves; `/ve stop` is only needed to end them early.
+  so it needs absolute coordinates. Without a world name the first loaded world is used.
+- Running effects finish by themselves, `/ve stop` is only needed to end them early.
   Finished effects disappear from `/ve list` automatically.
 
 ## Permissions
@@ -33,6 +33,8 @@ Notes:
 | `vengine.effect.stop` | `/ve stop` | op |
 | `vengine.list` | `/ve list` | op |
 | `vengine.reload` | `/ve reload` | op |
+| `vengine.trigger.<id>` | Firing a [trigger](triggers.md) that has `permission: true`. Registered for every such trigger on load and `/ve reload` | op |
+| `vengine.trigger.*` | Every trigger with `permission: true` | op |
 
 ## Configuration
 
@@ -63,7 +65,7 @@ PlaceholderAPI tokens that read this value, and the rest of the engine state, ar
 
 ## Effect files
 
-- Every file in `plugins/VEngine/effects/*.yml` is one effect; the file name (or its `id:` field)
+- Every file in `plugins/VEngine/effects/*.yml` is one effect, and the file name (or its `id:` field)
   is the name used with `/ve play`.
 - Bundled examples are copied only when missing - your edits are never overwritten, and new
   bundled files appear after updates.

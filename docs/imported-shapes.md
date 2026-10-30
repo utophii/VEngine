@@ -24,10 +24,10 @@ with all of them:
 |---|---|---|
 | `size` | `3` | Largest side of the shape, in blocks |
 | `points` | `1200` | Particle cap (at most 4096) |
-| `anchor` | `center` | `center`: centered on the effect position; `base`: standing on it |
+| `anchor` | `center` | `center`: centered on the effect position, `base`: standing on it |
 | `growth` | `0` | Ticks until the whole shape has appeared (0: all at once) |
 | `angularSpeed` | `0` | Spin around the vertical axis, rad/tick |
-| `mode` | depends on the source | How the source turns into particles; see below |
+| `mode` | depends on the source | How the source turns into particles, see below |
 
 2D shapes (pictures, text, SVG) stand upright in the vertical XY plane. Use `rotationYaw`,
 `rotationPitch` or a tilt to lay them down.
@@ -77,7 +77,7 @@ gradient: ["#4cc9f0", "#7209b7", "#f72585"]
 - PlaceholderAPI placeholders are filled in **for the player of every play**: the player who runs
   `/ve play`, or the followed player. Each distinct text is laid out once and then cached. Without
   PlaceholderAPI the text is drawn as written.
-- `mode` is `outline`, `fill` or `fourier`; see [Outlines](#outlines-svg-and-text) below.
+- `mode` is `outline`, `fill` or `fourier`, see [Outlines](#outlines-svg-and-text) below.
 
 ## OBJ models
 
@@ -91,12 +91,12 @@ shape:
 gradient: ["#06d6a0", "#118ab2"]
 ```
 
-- `v`, `f` and `l` lines are read; materials and textures are ignored. Faces may have any number of
+- `v`, `f` and `l` lines are read, materials and textures are ignored. Faces may have any number of
   corners, and negative indices are allowed.
 - OBJ models are y-up, like Minecraft, so they stand the way they were modeled.
 - `mode`:
-  - `vertices`: one particle per vertex;
-  - `edges`: a wireframe, with every shared edge drawn once;
+  - `vertices`: one particle per vertex
+  - `edges`: a wireframe, with every shared edge drawn once
   - `surface` (the default): points spread evenly over the faces, weighted by face area.
 - Gradient values run from the bottom of the model (0) to its top (1).
 
@@ -137,8 +137,8 @@ shape:
 
 | Key / parameter | Default | Meaning |
 |---|---|---|
-| `samples` | `1024` | Points the outline is resampled at (64-4096); more keeps sharp corners |
-| `epicycles` | `100` | Circles in the chain; fewer gives a smoother, rounder drawing |
+| `samples` | `1024` | Points the outline is resampled at (64-4096), more keeps sharp corners |
+| `epicycles` | `100` | Circles in the chain, fewer gives a smoother, rounder drawing |
 | `period` | `200` | Ticks per full loop |
 | `trail` | `1` | Share of the loop that stays visible behind the pen (1 keeps the whole drawing) |
 | `spacing` | `0.12` | Blocks between the particles of arms and circles |
