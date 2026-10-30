@@ -81,7 +81,8 @@ internal class EmitterRunner(
             .scale(scale)
             .receivers(runtime.receivers)
             .subject(runtime.subject)
-        emitter.duration?.let(builder::duration)
+        val duration = emitter.duration ?: DEFAULT_ATOM_DURATION_TICKS.takeIf { effect !is ScriptedEffect }
+        duration?.let(builder::duration)
 
         val handle = if (follow != null) {
             // offsets live in the follow frame, so they turn together with the entity
@@ -101,6 +102,9 @@ internal class EmitterRunner(
     }
 
     companion object {
+        // matches triggers and the MythicMobs mechanic
+        private const val DEFAULT_ATOM_DURATION_TICKS = 60L
+
         // effects spawned by emitters that are still playing, across all parents
         private val live = AtomicInteger()
     }
