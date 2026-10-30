@@ -3,7 +3,10 @@ package com.utophii.effects
 import com.utophii.api.EffectOptions
 import com.utophii.engine.FXEngine
 import com.utophii.engine.FollowAnchor
+import org.bukkit.Color
 import org.bukkit.Location
+import org.bukkit.Material
+import org.bukkit.Particle
 
 // renders the frames of one running effect on the server thread.
 // Origin is the effect's spawn point, the reference for client-side display models
@@ -11,6 +14,10 @@ class FrameRenderer(private val origin: Location) {
     private var displays: DisplayEntityPool? = null
     private var client: ClientDisplays? = null
     private val gradient = GradientColors()
+
+    // particle payload (DustOptions, BlockData, ItemStack) is rebuilt only when the options that shape it change.
+    // Building it per frame allocated an object on every rendered frame of every running effect
+    private val payload = PayloadCache()
 
     // anchor is set for followed effects
     fun render(buffer: ParticleBuffer, opts: EffectOptions, time: Double, anchor: FollowAnchor? = null) {
@@ -50,7 +57,7 @@ class FrameRenderer(private val origin: Location) {
     }
 
     private fun spawnParticles(positions: List<Location>, opts: EffectOptions, colored: Boolean) {
-        val data = AbstractParticleEffect.resolveParticleData(opts)
+        val data = payload.resolve(opts)
         FXEngine.scheduler().spawnParticles(
             locations = positions,
             particle = opts.particle,
@@ -64,6 +71,29 @@ class FrameRenderer(private val origin: Location) {
             dataAt = if (colored && gradient.colorsParticles()) gradient::dataAt else null,
             budgeted = !opts.budgetExempt,
             lod = opts.lod,
+        )
+    }
+
+    // caches the particle payload of one renderer, keyed by the options that determine it
+    private class PayloadCache {
+        private var key: Key? = null
+        private var value: Any? = null
+
+        fun resolve(opts: EffectOptions): Any? {
+            val next = Key(opts.particle, opts.color, opts.toColor, opts.dustSize, opts.material)
+            if (next != key) {
+                key = next
+                value = AbstractParticleEffect.resolveParticleData(opts)
+            }
+            return value
+        }
+
+        private data class Key(
+            val particle: Particle,
+            val color: Color?,
+            val toColor: Color?,
+            val dustSize: Float,
+            val material: Material?,
         )
     }
 }

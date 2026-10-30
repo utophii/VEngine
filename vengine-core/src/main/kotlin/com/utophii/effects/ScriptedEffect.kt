@@ -176,6 +176,10 @@ data class ScriptedLayer(
     val parameterFormulas: Map<String, PlaceholderExpression> = emptyMap(),
 ) {
 
+    // most recent merge result, see mergedBase: runtime options are shared by all frames of a play
+    private var mergedRuntime: EffectOptions? = null
+    private var merged: EffectOptions? = null
+
     // this layer with its placeholder formulas evaluated for one play
     fun bind(subject: Player?): ScriptedLayer {
         if (scaleFormula == null && parameterFormulas.isEmpty()) {
@@ -192,6 +196,16 @@ data class ScriptedLayer(
     // resolves the final layer options for one frame
     // global runtime values from the caller are merged with layer-local YAML values, and then animated tracks override the numeric targets they address
     fun resolveOptions(runtime: EffectOptions, time: Double): EffectOptions {
+        val base = mergedBase(runtime)
+        // a layer without animated tracks resolves to the same options on every frame
+        return if (animation.tracks.isEmpty()) base else animation.apply(base, time)
+    }
+
+    // layer options merged with one runtime options object. The runtime options of a play never change, so the
+    // merge is cached and only repeated when a different play resolves the layer. Rebuilding it per frame
+    // allocated two builders and a copied parameter map per layer per tick
+    private fun mergedBase(runtime: EffectOptions): EffectOptions {
+        merged?.let { cached -> if (runtime === mergedRuntime) return cached }
         val mergedParameters = options.parameters + runtime.parameters
         val builder = options.toBuilder()
 
@@ -222,10 +236,12 @@ data class ScriptedLayer(
         if (runtime.dustSize != EffectOptions.DEFAULT_DUST_SIZE) builder.dustSize(runtime.dustSize)
         if (runtime.particle != DEFAULT_PARTICLE) builder.particle(runtime.particle)
 
-        val animated = animation.apply(builder.build(), time)
-        return animated.toBuilder()
+        val result = builder
             .duration(durationTicks ?: runtime.duration)
             .build()
+        mergedRuntime = runtime
+        merged = result
+        return result
     }
 
     // checks whether the layer should contribute at the supplied absolute effect time
@@ -254,7 +270,9 @@ data class NumericAnimation(
         }
 
         val builder = options.toBuilder()
-        val parameters = options.parameters.toMutableMap()
+        // the parameter map is only copied when a track actually addresses one
+        val parameterTracks = tracks.any { track -> track.target.startsWith(PARAMETER_TARGET_PREFIX, ignoreCase = true) }
+        val parameters = if (parameterTracks) options.parameters.toMutableMap() else null
         val colorChannels = mutableMapOf(
             COLOR_RED_TARGET to (options.color?.red?.toDouble() ?: 255.0),
             COLOR_GREEN_TARGET to (options.color?.green?.toDouble() ?: 255.0),
@@ -273,7 +291,7 @@ data class NumericAnimation(
                 track.target.equals(TILT_ANGLE_TARGET, ignoreCase = true) -> builder.tiltAngle(value)
                 track.target.startsWith(PARAMETER_TARGET_PREFIX, ignoreCase = true) -> {
                     val key = track.target.substring(PARAMETER_TARGET_PREFIX.length)
-                    if (key.isNotBlank()) {
+                    if (key.isNotBlank() && parameters != null) {
                         parameters[key] = value
                     }
                 }
@@ -305,7 +323,7 @@ data class NumericAnimation(
             }
         }
 
-        builder.parameters(parameters)
+        if (parameters != null) builder.parameters(parameters)
         builder.display(display)
         if (colorTouched) {
             builder.color(

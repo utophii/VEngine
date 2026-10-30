@@ -34,7 +34,25 @@ class VEngineExpansion(
         }
     }
 
+    // the registry does not change within a tick, but scoreboard and tab plugins ask for a placeholder
+    // once per player per refresh: rebuilding the snapshot per request allocated a list of every running
+    // effect plus a sorted copy of every effect name thousands of times per second on a busy server
+    private var cached: VEnginePlaceholders.Snapshot? = null
+    private var cachedTick: Int = -1
+
     private fun snapshot(): VEnginePlaceholders.Snapshot {
+        val tick = plugin.server.currentTick
+        val current = cached
+        if (current != null && cachedTick == tick) {
+            return current
+        }
+        return buildSnapshot().also { built ->
+            cached = built
+            cachedTick = tick
+        }
+    }
+
+    private fun buildSnapshot(): VEnginePlaceholders.Snapshot {
         return VEnginePlaceholders.Snapshot(
             effectNames = FXEngine.effectNames(),
             running = FXEngine.runningEffects().map { effect ->

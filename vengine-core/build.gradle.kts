@@ -39,6 +39,15 @@ dependencies {
     jmhImplementation("io.papermc.paper:paper-api:1.21.6-R0.1-SNAPSHOT")
 }
 
+// ./gradlew :vengine-core:hotpath - a small single-JVM harness, safe to run on a busy or tiny machine
+tasks.register<JavaExec>("hotpath") {
+    group = "verification"
+    description = "Runs the calculate/render frame harness in one JVM and prints ns and bytes per frame"
+    classpath = sourceSets["jmh"].runtimeClasspath
+    mainClass.set("com.utophii.benchmarks.HotPathMain")
+    jvmArgs("-Xmx512m", "-XX:+UseSerialGC")
+}
+
 // ./gradlew :vengine-core:jmh, or -Pjmh.includes=Transform to run one class
 jmh {
     jmhVersion.set("1.37")
