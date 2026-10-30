@@ -24,14 +24,17 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
         val stableCenter = center.clone()
         val renderer = FrameRenderer(stableCenter)
         val anchor = played.follow?.let { follow -> FollowAnchor(follow.withDefaults(followDefaults), stableCenter) }
+        // frames of one play are calculated one at a time
+        var lastSize = 0
         return FXEngine.scheduler().scheduleFrames(
             effectName = name,
             durationTicks = played.duration.coerceAtLeast(MIN_DURATION_TICKS),
             origin = stableCenter,
             calculate = { time ->
-                val buffer = ParticleBufferPool.obtain(stableCenter)
+                val buffer = ParticleBufferPool.obtain(stableCenter, lastSize)
                 try {
                     calculateInto(buffer, stableCenter, played, time)
+                    lastSize = buffer.list().size
                     buffer
                 } catch (t: Throwable) {
                     ParticleBufferPool.release(buffer)

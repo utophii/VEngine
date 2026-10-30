@@ -86,13 +86,29 @@ class ParticleBufferTest {
 
     @Test
     fun `pool does not reuse a buffer that grew beyond the bound`() {
-        // obtain and grow far beyond MAX_CAPACITY so it is not returned to the pool
+        // grown past the large tier, so it is not returned to the pool
         val huge = ParticleBufferPool.obtain(location(0.0, 0.0, 0.0))
-        huge.acquire(5000)
-        ParticleBufferPool.release(huge) // dropped due to size bound
+        huge.acquire(ParticleBufferPool.LARGE_CAPACITY + 1)
+        ParticleBufferPool.release(huge)
 
-        val fresh = ParticleBufferPool.obtain(location(0.0, 0.0, 0.0))
+        val fresh = ParticleBufferPool.obtain(location(0.0, 0.0, 0.0), ParticleBufferPool.LARGE_CAPACITY + 1)
         assertTrue(fresh !== huge, "oversized buffer must not be reused")
+    }
+
+    @Test
+    fun `large buffers are reused only by large frames`() {
+        val large = ParticleBufferPool.obtain(location(0.0, 0.0, 0.0), LARGE_FRAME)
+        large.acquire(LARGE_FRAME)
+        ParticleBufferPool.release(large)
+
+        val small = ParticleBufferPool.obtain(location(0.0, 0.0, 0.0), 16)
+        assertTrue(small !== large, "a small frame must not take the large buffer")
+        ParticleBufferPool.release(small)
+
+        // other tests may have pooled large buffers too, so check the reuse rather than the instance
+        val reused = ParticleBufferPool.obtain(location(0.0, 0.0, 0.0), LARGE_FRAME)
+        assertTrue(reused.capacity() >= LARGE_FRAME, "a large frame must get a pooled large buffer")
+        ParticleBufferPool.release(reused)
     }
 
     @Test
@@ -115,5 +131,6 @@ class ParticleBufferTest {
 
     companion object {
         private const val EPS = 1.0E-9
+        private const val LARGE_FRAME = 10_000
     }
 }

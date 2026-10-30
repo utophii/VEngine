@@ -16,13 +16,14 @@ import java.util.concurrent.TimeUnit
 
 // one frame's buffer lifecycle as an effect sees it: obtain, fill size particles, release.
 // Pooled reuses retained Locations, fresh builds a new buffer every frame, which is what the pool avoids.
-// 8192 is above the pool's capacity cap
+// pooled passes the frame size as its hint, as effects do with their previous frame.
+// 8192 and 16384 land in the large tier, 65536 is past it and is dropped
 @State(Scope.Thread)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 open class ParticleBufferPoolBenchmark {
 
-    @Param("64", "1024", "4096", "8192")
+    @Param("64", "1024", "4096", "8192", "16384", "65536")
     @JvmField
     var size: Int = 0
 
@@ -30,7 +31,7 @@ open class ParticleBufferPoolBenchmark {
 
     @Benchmark
     fun pooled(blackhole: Blackhole) {
-        val buffer = ParticleBufferPool.obtain(center)
+        val buffer = ParticleBufferPool.obtain(center, size)
         fill(buffer)
         blackhole.consume(buffer.list())
         ParticleBufferPool.release(buffer)

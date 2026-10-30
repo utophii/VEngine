@@ -4,6 +4,7 @@ import com.utophii.math.FrameTransform
 import org.bukkit.Location
 import org.bukkit.World
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 
 // Reusable, pooled frame buffer that retains a fixed set of [Location] objects across ticks.
 // The hot render path therefore allocates no per-particle Location on every frame.
@@ -132,27 +133,49 @@ class ParticleBuffer(private var base: Location) {
 // Thread-safe pool of reusable [ParticleBuffer] instances.
 // Buffers are handed out exclusively (one per in-flight frame) and returned after rendering,
 // which removes the steady-state allocation of particle locations from the hot path.
+// Two tiers: many ordinary buffers, and a few large ones so dense surfaces are pooled too
+// without a pile of multi-megabyte buffers staying in memory. Larger buffers are dropped
 object ParticleBufferPool {
-    private const val MAX_BUFFERS = 64
-    private const val MAX_CAPACITY = 4096
+    const val SMALL_CAPACITY = 4096
+    const val LARGE_CAPACITY = 32768
+    private const val MAX_SMALL_BUFFERS = 64
+    private const val MAX_LARGE_BUFFERS = 4
 
-    private val free = ConcurrentLinkedQueue<ParticleBuffer>()
+    private val small = Tier(MAX_SMALL_BUFFERS)
+    private val large = Tier(MAX_LARGE_BUFFERS)
 
-    // obtains a reusable buffer bound to the supplied effect center
-    fun obtain(base: Location): ParticleBuffer {
-        val buffer = free.poll()
-        return if (buffer != null) {
-            buffer.rebind(base)
-            buffer
-        } else {
-            ParticleBuffer(base)
+    // obtains a reusable buffer bound to the supplied effect center.
+    // sizeHint is the particle count the caller expects, usually its previous frame's,
+    // so a small frame does not take a large buffer that a dense effect needs
+    fun obtain(base: Location, sizeHint: Int = 0): ParticleBuffer {
+        val tier = if (sizeHint > SMALL_CAPACITY) large else small
+        val buffer = tier.poll() ?: return ParticleBuffer(base)
+        buffer.rebind(base)
+        return buffer
+    }
+
+    // returns a buffer to the pool for reuse, dropping it when its tier is full or it grew past every tier
+    fun release(buffer: ParticleBuffer) {
+        buffer.release()
+        val capacity = buffer.capacity()
+        when {
+            capacity <= SMALL_CAPACITY -> small.offer(buffer)
+            capacity <= LARGE_CAPACITY -> large.offer(buffer)
         }
     }
 
-    // returns a buffer to the pool for reuse, dropping it when it grew too large for memory pressure
-    fun release(buffer: ParticleBuffer) {
-        buffer.release()
-        if (buffer.capacity() <= MAX_CAPACITY && free.size < MAX_BUFFERS) {
+    // a bounded free list, the counter avoids ConcurrentLinkedQueue.size, which walks the whole queue
+    private class Tier(private val limit: Int) {
+        private val free = ConcurrentLinkedQueue<ParticleBuffer>()
+        private val count = AtomicInteger()
+
+        fun poll(): ParticleBuffer? = free.poll()?.also { count.decrementAndGet() }
+
+        fun offer(buffer: ParticleBuffer) {
+            if (count.incrementAndGet() > limit) {
+                count.decrementAndGet()
+                return
+            }
             free.offer(buffer)
         }
     }

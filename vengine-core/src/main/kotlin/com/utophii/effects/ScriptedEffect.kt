@@ -59,6 +59,8 @@ class ScriptedEffect(
             val layerDuration = layer.durationTicks?.coerceAtLeast(MIN_DURATION_TICKS) ?: remainingDuration
             val clampedDuration = layerDuration.coerceAtMost(remainingDuration)
             val renderer = FrameRenderer(stableCenter)
+            // frames of one layer are calculated one at a time
+            var lastSize = 0
 
             val handle = FXEngine.scheduler().scheduleFrames(
                 effectName = "${name}_${layer.effect}",
@@ -66,7 +68,7 @@ class ScriptedEffect(
                 durationTicks = clampedDuration,
                 calculate = { time ->
                     val resolvedOptions = layer.resolveOptions(opts, time)
-                    val buffer = ParticleBufferPool.obtain(stableCenter)
+                    val buffer = ParticleBufferPool.obtain(stableCenter, lastSize)
                     try {
                         // primitives write directly into the pooled buffer; fall back to a copy for non-primitive effects
                         val cast = primitive as? AbstractParticleEffect
@@ -82,6 +84,7 @@ class ScriptedEffect(
                                 target.z = location.z
                             }
                         }
+                        lastSize = buffer.list().size
                         LayerFrame(resolvedOptions, buffer)
                     } catch (t: Throwable) {
                         ParticleBufferPool.release(buffer)
