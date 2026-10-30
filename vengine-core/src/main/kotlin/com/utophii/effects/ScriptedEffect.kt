@@ -211,6 +211,8 @@ data class ScriptedLayer(
         if (runtime.gradient.isNotEmpty()) builder.gradient(runtime.gradient)
         runtime.material?.let(builder::material)
         runtime.display?.let(builder::display)
+        if (runtime.budgetExempt) builder.budgetExempt(true)
+        if (!runtime.lod) builder.lod(false)
 
         if (runtime.count != EffectOptions.DEFAULT_PARTICLE_COUNT) builder.count(runtime.count)
         if (runtime.speed != EffectOptions.DEFAULT_PARTICLE_SPEED) builder.speed(runtime.speed)

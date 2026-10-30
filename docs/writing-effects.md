@@ -97,6 +97,19 @@ display:
 
 All keys, animation targets and limits: [Display entities](display-entities.md).
 
+### Particle budget
+
+The server thins particles out with distance and under lag (see `particle-budget` in
+[Configuration](commands-and-permissions.md#configuration)). Two keys opt an effect out, either at the
+top of the file (every layer) or on one layer:
+
+```yaml
+budget: exempt   # ignore the particle limits and auto-quality (boss telegraphs, cutscenes)
+lod: false       # full density at any distance up to view-distance
+```
+
+Use `exempt` sparingly: exempt particles are sent even when a player or the server is over budget.
+
 ### Modifiers
 
 Post-processing applied to every particle of a layer, each frame:

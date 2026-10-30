@@ -62,6 +62,8 @@ class FrameRenderer(private val origin: Location) {
             offsetZ = opts.offsetZ,
             speed = opts.speed,
             dataAt = if (colored && gradient.colorsParticles()) gradient::dataAt else null,
+            budgeted = !opts.budgetExempt,
+            lod = opts.lod,
         )
     }
 }

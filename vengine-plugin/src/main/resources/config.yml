@@ -11,3 +11,34 @@ view-distance: 64
 # may play at once across the whole server. Emissions beyond the limit
 # are skipped, which keeps runaway emitters from flooding clients.
 max-emitted-effects: 256
+
+# particle-budget: caps how many particles VEngine sends, so crowded
+# areas and lag spikes do not flood clients or the server thread.
+# Over a limit, every effect is thinned out evenly instead of being cut
+# off: each player keeps a stable subset of points, so shapes stay whole
+# and do not flicker. Effects with `budget: exempt` in their YAML ignore
+# the limits and auto-quality; `lod: false` turns distance LOD off.
+particle-budget:
+  # particles per tick sent across the whole server, 0 = unlimited
+  global-limit: 0
+  # particles per tick one player receives, 0 = unlimited.
+  # Protects client FPS when many effects play around one player
+  player-limit: 3000
+  # distance LOD, `blocks: keep fraction`. Density is interpolated between
+  # steps; beyond the last step its fraction applies up to view-distance.
+  # Remove all steps to send full density at any distance
+  lod:
+    16: 1.0
+    32: 0.6
+    64: 0.3
+  # auto-quality: thins all budgeted particles while the server lags.
+  # Thresholds are the average tick time in milliseconds (50 ms = 20 TPS
+  # limit), `ms: keep fraction`. The level drops as soon as a threshold is
+  # crossed and recovers once the tick time is recover-margin ms below it
+  auto-quality:
+    enabled: true
+    recover-margin: 3
+    levels:
+      40: 0.75
+      45: 0.5
+      50: 0.25

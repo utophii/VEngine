@@ -129,6 +129,12 @@ object FXEngine {
     // configured particle view distance, or the default when the engine is not initialized
     fun viewDistance(): Double = scheduler?.viewDistance ?: EffectScheduler.DEFAULT_VIEW_DISTANCE_BLOCKS
 
+    // keep fraction the lag-driven auto-quality currently applies, 1.0 = full quality
+    fun particleQuality(): Double = scheduler?.budget?.quality?.keep ?: 1.0
+
+    // particles sent to players during the last tick
+    fun particlesLastTick(): Int = scheduler?.budget?.sentLastTick ?: 0
+
     // returns the active scheduler or fails if the plugin was not initialized
     fun scheduler(): EffectScheduler = requireNotNull(scheduler) { "FXEngine is not initialized" }
 

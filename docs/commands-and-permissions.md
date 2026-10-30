@@ -41,6 +41,20 @@ Notes:
 | Key | Default | Description |
 |---|---|---|
 | `view-distance` | `64` | Particle view-distance culling radius in blocks. A player farther than this from a particle receives no packets for it. Raise for huge shows, lower to save bandwidth |
+| `max-emitted-effects` | `256` | How many effects spawned by `emitters:` / `then:` may play at once across the server |
+| `particle-budget.global-limit` | `0` | Particles per tick sent across the whole server, `0` = unlimited |
+| `particle-budget.player-limit` | `3000` | Particles per tick one player receives, `0` = unlimited. Protects client FPS in crowded areas |
+| `particle-budget.lod` | `16: 1.0`, `32: 0.6`, `64: 0.3` | Distance LOD as `blocks: keep fraction`, interpolated between steps. Empty = full density everywhere |
+| `particle-budget.auto-quality.enabled` | `true` | Thin particles out while the server lags |
+| `particle-budget.auto-quality.levels` | `40: 0.75`, `45: 0.5`, `50: 0.25` | `average tick ms: keep fraction`. Checked once a second |
+| `particle-budget.auto-quality.recover-margin` | `3` | Milliseconds below a threshold before quality steps back up |
+
+Over a limit, every effect is thinned out evenly instead of being cut off: each particle has a
+fixed rank, and a player receives the particles whose rank is below the current keep fraction.
+Shapes stay whole, and the kept points do not flicker from frame to frame. Limits use the previous
+tick's demand, so they settle within a tick or two. Display entities are not budgeted. Effects
+can opt out with `budget: exempt` or `lod: false`, see
+[Writing your own effects](writing-effects.md#particle-budget).
 
 Changes apply with `/ve reload`.
 

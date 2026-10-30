@@ -5,6 +5,7 @@ import com.utophii.config.YamlEffectLoader
 import com.utophii.effects.packet.PacketDisplaysBootstrap
 import com.utophii.engine.EffectScheduler
 import com.utophii.engine.FXEngine
+import com.utophii.engine.ParticleBudget
 import com.utophii.mythic.MythicHook
 import com.utophii.placeholders.PlaceholderService
 import com.utophii.triggers.TriggerListener
@@ -15,6 +16,7 @@ import dev.faststats.bukkit.BukkitContext
 import dev.faststats.data.Metric
 import org.bukkit.plugin.java.JavaPlugin
 import org.yaml.snakeyaml.Yaml
+import java.util.Locale
 
 class VEngine : JavaPlugin() {
     private lateinit var yamlEffectLoader: YamlEffectLoader
@@ -106,6 +108,8 @@ class VEngine : JavaPlugin() {
     // reads plugin configuration and applies view-distance culling to the active scheduler
     private fun applyConfig() {
         saveDefaultConfig()
+        // getConfig() caches the file
+        reloadConfig()
         val viewDistance = config.getDouble(
             VIEW_DISTANCE_CONFIG_KEY,
             EffectScheduler.DEFAULT_VIEW_DISTANCE_BLOCKS,
@@ -113,11 +117,49 @@ class VEngine : JavaPlugin() {
         FXEngine.scheduler().viewDistance = viewDistance
         logger.info("VEngine particle view distance set to ${FXEngine.scheduler().viewDistance} blocks.")
         FXEngine.maxEmittedEffects = config.getInt(MAX_EMITTED_EFFECTS_CONFIG_KEY, FXEngine.DEFAULT_MAX_EMITTED_EFFECTS)
+        applyBudget(FXEngine.scheduler())
     }
+
+    // reads the particle-budget section
+    private fun applyBudget(scheduler: EffectScheduler) {
+        val budget = scheduler.budget
+        budget.globalLimit = config.getInt("$BUDGET_SECTION.global-limit", ParticleBudget.UNLIMITED)
+        budget.playerLimit = config.getInt("$BUDGET_SECTION.player-limit", ParticleBudget.UNLIMITED)
+        budget.lod = keepSteps("$BUDGET_SECTION.lod").map { (distance, keep) -> ParticleBudget.LodStep(distance, keep) }
+
+        val quality = budget.quality
+        quality.enabled = config.getBoolean("$AUTO_QUALITY_SECTION.enabled", false)
+        quality.recoverMargin = config.getDouble("$AUTO_QUALITY_SECTION.recover-margin", ParticleBudget.DEFAULT_RECOVER_MARGIN)
+        quality.levels = keepSteps("$AUTO_QUALITY_SECTION.levels").map { (mspt, keep) -> ParticleBudget.QualityLevel(mspt, keep) }
+        scheduler.onQualityChange = {
+            val keep = (quality.keep * PERCENT).toInt()
+            val mspt = String.format(Locale.US, "%.1f", server.averageTickTime)
+            logger.info("VEngine particle quality set to $keep% (average tick $mspt ms).")
+        }
+
+        logger.info(
+            "VEngine particle budget: global ${limitText(budget.globalLimit)}, per player ${limitText(budget.playerLimit)}, " +
+                "${budget.lod.size} LOD steps, auto-quality ${if (quality.enabled) "on" else "off"}.",
+        )
+    }
+
+    private fun keepSteps(path: String): List<Pair<Double, Double>> {
+        // a config.yml from an older version lacks the section, the bundled defaults fill in
+        val section = (if (config.contains(path, true)) config.getConfigurationSection(path) else config.defaults?.getConfigurationSection(path))
+            ?: return emptyList()
+        return KeepSteps.parse(section) { key ->
+            logger.warning("Ignoring '$path.$key' in config.yml: expected '<number>: <fraction 0..1>'.")
+        }
+    }
+
+    private fun limitText(limit: Int): String = if (limit == ParticleBudget.UNLIMITED) "unlimited" else "$limit/tick"
 
     companion object {
         private const val VIEW_DISTANCE_CONFIG_KEY = "view-distance"
         private const val MAX_EMITTED_EFFECTS_CONFIG_KEY = "max-emitted-effects"
+        private const val BUDGET_SECTION = "particle-budget"
+        private const val AUTO_QUALITY_SECTION = "$BUDGET_SECTION.auto-quality"
+        private const val PERCENT = 100
         private const val TRIGGERS_FILE = "triggers.yml"
         private const val PACKETEVENTS_PLUGIN = "packetevents"
     }

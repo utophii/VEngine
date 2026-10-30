@@ -1,6 +1,7 @@
 package com.utophii.placeholders
 
 import java.util.Locale
+import kotlin.math.roundToInt
 
 object VEnginePlaceholders {
     const val IDENTIFIER = "vengine"
@@ -17,6 +18,8 @@ object VEnginePlaceholders {
         "%${IDENTIFIER}_nearest_id%",
         "%${IDENTIFIER}_nearest_distance%",
         "%${IDENTIFIER}_nearby%",
+        "%${IDENTIFIER}_quality%",
+        "%${IDENTIFIER}_particles_tick%",
     )
 
     // returns null when the token is unknown, or when a player-relative token is asked without a viewer
@@ -44,6 +47,8 @@ object VEnginePlaceholders {
                 formatNumber(distance(current, closest))
             }
             NEARBY -> playerValue(viewer) { nearbyCount(snapshot, it).toString() }
+            QUALITY -> (snapshot.quality * PERCENT).roundToInt().toString()
+            PARTICLES_TICK -> snapshot.particlesPerTick.toString()
             else -> null
         }
     }
@@ -92,6 +97,9 @@ object VEnginePlaceholders {
         val effectNames: List<String>,
         val running: List<Running>,
         val viewDistance: Double,
+        // auto-quality keep fraction, 1.0 = full
+        val quality: Double = 1.0,
+        val particlesPerTick: Int = 0,
     )
 
     data class Running(
@@ -121,6 +129,9 @@ object VEnginePlaceholders {
     private const val NEAREST_ID = "nearest_id"
     private const val NEAREST_DISTANCE = "nearest_distance"
     private const val NEARBY = "nearby"
+    private const val QUALITY = "quality"
+    private const val PARTICLES_TICK = "particles_tick"
+    private const val PERCENT = 100
     private const val ONE_DECIMAL = "%.1f"
     private const val TRAILING_ZERO = ".0"
 }

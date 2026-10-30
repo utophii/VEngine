@@ -143,6 +143,12 @@ class EffectConfig {
     // the player whose PlaceholderAPI values fill %placeholders% in the effect's YAML
     fun subject(player: Player?) = builder.subject(player)
 
+    // ignores the particle limits and the lag-driven quality drop
+    fun budgetExempt(value: Boolean = true) = builder.budgetExempt(value)
+
+    // false keeps full density at any distance
+    fun lod(value: Boolean) = builder.lod(value)
+
     fun modifiers(block: ModifierConfig.() -> Unit) {
         builder.modifiers(ModifierConfig().apply(block).build())
     }

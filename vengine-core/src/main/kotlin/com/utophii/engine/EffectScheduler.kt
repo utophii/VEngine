@@ -45,6 +45,14 @@ class EffectScheduler(val plugin: JavaPlugin) {
     private val viewDistanceSquared: Double
         get() = viewDistance * viewDistance
 
+    // particle limits, distance LOD and lag-driven quality applied to every spawned particle
+    val budget = ParticleBudget()
+
+    // called on the server thread after lag changed the quality level
+    var onQualityChange: (() -> Unit)? = null
+    private var tickCounter = 0L
+    private var singleRank = 0
+
     // advanced once per server tick by the loop
     internal interface Tickable {
         fun tick(): Boolean
@@ -59,6 +67,12 @@ class EffectScheduler(val plugin: JavaPlugin) {
 
     // renders the frames calculated since the last tick
     private fun tick() {
+        budget.startTick()
+        if (budget.quality.enabled && tickCounter++ % QUALITY_CHECK_TICKS == 0L) {
+            if (budget.quality.update(plugin.server.averageTickTime)) {
+                onQualityChange?.invoke()
+            }
+        }
         while (true) {
             val delivery = completed.poll() ?: break
             runGuarded(delivery::run)
@@ -271,6 +285,7 @@ class EffectScheduler(val plugin: JavaPlugin) {
 
     // spawns a particle only to players within the configured view distance of the particle location
     // explicit receivers are filtered by distance; when none are given the particle is broadcast only to nearby online players in the same world
+    // budgeted particles count against the limits and thin out with lag, lod thins them out with distance
     fun spawnParticle(
         location: Location,
         particle: Particle,
@@ -281,14 +296,22 @@ class EffectScheduler(val plugin: JavaPlugin) {
         offsetY: Double = DEFAULT_PARTICLE_OFFSET,
         offsetZ: Double = DEFAULT_PARTICLE_OFFSET,
         speed: Double = DEFAULT_PARTICLE_SPEED,
+        budgeted: Boolean = true,
+        lod: Boolean = true,
     ) {
-        spawnParticles(listOf(location), particle, data, receivers, count, offsetX, offsetY, offsetZ, speed)
+        // lone particles take turns in rank, otherwise every one of them would be kept or dropped together
+        spawnParticles(
+            listOf(location), particle, data, receivers, count, offsetX, offsetY, offsetZ, speed,
+            budgeted = budgeted, lod = lod, rankOffset = singleRank++,
+        )
     }
 
     // spawns one frame of particles with the same culling as spawnParticle.
     // Nearby players are resolved once per frame: candidates are pre-culled against the frame's bounding box,
     // then each particle is checked against cached player coordinates
-    // dataAt, when given, supplies the payload of each particle by index
+    // dataAt, when given, supplies the payload of each particle by index.
+    // Each player receives a stable subset of the frame sized by the budget, see ParticleBudget,
+    // rankOffset shifts which indices form that subset
     fun spawnParticles(
         locations: List<Location>,
         particle: Particle,
@@ -300,6 +323,9 @@ class EffectScheduler(val plugin: JavaPlugin) {
         offsetZ: Double = DEFAULT_PARTICLE_OFFSET,
         speed: Double = DEFAULT_PARTICLE_SPEED,
         dataAt: ((Int) -> Any?)? = null,
+        budgeted: Boolean = true,
+        lod: Boolean = true,
+        rankOffset: Int = 0,
     ) {
         if (locations.isEmpty()) {
             return
@@ -309,9 +335,18 @@ class EffectScheduler(val plugin: JavaPlugin) {
         locations.forEachIndexed { index, location ->
             val world = location.world ?: return@forEachIndexed
             val current = viewers?.takeIf { it.world == world }
-                ?: FrameViewers.collect(world, locations, explicitReceivers, viewDistance).also { viewers = it }
+                ?: FrameViewers.collect(world, locations, explicitReceivers, viewDistance, budget).also { viewers = it }
             val payload = if (dataAt != null) dataAt(index) else data
-            current.forEachNear(location, viewDistanceSquared) { player ->
+            val rank = ParticleBudget.rank(index + rankOffset)
+            current.forEachNear(location, viewDistanceSquared) { viewer, distanceSquared ->
+                if (budgeted) {
+                    val base = budget.baseKeep(distanceSquared, lod)
+                    if (!budget.admit(current.loads[viewer], rank, base, count)) return@forEachNear
+                } else if (lod && rank >= budget.distanceKeep(distanceSquared)) {
+                    return@forEachNear
+                }
+                val player = current.players[viewer]
+                budget.sent(count)
                 player.spawnParticle(
                     particle,
                     location,
@@ -329,10 +364,12 @@ class EffectScheduler(val plugin: JavaPlugin) {
     // online players of one world that may see any particle of the current frame, with their positions sampled once
     private class FrameViewers(
         val world: World,
-        private val players: List<Player>,
+        val players: List<Player>,
+        val loads: List<ParticleBudget.PlayerLoad>,
         private val coordinates: DoubleArray,
     ) {
-        inline fun forEachNear(location: Location, radiusSquared: Double, action: (Player) -> Unit) {
+        // action receives the viewer index and its squared distance to the location
+        inline fun forEachNear(location: Location, radiusSquared: Double, action: (Int, Double) -> Unit) {
             val x = location.x
             val y = location.y
             val z = location.z
@@ -340,8 +377,9 @@ class EffectScheduler(val plugin: JavaPlugin) {
                 val dx = coordinates[index * AXES] - x
                 val dy = coordinates[index * AXES + 1] - y
                 val dz = coordinates[index * AXES + 2] - z
-                if (dx * dx + dy * dy + dz * dz <= radiusSquared) {
-                    action(players[index])
+                val distanceSquared = dx * dx + dy * dy + dz * dz
+                if (distanceSquared <= radiusSquared) {
+                    action(index, distanceSquared)
                 }
             }
         }
@@ -350,7 +388,13 @@ class EffectScheduler(val plugin: JavaPlugin) {
             private const val AXES = 3
 
             // keeps the candidates within radius of the bounding box of the frame's particles in this world
-            fun collect(world: World, locations: List<Location>, explicitReceivers: List<Player>, radius: Double): FrameViewers {
+            fun collect(
+                world: World,
+                locations: List<Location>,
+                explicitReceivers: List<Player>,
+                radius: Double,
+                budget: ParticleBudget,
+            ): FrameViewers {
                 var minX = Double.POSITIVE_INFINITY
                 var minY = Double.POSITIVE_INFINITY
                 var minZ = Double.POSITIVE_INFINITY
@@ -366,6 +410,7 @@ class EffectScheduler(val plugin: JavaPlugin) {
 
                 val candidates = explicitReceivers.ifEmpty { world.players }
                 val players = ArrayList<Player>(candidates.size)
+                val loads = ArrayList<ParticleBudget.PlayerLoad>(candidates.size)
                 val coordinates = DoubleArray(candidates.size * AXES)
                 val radiusSquared = radius * radius
                 candidates.forEach { player ->
@@ -380,8 +425,9 @@ class EffectScheduler(val plugin: JavaPlugin) {
                     coordinates[offset + 1] = position.y
                     coordinates[offset + 2] = position.z
                     players.add(player)
+                    loads.add(budget.load(player.uniqueId))
                 }
-                return FrameViewers(world, players, coordinates)
+                return FrameViewers(world, players, loads, coordinates)
             }
 
             // distance from value to the [min, max] interval along one axis
@@ -415,6 +461,7 @@ class EffectScheduler(val plugin: JavaPlugin) {
     companion object {
         private const val INITIAL_DELAY_TICKS = 0L
         private const val FRAME_PERIOD_TICKS = 1L
+        private const val QUALITY_CHECK_TICKS = 20L
         private const val MIN_COMPOSITE_TTL_TICKS = 1L
         private val CALCULATOR_THREADS = (Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(1)
         private const val DEFAULT_PARTICLE_COUNT = 1

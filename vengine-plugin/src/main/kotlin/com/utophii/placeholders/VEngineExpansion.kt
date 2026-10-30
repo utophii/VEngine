@@ -48,6 +48,8 @@ class VEngineExpansion(
                 )
             },
             viewDistance = FXEngine.viewDistance(),
+            quality = FXEngine.particleQuality(),
+            particlesPerTick = FXEngine.particlesLastTick(),
         )
     }
 

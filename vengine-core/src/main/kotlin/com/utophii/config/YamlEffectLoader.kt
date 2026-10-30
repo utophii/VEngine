@@ -457,7 +457,35 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         val emitters = parseEmitters(raw[EMITTERS_KEY], fromEnd = false, fileName) +
             parseEmitters(raw[THEN_KEY], fromEnd = true, fileName)
         val durationFormula = parseFormula(raw[DURATION_KEY], DURATION_KEY, fileName)
-        return ScriptedEffect(id, duration, layers, parseFollow(raw[FOLLOW_KEY], fileName), emitters, durationFormula)
+        return ScriptedEffect(id, duration, withFileBudget(layers, raw), parseFollow(raw[FOLLOW_KEY], fileName), emitters, durationFormula)
+    }
+
+    // top-level budget: and lod: apply to every layer of the file
+    private fun withFileBudget(layers: List<ScriptedLayer>, raw: Map<String, Any?>): List<ScriptedLayer> {
+        val exempt = parseBudgetExempt(raw[BUDGET_KEY]) == true
+        val lodOff = raw[LOD_KEY] == false
+        if (!exempt && !lodOff) {
+            return layers
+        }
+        return layers.map { layer ->
+            val builder = layer.options.toBuilder()
+            if (exempt) builder.budgetExempt(true)
+            if (lodOff) builder.lod(false)
+            layer.copy(options = builder.build())
+        }
+    }
+
+    // budget: exempt keeps an effect out of the particle limits and the lag-driven quality drop
+    private fun parseBudgetExempt(value: Any?): Boolean? {
+        val mode = value?.toString()?.trim()?.lowercase() ?: return null
+        return when (mode) {
+            BUDGET_EXEMPT -> true
+            BUDGET_NORMAL -> false
+            else -> {
+                plugin.logger.warning("Unknown budget '$value' in VEngine YAML; expected '$BUDGET_EXEMPT' or '$BUDGET_NORMAL'.")
+                null
+            }
+        }
     }
 
     // parses emitters: or then:
@@ -633,7 +661,9 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
 
         parseMaterial(raw[MATERIAL_KEY])?.let(builder::material)
         parseDisplay(raw[DISPLAY_KEY])?.let(builder::display)
-    
+        parseBudgetExempt(raw[BUDGET_KEY])?.let(builder::budgetExempt)
+        (raw[LOD_KEY] as? Boolean)?.let(builder::lod)
+
         raw[COUNT_KEY]?.number()?.toInt()?.let(builder::count)
         raw[SPEED_KEY]?.number()?.let(builder::speed)
         parseOffset(raw[OFFSET_KEY])?.let { (x, y, z) -> builder.offset(x, y, z) }
@@ -1034,6 +1064,10 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         private const val OFFSET_KEY = "offset"
         private const val SPEED_KEY = "speed"
         private const val DISPLAY_KEY = "display"
+        private const val BUDGET_KEY = "budget"
+        private const val BUDGET_EXEMPT = "exempt"
+        private const val BUDGET_NORMAL = "normal"
+        private const val LOD_KEY = "lod"
         private const val TEXT_KEY = "text"
         private const val SIZE_KEY = "size"
         private const val ROTATION_KEY = "rotation"

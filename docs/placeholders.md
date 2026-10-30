@@ -26,6 +26,8 @@ without it.
 | `%vengine_nearest_id%` | Id of that effect |
 | `%vengine_nearest_distance%` | Distance to it, in blocks |
 | `%vengine_nearby%` | Running effects in the player's world, within view distance |
+| `%vengine_quality%` | Current auto-quality in percent (`100` = full) |
+| `%vengine_particles_tick%` | Particles sent to players during the last tick |
 
 ## Notes
 
