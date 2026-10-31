@@ -67,6 +67,8 @@ class EffectScheduler(val plugin: JavaPlugin) {
 
     // renders the frames calculated since the last tick
     private fun tick() {
+        // player positions and budget loads are sampled once per tick, see tickViewers
+        tickViewersCache.clear()
         budget.startTick()
         if (budget.quality.enabled && tickCounter++ % QUALITY_CHECK_TICKS == 0L) {
             if (budget.quality.update(plugin.server.averageTickTime)) {
@@ -308,7 +310,7 @@ class EffectScheduler(val plugin: JavaPlugin) {
 
     // spawns one frame of particles with the same culling as spawnParticle.
     // Nearby players are resolved once per frame: candidates are pre-culled against the frame's bounding box,
-    // then each particle is checked against cached player coordinates
+    // then each particle is checked against coordinates sampled once per tick
     // dataAt, when given, supplies the payload of each particle by index.
     // Each player receives a stable subset of the frame sized by the budget, see ParticleBudget,
     // rankOffset shifts which indices form that subset
@@ -330,26 +332,34 @@ class EffectScheduler(val plugin: JavaPlugin) {
         if (locations.isEmpty()) {
             return
         }
-        val explicitReceivers = receivers.toList()
+        // receivers is normally an empty list or a list already, so the copy is skipped
+        val explicitReceivers = receivers as? List<Player> ?: receivers.toList()
         var viewers: FrameViewers? = null
-        locations.forEachIndexed { index, location ->
-            val world = location.world ?: return@forEachIndexed
-            val current = viewers?.takeIf { it.world == world }
-                ?: FrameViewers.collect(world, locations, explicitReceivers, viewDistance, budget).also { viewers = it }
+        val radiusSquared = viewDistanceSquared
+        for (index in locations.indices) {
+            val location = locations[index]
+            val world = location.world ?: continue
+            val current = viewers?.takeIf { it.world === world }
+                ?: FrameViewers.collect(world, locations, explicitReceivers, viewDistance, budget, tickViewers(world))
+                    .also { viewers = it }
             val payload = if (dataAt != null) dataAt(index) else data
             val rank = ParticleBudget.rank(index + rankOffset)
-            current.forEachNear(location, viewDistanceSquared) { viewer, distanceSquared ->
+            current.forEachNear(location, radiusSquared) { viewer, distanceSquared ->
                 if (budgeted) {
                     val base = budget.baseKeep(distanceSquared, lod)
                     if (!budget.admit(current.loads[viewer], rank, base, count)) return@forEachNear
                 } else if (lod && rank >= budget.distanceKeep(distanceSquared)) {
                     return@forEachNear
                 }
-                val player = current.players[viewer]
                 budget.sent(count)
-                player.spawnParticle(
+                // the coordinate overload avoids building a Location per particle per viewer.
+                // force marks particles farther than the client's own 32 block cutoff, which would
+                // otherwise be dropped on the client even though they are inside the view distance
+                current.players[viewer].spawnParticle(
                     particle,
-                    location,
+                    location.x,
+                    location.y,
+                    location.z,
                     count,
                     offsetX,
                     offsetY,
@@ -361,7 +371,42 @@ class EffectScheduler(val plugin: JavaPlugin) {
         }
     }
 
-    // online players of one world that may see any particle of the current frame, with their positions sampled once
+    // players of one world with the positions and budget loads they had at the start of the current tick.
+    // Sampling them once per tick instead of once per layer/frame removes a Location allocation and a UUID
+    // map lookup per player per layer, which is what a 20 effect, 6 layer server paid every tick
+    private class WorldViewers(
+        val world: World,
+        val players: List<Player>,
+        val loads: List<ParticleBudget.PlayerLoad>,
+        val coordinates: DoubleArray,
+    )
+
+    private val tickViewersCache = java.util.IdentityHashMap<World, WorldViewers>()
+
+    private fun tickViewers(world: World): WorldViewers {
+        val cached = tickViewersCache[world]
+        if (cached != null) {
+            return cached
+        }
+        val players = world.players
+        val live = ArrayList<Player>(players.size)
+        val loads = ArrayList<ParticleBudget.PlayerLoad>(players.size)
+        val coordinates = DoubleArray(players.size * AXES)
+        players.forEach { player ->
+            if (!player.isOnline) return@forEach
+            val offset = live.size * AXES
+            coordinates[offset] = player.x
+            coordinates[offset + 1] = player.y
+            coordinates[offset + 2] = player.z
+            live.add(player)
+            loads.add(budget.load(player.uniqueId))
+        }
+        val built = WorldViewers(world, live, loads, coordinates.copyOf(live.size * AXES))
+        tickViewersCache[world] = built
+        return built
+    }
+
+    // players that may see any particle of the current frame, with their positions sampled once
     private class FrameViewers(
         val world: World,
         val players: List<Player>,
@@ -385,15 +430,15 @@ class EffectScheduler(val plugin: JavaPlugin) {
         }
 
         companion object {
-            private const val AXES = 3
-
-            // keeps the candidates within radius of the bounding box of the frame's particles in this world
+            // keeps the candidates within radius of the bounding box of the frame's particles in this world.
+            // snapshot holds this tick's players of the world; it is only used when the effect broadcasts
             fun collect(
                 world: World,
                 locations: List<Location>,
                 explicitReceivers: List<Player>,
                 radius: Double,
                 budget: ParticleBudget,
+                snapshot: WorldViewers,
             ): FrameViewers {
                 var minX = Double.POSITIVE_INFINITY
                 var minY = Double.POSITIVE_INFINITY
@@ -402,32 +447,57 @@ class EffectScheduler(val plugin: JavaPlugin) {
                 var maxY = Double.NEGATIVE_INFINITY
                 var maxZ = Double.NEGATIVE_INFINITY
                 locations.forEach { location ->
-                    if (location.world != world) return@forEach
+                    if (location.world !== world) return@forEach
                     minX = minOf(minX, location.x); maxX = maxOf(maxX, location.x)
                     minY = minOf(minY, location.y); maxY = maxOf(maxY, location.y)
                     minZ = minOf(minZ, location.z); maxZ = maxOf(maxZ, location.z)
                 }
 
-                val candidates = explicitReceivers.ifEmpty { world.players }
-                val players = ArrayList<Player>(candidates.size)
-                val loads = ArrayList<ParticleBudget.PlayerLoad>(candidates.size)
-                val coordinates = DoubleArray(candidates.size * AXES)
                 val radiusSquared = radius * radius
-                candidates.forEach { player ->
-                    if (!player.isOnline || player.world != world) return@forEach
-                    val position = player.location
-                    val dx = axisGap(position.x, minX, maxX)
-                    val dy = axisGap(position.y, minY, maxY)
-                    val dz = axisGap(position.z, minZ, maxZ)
+                if (explicitReceivers.isEmpty()) {
+                    // broadcast: filter the tick snapshot, which already carries positions and budget loads
+                    val players = ArrayList<Player>(snapshot.players.size)
+                    val loads = ArrayList<ParticleBudget.PlayerLoad>(snapshot.players.size)
+                    val coordinates = DoubleArray(snapshot.players.size * AXES)
+                    for (index in snapshot.players.indices) {
+                        val base = index * AXES
+                        val px = snapshot.coordinates[base]
+                        val py = snapshot.coordinates[base + 1]
+                        val pz = snapshot.coordinates[base + 2]
+                        val dx = axisGap(px, minX, maxX)
+                        val dy = axisGap(py, minY, maxY)
+                        val dz = axisGap(pz, minZ, maxZ)
+                        if (dx * dx + dy * dy + dz * dz > radiusSquared) continue
+                        val offset = players.size * AXES
+                        coordinates[offset] = px
+                        coordinates[offset + 1] = py
+                        coordinates[offset + 2] = pz
+                        players.add(snapshot.players[index])
+                        loads.add(snapshot.loads[index])
+                    }
+                    return FrameViewers(world, players, loads, coordinates.copyOf(players.size * AXES))
+                }
+
+                val players = ArrayList<Player>(explicitReceivers.size)
+                val loads = ArrayList<ParticleBudget.PlayerLoad>(explicitReceivers.size)
+                val coordinates = DoubleArray(explicitReceivers.size * AXES)
+                explicitReceivers.forEach { player ->
+                    if (!player.isOnline || player.world !== world) return@forEach
+                    val px = player.x
+                    val py = player.y
+                    val pz = player.z
+                    val dx = axisGap(px, minX, maxX)
+                    val dy = axisGap(py, minY, maxY)
+                    val dz = axisGap(pz, minZ, maxZ)
                     if (dx * dx + dy * dy + dz * dz > radiusSquared) return@forEach
                     val offset = players.size * AXES
-                    coordinates[offset] = position.x
-                    coordinates[offset + 1] = position.y
-                    coordinates[offset + 2] = position.z
+                    coordinates[offset] = px
+                    coordinates[offset + 1] = py
+                    coordinates[offset + 2] = pz
                     players.add(player)
                     loads.add(budget.load(player.uniqueId))
                 }
-                return FrameViewers(world, players, loads, coordinates)
+                return FrameViewers(world, players, loads, coordinates.copyOf(players.size * AXES))
             }
 
             // distance from value to the [min, max] interval along one axis
@@ -467,8 +537,8 @@ class EffectScheduler(val plugin: JavaPlugin) {
         private const val DEFAULT_PARTICLE_COUNT = 1
         private const val DEFAULT_PARTICLE_OFFSET = 0.0
         private const val DEFAULT_PARTICLE_SPEED = 0.0
+        private const val AXES = 3
 
-        // default view-distance culling radius in blocks
         const val DEFAULT_VIEW_DISTANCE_BLOCKS = 64.0
         private const val MIN_VIEW_DISTANCE_BLOCKS = 0.0
     }
