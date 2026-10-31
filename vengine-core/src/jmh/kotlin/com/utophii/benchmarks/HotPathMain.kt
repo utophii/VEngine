@@ -55,6 +55,8 @@ fun main() {
         ),
     )
     val runtime = EffectOptions(scale = 1.3, rotationYaw = 0.4)
+    val staticBase = staticLayer.mergedBase(runtime)
+    val animatedBase = animatedLayer.mergedBase(runtime)
 
     val parametric = ParametricEffect(
         name = "bench_torus",
@@ -93,13 +95,13 @@ fun main() {
         legacyResolveOptions(staticLayer, runtime, 12.0)
     }
     bench("scripted layer options, static (after)") {
-        staticLayer.resolveOptions(runtime, 12.0)
+        staticLayer.resolveBaseOptions(staticBase, 12.0)
     }
     bench("scripted layer options, animated (before)") {
         legacyResolveOptions(animatedLayer, runtime, 12.0)
     }
     bench("scripted layer options, animated (after)") {
-        animatedLayer.resolveOptions(runtime, 12.0)
+        animatedLayer.resolveBaseOptions(animatedBase, 12.0)
     }
     bench("formula frame setup: parameter map + 3 forks (before)") {
         val params = HashMap<String, Double>(8)

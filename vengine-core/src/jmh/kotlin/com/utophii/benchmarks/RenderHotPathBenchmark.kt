@@ -36,6 +36,8 @@ open class RenderHotPathBenchmark {
     private val buffer = ParticleBuffer(center)
     private lateinit var layer: ScriptedLayer
     private lateinit var animated: ScriptedLayer
+    private lateinit var staticBase: EffectOptions
+    private lateinit var animatedBase: EffectOptions
     private lateinit var parametric: ParametricEffect
     private val gradient = GradientColors()
     private val dustOptions = EffectOptions(particle = Particle.DUST, color = Color.RED)
@@ -65,6 +67,8 @@ open class RenderHotPathBenchmark {
             options = EffectOptions(parameters = mapOf("radius" to 3.0, "height" to 1.0)),
         )
         animated = layer.copy(animation = NumericAnimation(tracks))
+        staticBase = layer.mergedBase(RUNTIME)
+        animatedBase = animated.mergedBase(RUNTIME)
         parametric = ParametricEffect(
             name = "bench_torus",
             variables = listOf("t"),
@@ -81,13 +85,13 @@ open class RenderHotPathBenchmark {
     // ScriptedLayer.resolveOptions per frame: two builders and a parameters map copy per layer per tick
     @Benchmark
     fun scriptedLayerResolveStatic(blackhole: Blackhole) {
-        blackhole.consume(layer.resolveOptions(RUNTIME, 12.0))
+        blackhole.consume(layer.resolveBaseOptions(staticBase, 12.0))
     }
 
     // the same with animated tracks, which adds a second builder and a mutable parameter map
     @Benchmark
     fun scriptedLayerResolveAnimated(blackhole: Blackhole) {
-        blackhole.consume(animated.resolveOptions(RUNTIME, 12.0))
+        blackhole.consume(animated.resolveBaseOptions(animatedBase, 12.0))
     }
 
     // particle payload rebuilt from scratch on every rendered frame

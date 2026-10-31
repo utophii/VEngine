@@ -366,7 +366,6 @@ class EffectScheduler(val plugin: JavaPlugin) {
                     offsetZ,
                     speed,
                     payload,
-                    distanceSquared > CLIENT_PARTICLE_CUTOFF_SQUARED,
                 )
             }
         }
@@ -534,22 +533,12 @@ class EffectScheduler(val plugin: JavaPlugin) {
         private const val FRAME_PERIOD_TICKS = 1L
         private const val QUALITY_CHECK_TICKS = 20L
         private const val MIN_COMPOSITE_TTL_TICKS = 1L
-        // frame math is cheap per effect and the pool is shared with the whole server: on a 64 core host
-        // half the cores would be 32 threads of a single plugin competing with the tick loop. Capped and
-        // overridable through the JVM property so hosts can tune it
-        val CALCULATOR_THREADS: Int = System.getProperty("vengine.calculatorThreads")?.toIntOrNull()
-            ?.coerceAtLeast(1)
-            ?: (Runtime.getRuntime().availableProcessors() / 2).coerceIn(1, MAX_CALCULATOR_THREADS)
+        private val CALCULATOR_THREADS = (Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(1)
         private const val DEFAULT_PARTICLE_COUNT = 1
         private const val DEFAULT_PARTICLE_OFFSET = 0.0
         private const val DEFAULT_PARTICLE_SPEED = 0.0
-
-        // the vanilla client drops particles spawned farther than 32 blocks unless the packet is flagged long distance
-        private const val CLIENT_PARTICLE_CUTOFF_SQUARED = 32.0 * 32.0
         private const val AXES = 3
-        private const val MAX_CALCULATOR_THREADS = 4
 
-        // default view-distance culling radius in blocks
         const val DEFAULT_VIEW_DISTANCE_BLOCKS = 64.0
         private const val MIN_VIEW_DISTANCE_BLOCKS = 0.0
     }

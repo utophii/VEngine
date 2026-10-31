@@ -37,19 +37,20 @@ class VEngineExpansion(
     // the registry does not change within a tick, but scoreboard and tab plugins ask for a placeholder
     // once per player per refresh: rebuilding the snapshot per request allocated a list of every running
     // effect plus a sorted copy of every effect name thousands of times per second on a busy server
-    private var cached: VEnginePlaceholders.Snapshot? = null
-    private var cachedTick: Int = -1
+    private data class SnapshotCache(val tick: Int, val snapshot: VEnginePlaceholders.Snapshot)
+
+    @Volatile
+    private var cached: SnapshotCache? = null
 
     private fun snapshot(): VEnginePlaceholders.Snapshot {
         val tick = plugin.server.currentTick
         val current = cached
-        if (current != null && cachedTick == tick) {
-            return current
+        if (current != null && current.tick == tick) {
+            return current.snapshot
         }
-        return buildSnapshot().also { built ->
-            cached = built
-            cachedTick = tick
-        }
+        val built = buildSnapshot()
+        cached = SnapshotCache(tick, built)
+        return built
     }
 
     private fun buildSnapshot(): VEnginePlaceholders.Snapshot {

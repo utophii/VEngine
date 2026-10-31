@@ -76,24 +76,29 @@ class FrameRenderer(private val origin: Location) {
 
     // caches the particle payload of one renderer, keyed by the options that determine it
     private class PayloadCache {
-        private var key: Key? = null
+        private var particle: Particle? = null
+        private var color: Color? = null
+        private var toColor: Color? = null
+        private var dustSize: Float = -1.0f
+        private var material: Material? = null
         private var value: Any? = null
 
         fun resolve(opts: EffectOptions): Any? {
-            val next = Key(opts.particle, opts.color, opts.toColor, opts.dustSize, opts.material)
-            if (next != key) {
-                key = next
+            val p = opts.particle
+            val c = opts.color
+            val tc = opts.toColor
+            val ds = opts.dustSize
+            val m = opts.material
+
+            if (p != particle || c != color || tc != toColor || ds != dustSize || m != material || value == null) {
+                particle = p
+                color = c
+                toColor = tc
+                dustSize = ds
+                material = m
                 value = AbstractParticleEffect.resolveParticleData(opts)
             }
             return value
         }
-
-        private data class Key(
-            val particle: Particle,
-            val color: Color?,
-            val toColor: Color?,
-            val dustSize: Float,
-            val material: Material?,
-        )
     }
 }
