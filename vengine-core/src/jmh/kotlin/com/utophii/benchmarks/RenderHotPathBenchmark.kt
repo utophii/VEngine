@@ -41,7 +41,6 @@ open class RenderHotPathBenchmark {
     private lateinit var parametric: ParametricEffect
     private val gradient = GradientColors()
     private val dustOptions = EffectOptions(particle = Particle.DUST, color = Color.RED)
-    private val blockOptions = EffectOptions(particle = Particle.BLOCK, material = Material.STONE)
     private val gradientOptions = EffectOptions(
         particle = Particle.DUST,
         gradient = listOf(Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW),
@@ -100,12 +99,6 @@ open class RenderHotPathBenchmark {
         blackhole.consume(AbstractParticleEffect.resolveParticleData(dustOptions))
     }
 
-    // block payload calls Material#createBlockData, which needs a server registry: only measured if available
-    @Benchmark
-    fun blockPayloadPerFrame(blackhole: Blackhole) {
-        val data = runCatching { AbstractParticleEffect.resolveParticleData(blockOptions) }.getOrNull()
-        blackhole.consume(data)
-    }
 
     // one frame of a formula effect: a parameter map, a fork per axis and one exp4j evaluation per sample
     @Benchmark
