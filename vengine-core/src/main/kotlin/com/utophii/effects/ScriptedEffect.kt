@@ -62,12 +62,13 @@ class ScriptedEffect(
             // frames of one layer are calculated one at a time
             var lastSize = 0
 
+            val baseOptions = layer.mergedBase(opts)
             val handle = FXEngine.scheduler().scheduleFrames(
                 effectName = "${name}_${layer.effect}",
                 initialDelayTicks = startTick,
                 durationTicks = clampedDuration,
                 calculate = { time ->
-                    val resolvedOptions = layer.resolveOptions(opts, time)
+                    val resolvedOptions = layer.resolveBaseOptions(baseOptions, time)
                     val buffer = ParticleBufferPool.obtain(stableCenter, lastSize)
                     try {
                         // primitives write directly into the pooled buffer; fall back to a copy for non-primitive effects
@@ -190,8 +191,22 @@ data class ScriptedLayer(
     }
 
     // resolves the final layer options for one frame
-    // global runtime values from the caller are merged with layer-local YAML values, and then animated tracks override the numeric targets they address
     fun resolveOptions(runtime: EffectOptions, time: Double): EffectOptions {
+        val base = mergedBase(runtime)
+        return resolveBaseOptions(base, time)
+    }
+
+    // resolves the final layer options for one frame using pre-merged base options
+    fun resolveBaseOptions(base: EffectOptions, time: Double): EffectOptions {
+        if (animation.tracks.isEmpty()) return base
+        val animated = animation.apply(base, time)
+        return animated.toBuilder()
+            .duration(base.duration)
+            .build()
+    }
+
+    // layer options merged with runtime options once at play scheduling
+    fun mergedBase(runtime: EffectOptions): EffectOptions {
         val mergedParameters = options.parameters + runtime.parameters
         val builder = options.toBuilder()
 
@@ -222,8 +237,7 @@ data class ScriptedLayer(
         if (runtime.dustSize != EffectOptions.DEFAULT_DUST_SIZE) builder.dustSize(runtime.dustSize)
         if (runtime.particle != DEFAULT_PARTICLE) builder.particle(runtime.particle)
 
-        val animated = animation.apply(builder.build(), time)
-        return animated.toBuilder()
+        return builder
             .duration(durationTicks ?: runtime.duration)
             .build()
     }
@@ -248,13 +262,15 @@ data class ScriptedLayer(
 data class NumericAnimation(
     val tracks: List<NumericTrack>,
 ) {
+    val hasParameterTracks: Boolean = tracks.any { track -> track.target.startsWith(PARAMETER_TARGET_PREFIX, ignoreCase = true) }
+
     fun apply(options: EffectOptions, time: Double): EffectOptions {
         if (tracks.isEmpty()) {
             return options
         }
 
         val builder = options.toBuilder()
-        val parameters = options.parameters.toMutableMap()
+        val parameters = if (hasParameterTracks) options.parameters.toMutableMap() else null
         val colorChannels = mutableMapOf(
             COLOR_RED_TARGET to (options.color?.red?.toDouble() ?: 255.0),
             COLOR_GREEN_TARGET to (options.color?.green?.toDouble() ?: 255.0),
@@ -273,7 +289,7 @@ data class NumericAnimation(
                 track.target.equals(TILT_ANGLE_TARGET, ignoreCase = true) -> builder.tiltAngle(value)
                 track.target.startsWith(PARAMETER_TARGET_PREFIX, ignoreCase = true) -> {
                     val key = track.target.substring(PARAMETER_TARGET_PREFIX.length)
-                    if (key.isNotBlank()) {
+                    if (key.isNotBlank() && parameters != null) {
                         parameters[key] = value
                     }
                 }
@@ -305,7 +321,7 @@ data class NumericAnimation(
             }
         }
 
-        builder.parameters(parameters)
+        if (parameters != null) builder.parameters(parameters)
         builder.display(display)
         if (colorTouched) {
             builder.color(

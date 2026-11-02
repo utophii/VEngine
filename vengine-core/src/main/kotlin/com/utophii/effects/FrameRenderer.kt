@@ -3,7 +3,10 @@ package com.utophii.effects
 import com.utophii.api.EffectOptions
 import com.utophii.engine.FXEngine
 import com.utophii.engine.FollowAnchor
+import org.bukkit.Color
 import org.bukkit.Location
+import org.bukkit.Material
+import org.bukkit.Particle
 
 // renders the frames of one running effect on the server thread.
 // Origin is the effect's spawn point, the reference for client-side display models
@@ -11,6 +14,10 @@ class FrameRenderer(private val origin: Location) {
     private var displays: DisplayEntityPool? = null
     private var client: ClientDisplays? = null
     private val gradient = GradientColors()
+
+    // particle payload (DustOptions, BlockData, ItemStack) is rebuilt only when the options that shape it change.
+    // Building it per frame allocated an object on every rendered frame of every running effect
+    private val payload = PayloadCache()
 
     // anchor is set for followed effects
     fun render(buffer: ParticleBuffer, opts: EffectOptions, time: Double, anchor: FollowAnchor? = null) {
@@ -50,7 +57,7 @@ class FrameRenderer(private val origin: Location) {
     }
 
     private fun spawnParticles(positions: List<Location>, opts: EffectOptions, colored: Boolean) {
-        val data = AbstractParticleEffect.resolveParticleData(opts)
+        val data = payload.resolve(opts)
         FXEngine.scheduler().spawnParticles(
             locations = positions,
             particle = opts.particle,
@@ -65,5 +72,33 @@ class FrameRenderer(private val origin: Location) {
             budgeted = !opts.budgetExempt,
             lod = opts.lod,
         )
+    }
+
+    // caches the particle payload of one renderer, keyed by the options that determine it
+    private class PayloadCache {
+        private var particle: Particle? = null
+        private var color: Color? = null
+        private var toColor: Color? = null
+        private var dustSize: Float = -1.0f
+        private var material: Material? = null
+        private var value: Any? = null
+
+        fun resolve(opts: EffectOptions): Any? {
+            val p = opts.particle
+            val c = opts.color
+            val tc = opts.toColor
+            val ds = opts.dustSize
+            val m = opts.material
+
+            if (p != particle || c != color || tc != toColor || ds != dustSize || m != material || value == null) {
+                particle = p
+                color = c
+                toColor = tc
+                dustSize = ds
+                material = m
+                value = AbstractParticleEffect.resolveParticleData(opts)
+            }
+            return value
+        }
     }
 }

@@ -5,6 +5,7 @@ import com.utophii.api.FollowDefaults
 import com.utophii.math.ExpressionEvaluator
 import com.utophii.math.MathUtils
 import org.bukkit.Location
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.PI
 
 // A user-defined parametric effect expressed purely as math formulas.
@@ -35,19 +36,50 @@ class ParametricEffect(
         // angularSpeed may be overridden at runtime (e.g. by a layered config parameter) for backward compatibility
         val speed = opts.parameters[ANGULAR_SPEED_PARAM] ?: angularSpeed
         val phase = time * speed
-        // params = defaults + runtime options: runtime values override the configured formula defaults
+        // params = defaults + runtime options: runtime values override the configured formula defaults.
+        // The variable map and the per-axis forks are borrowed from a pool: rebinding a fork copies the parsed
+        // formula, which used to happen once per axis per frame of every running formula effect
+        val state = borrowState(opts)
+        try {
+            val params = state.params
+            val axes = state.axes
+            // expose the current effect time as a formula variable for live animation
+            params[TIME_VARIABLE] = time
+            when (variables.size) {
+                1 -> calculateCurve(buffer, center, opts, time, phase, params, samplingFor(opts), axes)
+                else -> calculateSurface(buffer, center, opts, time, phase, params, samplingFor(opts), axes)
+            }
+        } finally {
+            releaseState(state)
+        }
+    }
+
+    // one calculation's scratch state: the formula variables and one fork per axis
+    private class FrameState(val params: HashMap<String, Double>, val axes: List<ExpressionEvaluator.Fork>)
+
+    // concurrent plays of the same effect borrow separate states, the pool is bounded by the calculator threads
+    private val states = ConcurrentLinkedQueue<FrameState>()
+
+    private fun borrowState(opts: EffectOptions): FrameState {
+        val pooled = states.poll()
+        if (pooled != null) {
+            val params = pooled.params
+            params.clear()
+            params.putAll(defaults)
+            params.putAll(opts.parameters)
+            CONSTANT_NAMES.forEach { (name, value) -> params[name] = value }
+            return pooled
+        }
         val params = HashMap<String, Double>(defaults.size + opts.parameters.size + CONSTANT_NAMES.size + TIME_PARAM_COUNT)
         params.putAll(defaults)
         params.putAll(opts.parameters)
         CONSTANT_NAMES.forEach { (name, value) -> params[name] = value }
-        // expose the current effect time as a formula variable (0.0 default is overridden here) for live animation
-        params[TIME_VARIABLE] = time
-        // per-frame copies
-        val axes = evaluators.map(ExpressionEvaluator::fork)
+        return FrameState(params, evaluators.map(ExpressionEvaluator::fork))
+    }
 
-        when (variables.size) {
-            1 -> calculateCurve(buffer, center, opts, time, phase, params, samplingFor(opts), axes)
-            else -> calculateSurface(buffer, center, opts, time, phase, params, samplingFor(opts), axes)
+    private fun releaseState(state: FrameState) {
+        if (states.size < MAX_POOLED_STATES) {
+            states.offer(state)
         }
     }
 
@@ -141,6 +173,8 @@ class ParametricEffect(
         private const val ANGULAR_SPEED_PARAM = "angularSpeed"
         private const val TIME_VARIABLE = "time"
         private const val TIME_PARAM_COUNT = 1
+        // scratch states kept for reuse, one per calculator thread is plenty
+        private const val MAX_POOLED_STATES = 16
 
         // named mathematical constants exposed to formulas as variables (0.0 default, always overridden here)
         private val CONSTANT_NAMES = linkedMapOf(
