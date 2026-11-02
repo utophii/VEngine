@@ -100,10 +100,11 @@ open class RenderHotPathBenchmark {
         blackhole.consume(AbstractParticleEffect.resolveParticleData(dustOptions))
     }
 
-    // block payload calls Material#createBlockData, which is the expensive one
+    // block payload calls Material#createBlockData, which needs a server registry: only measured if available
     @Benchmark
     fun blockPayloadPerFrame(blackhole: Blackhole) {
-        blackhole.consume(AbstractParticleEffect.resolveParticleData(blockOptions))
+        val data = runCatching { AbstractParticleEffect.resolveParticleData(blockOptions) }.getOrNull()
+        blackhole.consume(data)
     }
 
     // one frame of a formula effect: a parameter map, a fork per axis and one exp4j evaluation per sample
