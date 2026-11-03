@@ -4,6 +4,7 @@ import com.utophii.engine.FXEngine
 import com.utophii.effects.ParamRange
 import com.utophii.effects.ParametricEffect
 import com.utophii.math.EasingType
+import com.utophii.math.ExpressionFunctions
 import com.utophii.math.MathUtils
 import com.utophii.modifiers.ColorModifier
 import com.utophii.modifiers.MotionModifier
@@ -334,6 +335,7 @@ class ParametricConfig {
     private var zFormula = DEFAULT_FORMULA
     private var angularSpeed = DEFAULT_ANGULAR_SPEED
     private val formulaDefaults = linkedMapOf<String, Double>()
+    private val formulaFunctions = linkedMapOf<String, String>()
     private val optionsConfig = EffectConfig()
 
     // declares the sampling variables (one for a curve, two for a surface)
@@ -389,6 +391,12 @@ class ParametricConfig {
         formulaDefaults.putAll(values)
     }
 
+    // defines a local formula function
+    fun function(signature: String, body: String) {
+        require(signature !in formulaFunctions) { "Duplicate function '$signature'" }
+        formulaFunctions[signature] = body
+    }
+
     // nested DSL for the shared rendering/transform fields (particle, color, scale, modifiers, ...)
     fun render(block: EffectConfig.() -> Unit) {
         optionsConfig.apply(block)
@@ -415,6 +423,7 @@ class ParametricConfig {
             zFormula = zFormula,
             defaults = formulaDefaults,
             angularSpeed = angularSpeed,
+            functions = ExpressionFunctions(formulaFunctions),
         )
     }
 

@@ -3,6 +3,7 @@ package com.utophii.effects
 import com.utophii.api.EffectOptions
 import com.utophii.api.FollowDefaults
 import com.utophii.math.ExpressionEvaluator
+import com.utophii.math.ExpressionFunctions
 import com.utophii.math.Hash
 import com.utophii.math.ImplicitSurface
 import com.utophii.math.ScalarField
@@ -25,11 +26,12 @@ class ImplicitEffect(
     private val defaults: Map<String, Double>,
     private val angularSpeed: Double,
     override val followDefaults: FollowDefaults? = null,
+    functions: ExpressionFunctions = ExpressionFunctions.EMPTY,
 ) : AbstractParticleEffect(name), ConfiguredPrimitive {
 
     // compiled once and shared across concurrent plays
-    private val field: ExpressionEvaluator = requireNotNull(ExpressionEvaluator.compile(formula)) { "Invalid formula: '$formula'" }
-    private val value: ExpressionEvaluator? = valueFormula?.let { requireNotNull(ExpressionEvaluator.compile(it)) { "Invalid formula: '$it'" } }
+    private val field: ExpressionEvaluator = ExpressionEvaluator.compileOrThrow(formula, functions)
+    private val value: ExpressionEvaluator? = valueFormula?.let { ExpressionEvaluator.compileOrThrow(it, functions) }
     private val animated = TIME_VARIABLE in field.variableNames || TIME_VARIABLE in value?.variableNames.orEmpty()
 
     // projected local points of static surfaces, shared by concurrent frames

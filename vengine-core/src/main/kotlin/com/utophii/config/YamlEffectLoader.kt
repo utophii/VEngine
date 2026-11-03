@@ -24,6 +24,7 @@ import com.utophii.engine.PlaceholderExpression
 import com.utophii.engine.Placeholders
 import com.utophii.math.EasingType
 import com.utophii.math.ExpressionEvaluator
+import com.utophii.math.ExpressionFunctions
 import com.utophii.math.MathUtils
 import com.utophii.modifiers.MotionModifier
 import com.utophii.modifiers.RotationModifier
@@ -44,13 +45,18 @@ import org.bukkit.Particle
 import org.bukkit.entity.Display
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.util.Vector
+import org.yaml.snakeyaml.LoaderOptions
 import org.yaml.snakeyaml.Yaml
+import org.yaml.snakeyaml.error.YAMLException
 import java.awt.Shape
 import java.io.File
+import java.util.logging.Logger
 
 // loads effect descriptions from YAML without recompilation
-class YamlEffectLoader(private val plugin: JavaPlugin) {
-    private val yaml = Yaml()
+class YamlEffectLoader internal constructor(private val dataFolder: File, private val logger: Logger) {
+    constructor(plugin: JavaPlugin) : this(plugin.dataFolder, plugin.logger)
+
+    private val yaml = Yaml(LoaderOptions().apply { setAllowDuplicateKeys(false) })
 
     // ensures the effects and shapes directories exist
     fun ensureDirectories() {
@@ -73,35 +79,35 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         val parsedFiles = effectsDirectory()
             .listFiles { file -> file.isFile && file.extension.equals(YAML_EXTENSION, ignoreCase = true) }
             ?.sortedBy { file -> file.name }
-            ?.mapNotNull { file -> readRaw(file)?.let { raw -> file to raw } }
+            ?.mapNotNull(::readSource)
             ?: emptyList()
 
         val loaded = mutableListOf<ParticleEffect>()
 
         // pass 1: register every formula atom so scripted layers can reference them regardless of file names
-        parsedFiles.forEach { (file, raw) ->
+        parsedFiles.forEach { (file, raw, functions) ->
             if (isAtom(raw)) {
-                val effect = parseAtom(effectId(raw, file), raw, file.name) ?: return@forEach
+                val effect = parseAtom(effectId(raw, file), raw, file.name, functions) ?: return@forEach
                 if (raw.containsKey(EMITTERS_KEY) || raw.containsKey(THEN_KEY)) {
-                    plugin.logger.warning(
+                    logger.warning(
                         "'${file.name}' is a formula effect; its emitters/then are ignored. " +
                             "Use it as a layer of a layered effect to spawn other effects.",
                     )
                 }
                 FXEngine.registerPrimitive(effect)
                 // played on its own, the atom renders with the particle/color/gradient written next to its block
-                FXEngine.registerScripted(standaloneAtom(effect, raw))
+                FXEngine.registerScripted(standaloneAtom(effect, raw, file.name, functions))
                 loaded += effect
             }
         }
 
         // pass 2: layered scripted effects; all YAML atoms are guaranteed to be resolvable now
-        parsedFiles.forEach { (file, raw) ->
+        parsedFiles.forEach { (file, raw, functions) ->
             if (!isAtom(raw)) {
                 // a duration formula is only known at play time, so layer timing falls back to the default
                 val duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS)
                     ?: DEFAULT_DURATION_TICKS
-                val effect = loadScripted(effectId(raw, file), duration, raw, file.name) ?: return@forEach
+                val effect = loadScripted(effectId(raw, file), duration, raw, file.name, functions) ?: return@forEach
                 FXEngine.registerScripted(effect)
                 loaded += effect
             }
@@ -114,13 +120,13 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         val scripted = loaded.filterIsInstance<ScriptedEffect>()
         scripted.forEach { effect ->
             effect.emittedEffects.filter { FXEngine.effect(it) == null }.distinct().forEach { missing ->
-                plugin.logger.warning("Effect '${effect.name}' emits unknown effect '$missing'; that emitter will do nothing.")
+                logger.warning("Effect '${effect.name}' emits unknown effect '$missing'; that emitter will do nothing.")
             }
         }
         val cyclic = EmitterGraph.cyclic(scripted.associate { it.name.lowercase() to it.emittedEffects.map(String::lowercase) })
         val rejected = scripted.filter { it.name.lowercase() in cyclic }
         rejected.forEach { effect ->
-            plugin.logger.warning("Skipping effect '${effect.name}': its emitters/then spawn it again, directly or through other effects.")
+            logger.warning("Skipping effect '${effect.name}': its emitters/then spawn it again, directly or through other effects.")
             FXEngine.unregisterScripted(effect.name)
         }
         return rejected
@@ -130,53 +136,76 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
     // note: scripted files only resolve layers whose primitives are already registered; bulk loading
     // should use [loadAll], which handles the ordering internally
     fun load(file: File): ParticleEffect? {
-        val raw = readRaw(file) ?: return null
+        val (_, raw, functions) = readSource(file) ?: return null
         val duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS) ?: DEFAULT_DURATION_TICKS
         return if (isAtom(raw)) {
-            parseAtom(effectId(raw, file), raw, file.name)
+            parseAtom(effectId(raw, file), raw, file.name, functions)
         } else {
-            loadScripted(effectId(raw, file), duration, raw, file.name)
+            loadScripted(effectId(raw, file), duration, raw, file.name, functions)
         }
     }
 
-    private fun readRaw(file: File): Map<String, Any?>? =
+    private fun readRaw(file: File): Map<String, Any?>? = try {
         file.inputStream().use { stream -> yaml.load<Map<String, Any?>>(stream) }
+    } catch (exception: YAMLException) {
+        logger.warning("Skipping effect '${file.name}': invalid YAML: ${exception.message}")
+        null
+    }
+
+    private data class EffectSource(val file: File, val raw: Map<String, Any?>, val functions: ExpressionFunctions)
+
+    private fun readSource(file: File): EffectSource? {
+        val raw = readRaw(file) ?: return null
+        return try {
+            EffectSource(file, raw, parseFunctions(raw[FUNCTIONS_KEY]))
+        } catch (exception: IllegalArgumentException) {
+            logger.warning("Skipping effect '${file.name}': ${exception.message}")
+            null
+        }
+    }
 
     private fun effectId(raw: Map<String, Any?>, file: File): String =
         raw[ID_KEY]?.toString()?.takeIf(String::isNotBlank) ?: file.nameWithoutExtension
 
     // wraps an atom into a one-layer effect carrying the file's top-level options, layers of other
     // effects still reference the bare primitive and bring their own options
-    private fun standaloneAtom(atom: AbstractParticleEffect, raw: Map<String, Any?>): ScriptedEffect {
+    private fun standaloneAtom(atom: AbstractParticleEffect, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions): ScriptedEffect {
         val duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS) ?: DEFAULT_DURATION_TICKS
-        val layer = ScriptedLayer(effect = atom.name.lowercase(), startTick = DEFAULT_START_TICKS, durationTicks = null, options = parseOptions(raw))
-        return ScriptedEffect(atom.name, duration, listOf(layer), atom.followDefaults)
+        val layer = ScriptedLayer(
+            effect = atom.name.lowercase(),
+            startTick = DEFAULT_START_TICKS,
+            // an atom follows the total play duration
+            durationTicks = null,
+            options = parseOptions(raw),
+            scaleFormula = parseFormula(raw[SCALE_KEY], SCALE_KEY, fileName, functions),
+            parameterFormulas = parseParameterFormulas(raw, fileName, functions),
+        )
+        return ScriptedEffect(
+            atom.name, duration, listOf(layer), atom.followDefaults,
+            durationFormula = parseFormula(raw[DURATION_KEY], DURATION_KEY, fileName, functions),
+        )
     }
 
     // builds a formula atom
-    private fun parseAtom(id: String, raw: Map<String, Any?>, fileName: String): AbstractParticleEffect? = when {
-        raw.containsKey(SDF_KEY) -> parseImplicit(id, raw, fileName)
+    private fun parseAtom(id: String, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions): AbstractParticleEffect? = when {
+        raw.containsKey(SDF_KEY) -> parseImplicit(id, raw, fileName, functions)
         raw.containsKey(LSYSTEM_KEY) -> parseLSystem(id, raw, fileName)
         raw.containsKey(SHAPE_KEY) -> parseShape(id, raw, fileName)
-        else -> parseParametric(id, raw, fileName)
+        else -> parseParametric(id, raw, fileName, functions)
     }
 
     // builds an implicit surface effect from an sdf YAML block
-    private fun parseImplicit(id: String, raw: Map<String, Any?>, fileName: String): ImplicitEffect? {
+    private fun parseImplicit(id: String, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions): ImplicitEffect? {
         val block = raw[SDF_KEY] as? Map<*, *> ?: run {
-            plugin.logger.warning("Skipping sdf effect '$fileName': 'sdf' must be a block with an 'f' formula.")
+            logger.warning("Skipping sdf effect '$fileName': 'sdf' must be a block with an 'f' formula.")
             return null
         }
         val formula = block[F_KEY]?.toString()?.takeIf(String::isNotBlank) ?: run {
-            plugin.logger.warning("Skipping sdf effect '$fileName': missing 'f' formula.")
+            logger.warning("Skipping sdf effect '$fileName': missing 'f' formula.")
             return null
         }
         val value = block[VALUE_KEY]?.toString()?.takeIf(String::isNotBlank)
-        val invalid = listOfNotNull(formula, value).firstOrNull { ExpressionEvaluator.compile(it) == null }
-        if (invalid != null) {
-            plugin.logger.warning("Skipping sdf effect '$fileName': invalid formula '$invalid'.")
-            return null
-        }
+        if (!validateFormulas(listOfNotNull(formula, value), fileName, functions)) return null
         return ImplicitEffect(
             name = id,
             formula = formula,
@@ -186,17 +215,18 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             defaults = parseParameters(block[PARAMETERS_KEY]),
             angularSpeed = block[ANGULAR_SPEED_KEY]?.number() ?: DEFAULT_ANGULAR_SPEED,
             followDefaults = parseFollow(raw[FOLLOW_KEY], fileName),
+            functions = functions,
         )
     }
 
     // builds a turtle-drawn L-system from an lsystem YAML block
     private fun parseLSystem(id: String, raw: Map<String, Any?>, fileName: String): LSystemEffect? {
         val block = raw[LSYSTEM_KEY] as? Map<*, *> ?: run {
-            plugin.logger.warning("Skipping lsystem effect '$fileName': 'lsystem' must be a block with 'axiom' and 'rules'.")
+            logger.warning("Skipping lsystem effect '$fileName': 'lsystem' must be a block with 'axiom' and 'rules'.")
             return null
         }
         val axiom = block[AXIOM_KEY]?.toString()?.takeIf(String::isNotBlank) ?: run {
-            plugin.logger.warning("Skipping lsystem effect '$fileName': missing 'axiom'.")
+            logger.warning("Skipping lsystem effect '$fileName': missing 'axiom'.")
             return null
         }
         // rules: one symbol -> its replacement, or a list of replacements picked at random
@@ -204,7 +234,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             val key = symbol?.toString()
             val productions = parseProductions(replacement, fileName, symbol)
             if (key == null || key.length != 1 || productions.isNullOrEmpty()) {
-                plugin.logger.warning(
+                logger.warning(
                     "In '$fileName': ignoring lsystem rule '$symbol' " +
                         "(a rule maps one symbol to a string or to a list of strings / { to, weight } entries).",
                 )
@@ -215,7 +245,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         val iterations = block[ITERATIONS_KEY]?.number()?.toInt()?.coerceAtLeast(0) ?: DEFAULT_LSYSTEM_ITERATIONS
         val anchor = block[ANCHOR_KEY]?.toString()?.lowercase()
         if (anchor != null && anchor != ANCHOR_BASE && anchor != ANCHOR_CENTER) {
-            plugin.logger.warning("In '$fileName': unknown lsystem anchor '$anchor'; expected '$ANCHOR_BASE' or '$ANCHOR_CENTER'.")
+            logger.warning("In '$fileName': unknown lsystem anchor '$anchor'; expected '$ANCHOR_BASE' or '$ANCHOR_CENTER'.")
         }
         val effect = LSystemEffect(
             name = id,
@@ -233,7 +263,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             seed = block[SEED_KEY]?.number()?.toLong(),
         )
         if (effect.appliedIterations < iterations) {
-            plugin.logger.warning(
+            logger.warning(
                 "In '$fileName': lsystem stopped after ${effect.appliedIterations} of $iterations iterations " +
                     "(more than ${LSystemEffect.MAX_SYMBOLS} symbols).",
             )
@@ -244,17 +274,17 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
     // builds an imported shape from a shape YAML block: exactly one of image, text, obj or svg
     private fun parseShape(id: String, raw: Map<String, Any?>, fileName: String): AbstractParticleEffect? {
         val block = raw[SHAPE_KEY] as? Map<*, *> ?: run {
-            plugin.logger.warning("Skipping shape effect '$fileName': 'shape' must be a block with an image, text, obj or svg source.")
+            logger.warning("Skipping shape effect '$fileName': 'shape' must be a block with an image, text, obj or svg source.")
             return null
         }
         val sources = SHAPE_SOURCES.filter(block::containsKey)
         if (sources.size != 1) {
-            plugin.logger.warning("Skipping shape effect '$fileName': 'shape' needs exactly one of ${SHAPE_SOURCES.joinToString()}.")
+            logger.warning("Skipping shape effect '$fileName': 'shape' needs exactly one of ${SHAPE_SOURCES.joinToString()}.")
             return null
         }
         val anchor = block[ANCHOR_KEY]?.toString()?.lowercase()
         if (anchor != null && anchor != ANCHOR_BASE && anchor != ANCHOR_CENTER) {
-            plugin.logger.warning("In '$fileName': unknown shape anchor '$anchor'; expected '$ANCHOR_BASE' or '$ANCHOR_CENTER'.")
+            logger.warning("In '$fileName': unknown shape anchor '$anchor'; expected '$ANCHOR_BASE' or '$ANCHOR_CENTER'.")
         }
         val settings = ShapeSettings(
             size = block[SIZE_KEY].number()?.takeIf { it > 0.0 } ?: DEFAULT_SHAPE_SIZE,
@@ -281,14 +311,14 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
                 }
             }
         } catch (error: ShapeException) {
-            plugin.logger.warning("Skipping shape effect '$fileName': ${error.message}.")
+            logger.warning("Skipping shape effect '$fileName': ${error.message}.")
             null
         } catch (error: Exception) {
-            plugin.logger.warning("Skipping shape effect '$fileName': $error")
+            logger.warning("Skipping shape effect '$fileName': $error")
             null
         } catch (error: LinkageError) {
             // AWT font support missing on a headless server
-            plugin.logger.warning("Skipping shape effect '$fileName': $error")
+            logger.warning("Skipping shape effect '$fileName': $error")
             null
         }
     }
@@ -296,7 +326,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
     private fun parseImageShape(id: String, block: Map<*, *>, settings: ShapeSettings, raw: Map<String, Any?>, fileName: String): ShapeEffect {
         val colors = block[COLORS_KEY]?.toString()?.lowercase() ?: COLORS_IMAGE
         if (colors != COLORS_IMAGE && colors != COLORS_GRADIENT) {
-            plugin.logger.warning("In '$fileName': unknown shape colors '$colors'; expected '$COLORS_IMAGE' or '$COLORS_GRADIENT'.")
+            logger.warning("In '$fileName': unknown shape colors '$colors'; expected '$COLORS_IMAGE' or '$COLORS_GRADIENT'.")
         }
         val cloud = ImageShape.load(
             ShapeFiles.resolve(shapesDirectory(), block[IMAGE_KEY].toString()),
@@ -313,7 +343,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
 
     private fun parseObjShape(id: String, block: Map<*, *>, settings: ShapeSettings, raw: Map<String, Any?>, fileName: String): ShapeEffect {
         val mode = ObjShape.Mode.entries.firstOrNull { it.name.equals(settings.mode ?: OBJ_DEFAULT_MODE, ignoreCase = true) } ?: run {
-            plugin.logger.warning("In '$fileName': unknown obj mode '${settings.mode}'; expected vertices, edges or surface.")
+            logger.warning("In '$fileName': unknown obj mode '${settings.mode}'; expected vertices, edges or surface.")
             ObjShape.Mode.SURFACE
         }
         val cloud = ObjShape.load(ShapeFiles.resolve(shapesDirectory(), block[OBJ_KEY].toString())).cloud(mode, settings.points)
@@ -364,7 +394,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             }
             else -> {
                 if (settings.mode != MODE_OUTLINE) {
-                    plugin.logger.warning("In '$fileName': unknown shape mode '${settings.mode}'; expected outline, fill or fourier.")
+                    logger.warning("In '$fileName': unknown shape mode '${settings.mode}'; expected outline, fill or fourier.")
                 }
                 val shape = variants { text -> Outlines.outline(contours(text), settings.points).fitted(settings.size, settings.anchorBase) }
                 ShapeEffect(id, shape, settings.growth, settings.angularSpeed, sourceColors = false, followDefaults = follow)
@@ -391,7 +421,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
                     val successor = entry[TO_KEY]?.toString()
                     val weight = entry[WEIGHT_KEY]?.number() ?: DEFAULT_PRODUCTION_WEIGHT
                     if (successor == null || weight <= 0.0) {
-                        plugin.logger.warning("In '$fileName': ignoring a production of lsystem rule '$symbol' (needs 'to' and a positive 'weight').")
+                        logger.warning("In '$fileName': ignoring a production of lsystem rule '$symbol' (needs 'to' and a positive 'weight').")
                         null
                     } else {
                         LSystemEffect.Production(successor.filterNot(Char::isWhitespace), weight)
@@ -406,9 +436,9 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
     }
 
     // builds a parametric formula effect from a `curve`/`surface` YAML block
-    private fun parseParametric(id: String, raw: Map<String, Any?>, fileName: String): ParametricEffect? {
+    private fun parseParametric(id: String, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions): ParametricEffect? {
         val block = (raw[curveOrSurfaceKey(raw)] as? Map<*, *>) ?: run {
-            plugin.logger.warning("Skipping parametric effect '${fileName}': missing 'curve' or 'surface' block.")
+            logger.warning("Skipping parametric effect '${fileName}': missing 'curve' or 'surface' block.")
             return null
         }
         val variables = parseStringList(block[VARIABLES_KEY], defaultVariables(raw))
@@ -427,11 +457,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         val value = block[VALUE_KEY]?.toString()?.takeIf(String::isNotBlank)
 
         // fail fast on a malformed formula so the user sees a clear message instead of a silent no-op
-        val valid = listOfNotNull(x, y, z, value).all { formula -> ExpressionEvaluator.compile(formula) != null }
-        if (!valid) {
-            plugin.logger.warning("Skipping parametric effect '${fileName}': one of the x/y/z/value formulas is invalid.")
-            return null
-        }
+        if (!validateFormulas(listOfNotNull(x, y, z, value), fileName, functions)) return null
         return ParametricEffect(
             name = id,
             variables = variables,
@@ -444,19 +470,20 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             angularSpeed = angularSpeed,
             followDefaults = parseFollow(raw[FOLLOW_KEY], fileName),
             valueFormula = value,
+            functions = functions,
         )
     }
 
     // builds a layered scripted effect from `layers` or a legacy single layer
-    private fun loadScripted(id: String, duration: Long, raw: Map<String, Any?>, fileName: String): ScriptedEffect? {
-        val layers = parseLayers(raw, duration, fileName)
+    private fun loadScripted(id: String, duration: Long, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions): ScriptedEffect? {
+        val layers = parseLayers(raw, duration, fileName, functions)
         if (layers.isEmpty()) {
-            plugin.logger.warning("Skipping effect '${fileName}': no valid layers were found.")
+            logger.warning("Skipping effect '${fileName}': no valid layers were found.")
             return null
         }
         val emitters = parseEmitters(raw[EMITTERS_KEY], fromEnd = false, fileName) +
             parseEmitters(raw[THEN_KEY], fromEnd = true, fileName)
-        val durationFormula = parseFormula(raw[DURATION_KEY], DURATION_KEY, fileName)
+        val durationFormula = parseFormula(raw[DURATION_KEY], DURATION_KEY, fileName, functions)
         return ScriptedEffect(id, duration, withFileBudget(layers, raw), parseFollow(raw[FOLLOW_KEY], fileName), emitters, durationFormula)
     }
 
@@ -482,7 +509,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             BUDGET_EXEMPT -> true
             BUDGET_NORMAL -> false
             else -> {
-                plugin.logger.warning("Unknown budget '$value' in VEngine YAML; expected '$BUDGET_EXEMPT' or '$BUDGET_NORMAL'.")
+                logger.warning("Unknown budget '$value' in VEngine YAML; expected '$BUDGET_EXEMPT' or '$BUDGET_NORMAL'.")
                 null
             }
         }
@@ -498,7 +525,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         return entries.mapNotNull { entry ->
             val node = entry as? Map<*, *> ?: mapOf(EFFECT_KEY to entry)
             val effect = node[EFFECT_KEY]?.toString()?.trim()?.lowercase()?.takeIf(String::isNotBlank) ?: run {
-                plugin.logger.warning("Skipping an ${if (fromEnd) THEN_KEY else EMITTERS_KEY} entry without 'effect' in '$fileName'.")
+                logger.warning("Skipping an ${if (fromEnd) THEN_KEY else EMITTERS_KEY} entry without 'effect' in '$fileName'.")
                 return@mapNotNull null
             }
             val every = node[EVERY_KEY].number()?.toLong()?.takeIf { it > 0L }
@@ -529,7 +556,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         val rotation = rotationName?.let { name ->
             FollowRotation.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
                 ?: run {
-                    plugin.logger.warning(
+                    logger.warning(
                         "Unknown follow rotation '$name' in '$fileName'; expected one of " +
                             FollowRotation.entries.joinToString { it.name.lowercase() } + ".",
                     )
@@ -589,17 +616,17 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         else (ranges + List(variableCount - ranges.size) { DEFAULT_RANGE }).take(variableCount)
     }
 
-    private fun parseLayers(raw: Map<String, Any?>, effectDuration: Long, fileName: String): List<ScriptedLayer> {
+    private fun parseLayers(raw: Map<String, Any?>, effectDuration: Long, fileName: String, functions: ExpressionFunctions): List<ScriptedLayer> {
         val configuredLayers = raw[LAYERS_KEY]
         if (configuredLayers is List<*>) {
             val nodes = configuredLayers.filterIsInstance<Map<*, *>>()
             val timeline = LayerTimeline.resolve(nodes.map(::parseTiming), effectDuration)
-            timeline.problems.forEach { problem -> plugin.logger.warning("In '$fileName': $problem.") }
-            return nodes.zip(timeline.starts).mapNotNull { (node, start) -> start?.let { parseLayer(node, it, fileName) } }
+            timeline.problems.forEach { problem -> logger.warning("In '$fileName': $problem.") }
+            return nodes.zip(timeline.starts).mapNotNull { (node, start) -> start?.let { parseLayer(node, it, fileName, functions) } }
         }
 
         // backward-compatible single-layer format
-        val legacyLayer = parseLayer(raw, parseTiming(raw).start, fileName)
+        val legacyLayer = parseLayer(raw, parseTiming(raw).start, fileName, functions)
         return legacyLayer?.let(::listOf) ?: emptyList()
     }
 
@@ -611,10 +638,10 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         delay = raw[DELAY_KEY].number()?.toLong()?.coerceAtLeast(MIN_START_TICKS) ?: DEFAULT_START_TICKS,
     )
 
-    private fun parseLayer(raw: Map<*, *>, startTick: Long, fileName: String): ScriptedLayer? {
+    private fun parseLayer(raw: Map<*, *>, startTick: Long, fileName: String, functions: ExpressionFunctions): ScriptedLayer? {
         val effectName = raw[EFFECT_KEY]?.toString()?.lowercase()?.takeIf(String::isNotBlank) ?: return null
         if (FXEngine.primitiveEffect(effectName) == null) {
-            plugin.logger.warning("Skipping layer for unknown primitive effect '$effectName'.")
+            logger.warning("Skipping layer for unknown primitive effect '$effectName'.")
             return null
         }
 
@@ -628,21 +655,36 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             durationTicks = durationTicks,
             options = options,
             animation = animation,
-            scaleFormula = parseFormula(raw[SCALE_KEY], SCALE_KEY, fileName),
-            parameterFormulas = (raw[PARAMETERS_KEY] as? Map<*, *>).orEmpty().mapNotNull { (name, value) ->
-                val key = name?.toString()?.takeIf(String::isNotBlank) ?: return@mapNotNull null
-                parseFormula(value, "$PARAMETERS_KEY.$key", fileName)?.let { key to it }
-            }.toMap(),
+            scaleFormula = parseFormula(raw[SCALE_KEY], SCALE_KEY, fileName, functions),
+            parameterFormulas = parseParameterFormulas(raw, fileName, functions),
         )
     }
 
+    private fun parseParameterFormulas(raw: Map<*, *>, fileName: String, functions: ExpressionFunctions): Map<String, PlaceholderExpression> =
+        (raw[PARAMETERS_KEY] as? Map<*, *>).orEmpty().mapNotNull { (name, value) ->
+            val key = name?.toString()?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+            parseFormula(value, "$PARAMETERS_KEY.$key", fileName, functions)?.let { key to it }
+        }.toMap()
+
     // a string that is not a plain number is a formula
-    private fun parseFormula(value: Any?, key: String, fileName: String): PlaceholderExpression? {
+    private fun parseFormula(value: Any?, key: String, fileName: String, functions: ExpressionFunctions): PlaceholderExpression? {
         val formula = (value as? String)?.takeIf { it.isNotBlank() && it.trim().toDoubleOrNull() == null } ?: return null
-        return PlaceholderExpression.compile(formula) ?: run {
-            plugin.logger.warning("In '$fileName': invalid expression for '$key': $formula")
+        return PlaceholderExpression.compile(formula, functions) ?: run {
+            logger.warning("In '$fileName': invalid expression for '$key': $formula")
             null
         }
+    }
+
+    private fun validateFormulas(formulas: List<String>, fileName: String, functions: ExpressionFunctions): Boolean {
+        for (formula in formulas) {
+            try {
+                ExpressionEvaluator.compileOrThrow(formula, functions)
+            } catch (exception: RuntimeException) {
+                logger.warning("Skipping effect '$fileName': invalid formula '$formula': ${exception.message}")
+                return false
+            }
+        }
+        return true
     }
 
     private fun parseOptions(raw: Map<*, *>): EffectOptions {
@@ -687,7 +729,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
         val node = value as? Map<*, *> ?: return null
         val typeName = node[TYPE_KEY]?.toString()?.trim()?.uppercase() ?: DisplayOptions.Type.ITEM.name
         val type = runCatching { DisplayOptions.Type.valueOf(typeName) }.getOrElse {
-            plugin.logger.warning("Unknown display type '$typeName' in VEngine YAML; expected item, block, text or pixel.")
+            logger.warning("Unknown display type '$typeName' in VEngine YAML; expected item, block, text or pixel.")
             return null
         }
         val defaults = if (type == DisplayOptions.Type.PIXEL) {
@@ -712,7 +754,7 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
             phase = node[PHASE_KEY].number() ?: defaults.phase,
             billboard = node[BILLBOARD_KEY]?.toString()?.trim()?.uppercase()?.let { name ->
                 runCatching { Display.Billboard.valueOf(name) }
-                    .onFailure { plugin.logger.warning("Unknown display billboard '$name' in VEngine YAML.") }
+                    .onFailure { logger.warning("Unknown display billboard '$name' in VEngine YAML.") }
                     .getOrNull()
             },
             blockLight = (brightness as? Map<*, *>)?.get(BLOCK_KEY).number()?.toInt() ?: brightness.number()?.toInt(),
@@ -906,13 +948,13 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
     private fun parseParticle(value: Any?): Particle? {
         val particleName = value?.toString()?.uppercase() ?: return null
         return runCatching { Particle.valueOf(particleName) }
-            .onFailure { plugin.logger.warning("Unknown particle '$particleName' in VEngine YAML.") }
+            .onFailure { logger.warning("Unknown particle '$particleName' in VEngine YAML.") }
             .getOrNull()
     }
 
-    private fun effectsDirectory(): File = File(plugin.dataFolder, EFFECTS_DIRECTORY)
+    private fun effectsDirectory(): File = File(dataFolder, EFFECTS_DIRECTORY)
 
-    private fun shapesDirectory(): File = File(plugin.dataFolder, ShapeFiles.DIRECTORY)
+    private fun shapesDirectory(): File = File(dataFolder, ShapeFiles.DIRECTORY)
 
     private fun Any?.number(): Double? = when (this) {
         is Number -> toDouble()
@@ -923,6 +965,17 @@ class YamlEffectLoader(private val plugin: JavaPlugin) {
     private fun Int.coerceColor(): Int = coerceIn(MIN_COLOR_CHANNEL, MAX_COLOR_CHANNEL)
 
     companion object {
+        private fun parseFunctions(value: Any?): ExpressionFunctions {
+            if (value == null) return ExpressionFunctions.EMPTY
+            require(value is Map<*, *>) { "'functions' must map signatures to formula strings" }
+            val definitions = value.entries.associate { (signature, body) ->
+                require(signature is String && body is String) { "Function signatures and bodies must be strings" }
+                signature to body
+            }
+            return ExpressionFunctions(definitions)
+        }
+
+        private const val FUNCTIONS_KEY = "functions"
         private const val EFFECTS_DIRECTORY = "effects"
         private const val YAML_EXTENSION = "yml"
         private const val HEX_RADIX = 16

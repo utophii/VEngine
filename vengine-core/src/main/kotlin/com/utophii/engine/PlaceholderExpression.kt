@@ -1,6 +1,7 @@
 package com.utophii.engine
 
 import com.utophii.math.ExpressionEvaluator
+import com.utophii.math.ExpressionFunctions
 import org.bukkit.entity.Player
 
 // a formula that may contain PlaceholderAPI placeholders.
@@ -30,12 +31,13 @@ class PlaceholderExpression private constructor(
         private const val VARIABLE_PREFIX = "__placeholder"
 
         // compiles a formula with optional %placeholders%
-        fun compile(formula: String): PlaceholderExpression? {
+        @JvmOverloads
+        fun compile(formula: String, functions: ExpressionFunctions = ExpressionFunctions.EMPTY): PlaceholderExpression? {
             val variables = linkedMapOf<String, String>()
             val rewritten = PLACEHOLDER_PATTERN.replace(formula) { match ->
                 variables.getOrPut(match.value) { "$VARIABLE_PREFIX${variables.size}" }
             }
-            val evaluator = ExpressionEvaluator.compile(rewritten) ?: return null
+            val evaluator = ExpressionEvaluator.compile(rewritten, functions) ?: return null
             return PlaceholderExpression(evaluator, variables.entries.associate { (placeholder, variable) -> variable to placeholder })
         }
     }

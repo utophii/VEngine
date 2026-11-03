@@ -347,7 +347,8 @@ object MathUtils {
         vector.y = originalX * sin(theta) + originalY * cos(theta)
     }
 
-    private fun valueNoise(x: Double, y: Double, z: Double): Double {
+    // coherent, deterministic noise in [-1, 1], also exposed to effect formulas
+    fun valueNoise(x: Double, y: Double, z: Double): Double {
         val xi = floor(x)
         val yi = floor(y)
         val zi = floor(z)

@@ -3,6 +3,7 @@ package com.utophii.effects
 import com.utophii.api.EffectOptions
 import com.utophii.api.FollowDefaults
 import com.utophii.math.ExpressionEvaluator
+import com.utophii.math.ExpressionFunctions
 import com.utophii.math.MathUtils
 import org.bukkit.Location
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -10,7 +11,7 @@ import kotlin.math.PI
 
 // A user-defined parametric effect expressed purely as math formulas.
 // Supports one or more variables (curve: `t`; surface: `theta`, `phi`) and evaluates `x`, `y`, `z`
-// with the exp4j engine, so arbitrary parametric shapes can be created without writing Kotlin code.
+// with the shared expression evaluator, so arbitrary parametric shapes need no Kotlin code.
 // The effect inherits the pooled render buffer and the standard modifier/particle pipeline from [AbstractParticleEffect].
 class ParametricEffect(
     name: String,
@@ -25,11 +26,12 @@ class ParametricEffect(
     override val followDefaults: FollowDefaults? = null,
     // optional 0..1 gradient value of each sample
     private val valueFormula: String? = null,
+    functions: ExpressionFunctions = ExpressionFunctions.EMPTY,
 ) : AbstractParticleEffect(name), ConfiguredPrimitive {
 
     // compiled once per axis and shared across concurrent plays
     private val evaluators: List<ExpressionEvaluator> = listOfNotNull(xFormula, yFormula, zFormula, valueFormula)
-        .map { formula -> requireNotNull(ExpressionEvaluator.compile(formula)) { "Invalid formula: '$formula'" } }
+        .map { formula -> ExpressionEvaluator.compileOrThrow(formula, functions) }
 
     // writes the sampled parametric positions into the pooled buffer
     override fun calculateInto(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
@@ -37,8 +39,7 @@ class ParametricEffect(
         val speed = opts.parameters[ANGULAR_SPEED_PARAM] ?: angularSpeed
         val phase = time * speed
         // params = defaults + runtime options: runtime values override the configured formula defaults.
-        // The variable map and the per-axis forks are borrowed from a pool: rebinding a fork copies the parsed
-        // formula, which used to happen once per axis per frame of every running formula effect
+        // Reuse variable maps and per-axis forks between frames. Each concurrent calculation owns its values
         val state = borrowState(opts)
         try {
             val params = state.params

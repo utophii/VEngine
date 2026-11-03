@@ -49,6 +49,10 @@ Quick reference:
 Multiplication is always explicit: write `R * cos(t)`, not `R cos(t)`. Full function list and
 surface examples: [Parametric Effects](parametric-effects.md).
 
+Formulas also support `noise`, `clamp`, `mix`, lazy `if`, comparisons and local functions.
+Declare functions once per file, for example `functions: { 'wave(u, a)': 'a * sin(u)' }`,
+then call `wave(t, 0.5)` in a formula. See [formula helpers and local functions](parametric-effects.md#local-functions).
+
 Other kinds of atoms: implicit surfaces and L-system plants ([SDF surfaces and
 L-systems](sdf-and-lsystems.md)), and pictures, text, OBJ models and SVG outlines ([Imported
 shapes](imported-shapes.md)). Atoms built into the plugin - `sphere`, physics, strange attractors,
@@ -290,7 +294,8 @@ this page. For display entities, read `crystal_ward.yml` next.
 |---|---|
 | `Skipping effect '<file>': no valid layers were found` | Every layer failed to parse, look for the layer warnings just above |
 | `Skipping layer for unknown primitive effect '<name>'` | Layer references an effect name that does not exist (typo, or the atom file failed to load) |
-| `Skipping parametric effect '<file>': one of the x/y/z formulas is invalid` | Formula syntax error - often a missing `*` or unbalanced parenthesis |
+| `Skipping effect '<file>': invalid formula '…': …` | Formula syntax error, unknown function, wrong argument count or unbalanced parenthesis. The warning includes the cause |
+| `Skipping effect '<file>': In function '…': …` | Invalid local function body, an undeclared argument or recursive calls |
 | Nothing visible, no warnings | `duration` too short (YAML default is 60 ticks, `/ve play` lets you override), particle typo, or you are beyond `view-distance` in `config.yml` |
 | `Unknown display type '<name>'` | `display.type` must be `item`, `block` or `text`, the layer falls back to particles |
 | Display layer shows fewer models than points | A layer is capped at 256 display entities |

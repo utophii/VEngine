@@ -54,6 +54,8 @@ To move a shape, shift its coordinates: `sdSphere(x - 1, y, z, 0.5)` is a sphere
 `x = 1`. Any other formula works as well, for example the gyroid
 `sin(x) * cos(y) + sin(y) * cos(z) + sin(z) * cos(x)`, and `gyroid_orb.yml` carves one into a ball
 with `smax`. All [math functions](parametric-effects.md) are available.
+This includes `noise`, `clamp`, `mix`, lazy `if` and [file-local functions](parametric-effects.md#local-functions)
+declared in a top-level `functions` block. Pass `x`, `y`, `z`, parameters and `time` explicitly to those functions.
 
 ### Performance
 
