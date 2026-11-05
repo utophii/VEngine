@@ -1,10 +1,12 @@
 package com.utophii.effects
 
 import com.utophii.api.EffectOptions
+import com.utophii.api.ParametricConfig
 import com.utophii.math.MathUtils
 import org.bukkit.Location
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 // Verifies a user-defined parametric effect produces the expected analytic coordinates.
@@ -98,6 +100,65 @@ class ParametricEffectTest {
         val positions = surface.calculate(center(), EffectOptions(), time = 0.0)
         assertEquals(16, positions.size)
         assertTrue(positions.all { it.x >= -1.5 - EPS && it.x <= 1.5 + EPS }, "x stays within (R+r)")
+    }
+
+    @Test
+    fun `age only formula preserves spatial fallback and resets each frame`() {
+        val effect = ParametricConfig().apply {
+            samples(4)
+            range(0.0, 1.0)
+            angularSpeed(0.0)
+            x("t")
+            age("(time - t * 40) / life")
+            default("life", 40.0)
+        }.buildEffect()
+        val buffer = ParticleBuffer(center())
+        effect.calculateInto(buffer, center(), EffectOptions(), 40.0)
+        assertTrue(!buffer.hasValues(), "age must not occupy the optional spatial value slot")
+        for (index in 0 until 4) assertEquals(1.0 - index * 0.25, buffer.ageAt(index), EPS)
+
+        effect.calculateInto(buffer, center(), EffectOptions(parameters = mapOf("life" to 80.0)), 40.0)
+        assertEquals(0.5, buffer.ageAt(0), EPS)
+        assertEquals(0.125, buffer.ageAt(3), EPS)
+
+        effect.calculateInto(buffer, center(), EffectOptions(), 0.0)
+        for (index in 0 until 4) assertEquals(0.0, buffer.ageAt(index), EPS)
+        circleEffect(4).calculateInto(buffer, center(), EffectOptions(), 10.0)
+        for (index in 0 until 4) assertTrue(buffer.ageAt(index).isNaN(), "no formula restores layer age")
+    }
+
+    @Test
+    fun `surface age and spatial value use both variables and local functions independently`() {
+        val effect = ParametricConfig().apply {
+            variables("u", "v")
+            samples(4, 4)
+            ranges(ParamRange(0.0, 1.0), ParamRange(0.0, 1.0))
+            angularSpeed(0.0)
+            function("lifetime(a, b, tick)", "a + b + tick / 10")
+            value("1 - u")
+            age("lifetime(u, v, time)")
+        }.buildEffect()
+        val buffer = ParticleBuffer(center())
+        effect.calculateInto(buffer, center(), EffectOptions(), 0.0)
+        for (u in 0 until 4) for (v in 0 until 4) {
+            val index = u * 4 + v
+            assertEquals(1.0 - u * 0.25, buffer.valueAt(index), EPS)
+            assertEquals(((u + v) * 0.25).coerceAtMost(1.0), buffer.ageAt(index), EPS)
+        }
+        effect.calculateInto(buffer, center(), EffectOptions(), 10.0)
+        for (index in 0 until 16) assertEquals(1.0, buffer.ageAt(index), EPS)
+    }
+
+    @Test
+    fun `nonfinite age fails with a clear error and pooled state remains reusable`() {
+        val effect = ParametricConfig().apply { age("sqrt(time - 1)") }.buildEffect()
+        val buffer = ParticleBuffer(center())
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            effect.calculateInto(buffer, center(), EffectOptions(), 0.0)
+        }
+        assertEquals("Particle age must be finite", error.message)
+        effect.calculateInto(buffer, center(), EffectOptions(), 2.0)
+        assertEquals(1.0, buffer.ageAt(0), EPS)
     }
 
     companion object {

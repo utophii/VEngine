@@ -1,5 +1,6 @@
 package com.utophii.config
 
+import com.utophii.api.ColorInterpolation
 import com.utophii.api.DisplayOptions
 import com.utophii.api.EffectOptions
 import com.utophii.api.EffectModifier
@@ -455,9 +456,10 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
         val defaults = parseParameters(block[PARAMETERS_KEY])
         val angularSpeed = block[ANGULAR_SPEED_KEY]?.number() ?: DEFAULT_ANGULAR_SPEED
         val value = block[VALUE_KEY]?.toString()?.takeIf(String::isNotBlank)
+        val age = block[AGE_KEY]?.toString()?.takeIf(String::isNotBlank)
 
         // fail fast on a malformed formula so the user sees a clear message instead of a silent no-op
-        if (!validateFormulas(listOfNotNull(x, y, z, value), fileName, functions)) return null
+        if (!validateFormulas(listOfNotNull(x, y, z, value, age), fileName, functions)) return null
         return ParametricEffect(
             name = id,
             variables = variables,
@@ -471,6 +473,7 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
             followDefaults = parseFollow(raw[FOLLOW_KEY], fileName),
             valueFormula = value,
             functions = functions,
+            ageFormula = age,
         )
     }
 
@@ -699,6 +702,23 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
         parseColor(raw[COLOR_KEY])?.let(builder::color)
         parseColor(raw[TO_COLOR_KEY] ?: raw[TRANSITION_COLOR_KEY])?.let(builder::toColor)
         (raw[GRADIENT_KEY] as? List<*>)?.mapNotNull(::parseColor)?.takeIf { it.isNotEmpty() }?.let(builder::gradient)
+        raw[GRADIENT_INTERPOLATION_KEY]?.let { value ->
+            val mode = ColorInterpolation.entries.firstOrNull { it.name.equals(value.toString().trim(), ignoreCase = true) }
+            if (mode == null) logger.warning("Unknown gradientInterpolation '$value'. Expected rgb or hsv.")
+            else builder.gradientInterpolation(mode)
+        }
+        raw[COLOR_OVER_LIFE_KEY]?.let { value ->
+            val stops = (value as? List<*>)?.map { runCatching { parseColor(it) }.getOrNull() }
+            if (stops == null || stops.any { it == null }) {
+                logger.warning("colorOverLife must be a list of colors. Ignoring it.")
+            } else builder.colorOverLife(stops.filterNotNull())
+        }
+        raw[SIZE_OVER_LIFE_KEY]?.let { value ->
+            val stops = (value as? List<*>)?.map { it.number()?.toFloat() }
+            if (stops == null || stops.any { it == null || !it.isFinite() || it < 0f }) {
+                logger.warning("sizeOverLife must be a list of finite nonnegative multipliers. Ignoring it.")
+            } else builder.sizeOverLife(stops.filterNotNull())
+        }
         raw[DUST_SIZE_KEY]?.number()?.toFloat()?.let(builder::dustSize)
 
         parseMaterial(raw[MATERIAL_KEY])?.let(builder::material)
@@ -1089,6 +1109,7 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
         private const val KEYFRAMES_KEY = "keyframes"
         private const val TICK_KEY = "tick"
         private const val VALUE_KEY = "value"
+        private const val AGE_KEY = "age"
         private const val LOOP_KEY = "loop"
         private const val TYPE_KEY = "type"
         private const val FOLLOW_KEY = "follow"
@@ -1110,6 +1131,9 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
         private const val EASING_KEY = "easing"
         private const val TO_COLOR_KEY = "toColor"
         private const val GRADIENT_KEY = "gradient"
+        private const val GRADIENT_INTERPOLATION_KEY = "gradientInterpolation"
+        private const val COLOR_OVER_LIFE_KEY = "colorOverLife"
+        private const val SIZE_OVER_LIFE_KEY = "sizeOverLife"
         private const val TRANSITION_COLOR_KEY = "transitionColor"
         private const val DUST_SIZE_KEY = "dustSize"
         private const val MATERIAL_KEY = "material"

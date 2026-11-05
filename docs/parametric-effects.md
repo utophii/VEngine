@@ -77,7 +77,7 @@ duration: 200
 ```
 
 Functions are local to their file and compiled when the effect loads. They are available in
-coordinate and `value` formulas, SDF formulas, and existing expression fields such as layer `scale`,
+coordinate, `value` and `age` formulas, SDF formulas, and existing expression fields such as layer `scale`,
 layer `parameters`, and the file's `duration`. A layer calling an atom from another file does not
 replace that atom's functions. Reloading recompiles the definitions.
 
@@ -154,12 +154,51 @@ duration: 200
 | `angularSpeed` | `Double` | `0.05` | Time multiplier → phase (animation). |
 | `range` | `[{min,max}, ...]` | `[0, tau]` per variable | Range of each variable. |
 | `x` / `y` / `z` | `String` | `0` | Coordinate formulas. |
+| `value` | `String` | drawing order | Per-point position on the spatial `gradient`, in `0…1`. |
+| `age` | `String` | layer age | Per-point normalized age for `colorOverLife` and `sizeOverLife`, clamped to `0…1`. |
 | `parameters` | `Map<String, Double>` | - | Default values for parameter variables. |
 
 Common fields (`particle`, `color`, `toColor`, `material`, `count`, `offset`, `speed`, `scale`,
 `rotationYaw`, `tiltAxis`, `tiltAngle`, `duration`, `modifiers`) are set at the top level and work
 the same way as for the other effects. Any runtime `parameters` (e.g. from modifiers) override the
 `curve.parameters` values during rendering.
+
+### Individual point age
+
+Use `age` inside a `curve` or `surface` block to give points separate lifetimes. It can use the
+sampling variables, `time` in ticks, parameters and local functions, just like the coordinate
+formulas. `age` and `value` are independent: a spatial gradient can stay fixed while size changes
+with age. Without `age`, points use the [layer's age](writing-effects.md#color-and-size-over-life).
+
+The bundled `age_wave` effect grows and fades around a ring:
+
+```yaml
+id: age_wave
+duration: 81
+particle: DUST
+dustSize: 1.2
+gradientInterpolation: hsv
+colorOverLife: ["#ffbb22", "#ff3366", "#5522cc"]
+sizeOverLife: [0, 1, 0]
+curve:
+  variables: [t]
+  samples: 96
+  angularSpeed: 0
+  range: [{min: 0, max: 1}]
+  x: '2 * cos(t * tau)'
+  y: '0'
+  z: '2 * sin(t * tau)'
+  age: '(time - t * 40) / 40'
+```
+
+Each point starts at tick `t * 40` and lives for 40 ticks. Negative ages clamp to `0`, ages above
+`1` clamp to `1`. The zero size stops keep points hidden before birth and after death. Age alone
+does not remove a point: a nonzero final size remains visible until the effect ends. `angularSpeed`
+also shifts the sampling variables seen by `age`. Use zero when the birth schedule should stay
+attached to the same points. Infinite effects can animate individual ages explicitly.
+
+Age formulas must produce finite numbers. A NaN or infinite result fails the frame with
+`Particle age must be finite`. Use `if` to guard invalid divisions or square roots.
 
 ## 3. The same effect via the Kotlin DSL
 
@@ -187,9 +226,20 @@ player.location.playParametric("ring") {
 The `ParametricConfig` builder:
 - `variables(...)`, `samples(...)`, `range(...)`, `ranges(...)`
 - `x(...)`, `y(...)`, `z(...)`, `angularSpeed(...)`
+- `value(formula)`, `age(formula)` - independent spatial gradient and normalized age expressions
 - `default(key, value)`, `defaults(map)`
 - `function(signature, body)` - local functions, using the same signatures and rules as YAML
 - `render { EffectConfig.() -> Unit }` - the same common settings as in `playEffect`.
+
+For individual lifetimes, configure age and appearance together:
+
+```kotlin
+age("(time - t * 40) / 40")
+render {
+    colorOverLife(Color.RED, Color.BLUE)
+    sizeOverLife(0f, 1f, 0f)
+}
+```
 
 For direct evaluator use, construct `ExpressionFunctions(mapOf("wave(u, a)" to "a * sin(u)"))`
 and pass it as the second argument to `ExpressionEvaluator.compile`. A compiled evaluator is shared

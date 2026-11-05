@@ -21,6 +21,10 @@ class ParticleBuffer(private var base: Location) {
     // optional per-particle RGB that overrides the gradient
     private var colors = IntArray(INITIAL_CAPACITY)
     private var colored = false
+
+    // normalized age is independent of the scalar used by spatial gradients
+    private var ages = DoubleArray(INITIAL_CAPACITY)
+    private var aged = false
     private var boundWorld: World? = null
 
     // rotation matrix of the frame being written, rebuilt only when the effect's orientation changes
@@ -38,6 +42,7 @@ class ParticleBuffer(private var base: Location) {
         count = size
         valued = false
         colored = false
+        aged = false
         bindWorld()
     }
 
@@ -52,6 +57,7 @@ class ParticleBuffer(private var base: Location) {
         count++
         if (valued) values[index] = NO_VALUE
         if (colored) colors[index] = NO_COLOR
+        if (aged) ages[index] = NO_VALUE
     }
 
     // assigns the gradient value of the particle at index
@@ -84,6 +90,19 @@ class ParticleBuffer(private var base: Location) {
     // RGB at index, or -1 when the particle has none
     fun colorAt(index: Int): Int = if (colored) colors[index] else NO_COLOR
 
+    // assigns normalized age
+    fun age(index: Int, value: Double) {
+        require(value.isFinite()) { "Particle age must be finite" }
+        if (!aged) {
+            aged = true
+            ages.fill(NO_VALUE, 0, count)
+        }
+        ages[index] = value.coerceIn(0.0, 1.0)
+    }
+
+    // NaN means the renderer should use the layer's age.
+    fun ageAt(index: Int): Double = if (aged) ages[index] else NO_VALUE
+
     // returns the reusable Location at the given logical index
     fun location(index: Int): Location = locations[index]
 
@@ -98,6 +117,7 @@ class ParticleBuffer(private var base: Location) {
         count = 0
         valued = false
         colored = false
+        aged = false
     }
 
     private fun ensureCapacity(size: Int) {
@@ -106,6 +126,9 @@ class ParticleBuffer(private var base: Location) {
         }
         if (values.size < size) {
             values = values.copyOf(maxOf(size, values.size * 2))
+        }
+        if (ages.size < size) {
+            ages = ages.copyOf(maxOf(size, ages.size * 2))
         }
         if (colors.size < size) {
             colors = colors.copyOf(maxOf(size, colors.size * 2))

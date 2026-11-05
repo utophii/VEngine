@@ -16,6 +16,9 @@ import org.bukkit.util.Vector
 *   Each particle picks its color by the value its effect assigns (e.g. escape time of a fractal),
 *   or by its index along the shape when the effect assigns none. Applies to DUST, DUST_COLOR_TRANSITION,
 *   ENTITY_EFFECT and PIXEL displays
+* @property gradientInterpolation color space for both spatial and lifetime gradients (default RGB)
+* @property colorOverLife evenly spaced color stops over normalized age, overrides own and spatial colors
+* @property sizeOverLife evenly spaced nonnegative size multipliers over normalized age, for dust and displays
 * @property dustSize : Dust particle size (default 1.0)
 * @property material : Material for block (BLOCK, FALLING_DUST) and item (ITEM) particles
 * @property count : Number of particles spawned at each point (default 1)
@@ -66,7 +69,16 @@ data class EffectOptions(
     val subject: Player? = null,
     val budgetExempt: Boolean = false,
     val lod: Boolean = true,
+    val gradientInterpolation: ColorInterpolation = ColorInterpolation.RGB,
+    val colorOverLife: List<Color> = emptyList(),
+    val sizeOverLife: List<Float> = emptyList(),
 ) {
+    init {
+        require(sizeOverLife.all { it.isFinite() && it >= 0f }) {
+            "sizeOverLife stops must be finite and nonnegative"
+        }
+    }
+
     fun toBuilder(): Builder = Builder()
         .particle(particle)
         .dustSize(dustSize)
@@ -74,6 +86,9 @@ data class EffectOptions(
         .offset(offsetX, offsetY, offsetZ)
         .speed(speed)
         .gradient(gradient)
+        .gradientInterpolation(gradientInterpolation)
+        .colorOverLife(colorOverLife)
+        .sizeOverLife(sizeOverLife)
         .scale(scale)
         .rotationYaw(rotationYaw)
         .rotationPitch(rotationPitch)
@@ -122,11 +137,17 @@ data class EffectOptions(
         private var subject: Player? = null
         private var budgetExempt: Boolean = false
         private var lod: Boolean = true
+        private var gradientInterpolation = ColorInterpolation.RGB
+        private var colorOverLife: List<Color> = emptyList()
+        private var sizeOverLife: List<Float> = emptyList()
 
         fun particle(value: Particle) = apply { particle = value }
         fun color(value: Color) = apply { color = value }
         fun toColor(value: Color) = apply { toColor = value }
         fun gradient(value: List<Color>) = apply { gradient = value.toList() }
+        fun gradientInterpolation(value: ColorInterpolation) = apply { gradientInterpolation = value }
+        fun colorOverLife(value: List<Color>) = apply { colorOverLife = value.toList() }
+        fun sizeOverLife(value: List<Float>) = apply { sizeOverLife = value.toList() }
         fun dustSize(value: Float) = apply { dustSize = value }
         fun material(value: Material) = apply { material = value }
         fun count(value: Int) = apply { count = value.coerceAtLeast(1) }
@@ -181,6 +202,9 @@ data class EffectOptions(
             subject = subject,
             budgetExempt = budgetExempt,
             lod = lod,
+            gradientInterpolation = gradientInterpolation,
+            colorOverLife = colorOverLife,
+            sizeOverLife = sizeOverLife,
         )
     }
 

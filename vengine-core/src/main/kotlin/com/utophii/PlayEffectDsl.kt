@@ -88,6 +88,12 @@ class EffectConfig {
     // per-particle colors
     fun gradient(vararg stops: Color) = builder.gradient(stops.toList())
 
+    fun gradientInterpolation(value: ColorInterpolation) = builder.gradientInterpolation(value)
+
+    fun colorOverLife(vararg stops: Color) = builder.colorOverLife(stops.toList())
+
+    fun sizeOverLife(vararg stops: Float) = builder.sizeOverLife(stops.toList())
+
     fun dustSize(value: Float) = builder.dustSize(value)
 
     fun material(material: Material) = builder.material(material)
@@ -333,6 +339,8 @@ class ParametricConfig {
     private var xFormula = DEFAULT_FORMULA
     private var yFormula = DEFAULT_FORMULA
     private var zFormula = DEFAULT_FORMULA
+    private var valueFormula: String? = null
+    private var ageFormula: String? = null
     private var angularSpeed = DEFAULT_ANGULAR_SPEED
     private val formulaDefaults = linkedMapOf<String, Double>()
     private val formulaFunctions = linkedMapOf<String, String>()
@@ -376,6 +384,15 @@ class ParametricConfig {
 
     fun z(formula: String) {
         zFormula = formula
+    }
+
+    // independent formulas for the spatial gradient and normalized lifetime
+    fun value(formula: String) {
+        valueFormula = formula
+    }
+
+    fun age(formula: String) {
+        ageFormula = formula
     }
 
     fun angularSpeed(value: Double) {
@@ -424,6 +441,8 @@ class ParametricConfig {
             defaults = formulaDefaults,
             angularSpeed = angularSpeed,
             functions = ExpressionFunctions(formulaFunctions),
+            valueFormula = valueFormula,
+            ageFormula = ageFormula,
         )
     }
 

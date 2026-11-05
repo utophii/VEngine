@@ -39,6 +39,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         time: Double,
         frameRotation: Quaternionf? = null,
         colors: IntArray? = null,
+        sizes: FloatArray? = null,
     ) {
         val previous = look
         if (previous != null && previous.type != display.type) {
@@ -59,7 +60,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         val interpolation = display.interpolationTicks.coerceIn(0, DisplayOptions.MAX_INTERPOLATION_TICKS)
         for (index in 0 until target) {
             val position = positions[index]
-            val transform = modelTransformation(display, opts, index, time, frameRotation)
+            val transform = modelTransformation(display, opts, index, time, frameRotation, sizes?.get(index) ?: 1f)
             val color = colors?.get(index) ?: uniformColor
             if (index >= entities.size) {
                 spawn(position, display, transform, index, opts, color) ?: return
@@ -246,6 +247,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
             index: Int,
             time: Double,
             frameRotation: Quaternionf? = null,
+            sizeMultiplier: Float = 1f,
         ): Transformation {
             // angleTime = t + i * phase: offsets each piece along the spin so the set does not rotate in lockstep
             val angleTime = time + index * display.phase
@@ -256,9 +258,9 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
             )
             frameRotation?.let { frame -> rotation.premul(frame) }
             val size = Vector3f(
-                (display.size.x * opts.scale).toFloat(),
-                (display.size.y * opts.scale).toFloat(),
-                (display.size.z * opts.scale).toFloat(),
+                (display.size.x * opts.scale * sizeMultiplier).toFloat(),
+                (display.size.y * opts.scale * sizeMultiplier).toFloat(),
+                (display.size.z * opts.scale * sizeMultiplier).toFloat(),
             )
             return when (display.type) {
                 // block models span 0..1 from their corner; T = R(S * -0.5) rotates and scales them around their center

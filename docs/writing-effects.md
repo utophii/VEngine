@@ -130,6 +130,52 @@ first stop to last. Gradients work with `DUST`, `DUST_COLOR_TRANSITION` and `ENT
 particles and with `pixel` displays. Image shapes use the picture's colors unless they set
 `colors: gradient`.
 
+Set `gradientInterpolation: hsv` to interpolate hue along the shortest arc of the color wheel.
+For example, red to blue passes through magenta. The default is `rgb`, preserving existing effects.
+When one stop is gray or black, HSV borrows the other stop's hue.
+
+### Color and size over life
+
+`colorOverLife` changes color with age. `sizeOverLife` changes size using multipliers of the
+base `dustSize` or display model size. Both lists have evenly spaced stops from birth (`0`)
+to the end of life (`1`). They can be used independently:
+
+```yaml
+id: fading_ring
+duration: 60
+particle: DUST
+dustSize: 1.2
+gradientInterpolation: hsv
+colorOverLife: ["#ff2200", "#ffcc00", "#220000"]
+sizeOverLife: [0.3, 1.0, 0.0]
+curve:
+  samples: 64
+  angularSpeed: 0
+  x: 'cos(t)'
+  y: '0'
+  z: 'sin(t)'
+```
+
+By default, all points use the layer's elapsed time divided by its actual duration minus one tick.
+The first rendered tick uses the first stop and the last tick uses the final stop. Delayed layers
+start their own age at zero. Layers cut short by their parent use the shortened duration.
+A one-tick or infinite layer stays at age zero. Custom effects can assign individual ages through
+`ParticleBuffer.age(index, normalizedAge)`. Unassigned points still use the layer's age.
+YAML curves and surfaces can assign ages with an [`age` formula](parametric-effects.md#individual-point-age).
+The bundled `age_wave.yml` demonstrates staggered birth and fading around a ring.
+
+`colorOverLife` overrides both `gradient` and image/point colors and uses the same
+`gradientInterpolation` setting. It supports `DUST`, `DUST_COLOR_TRANSITION`, `ENTITY_EFFECT`
+and `pixel` displays. For dust transitions, `toColor` remains the client-side target color.
+
+Size stops must be finite, nonnegative numbers. `1` means the base size and `0` hides the point:
+dust particles stop being emitted and display models shrink to zero. Size changes support both
+dust types and all display types. Other particle types ignore them. Positive dust sizes are limited
+to `0.01…4`. Colors and size curves are sampled at 64 age steps, with payloads reused across frames.
+
+These settings control each newly emitted frame. Previously spawned Minecraft particles keep
+their client-side animation and lifetime. This does not edit or remove particles already in flight.
+
 ### Display entities
 
 Add a `display:` block to a layer and it places an item, block or text model at every point

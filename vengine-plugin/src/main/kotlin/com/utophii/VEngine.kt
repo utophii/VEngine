@@ -210,6 +210,7 @@ class VEngine : JavaPlugin() {
         saveIfMissing("effects/spline_beam.yml")
         saveIfMissing("effects/crystal_ward.yml")
         saveIfMissing("effects/parametric_rose.yml")
+        saveIfMissing("effects/age_wave.yml")
         saveIfMissing("effects/parametric_torus.yml")
         saveIfMissing("effects/traveling_comet.yml")
         saveIfMissing("effects/julia_portal.yml")

@@ -20,24 +20,26 @@ class FrameRenderer(private val origin: Location) {
     private val payload = PayloadCache()
 
     // anchor is set for followed effects
-    fun render(buffer: ParticleBuffer, opts: EffectOptions, time: Double, anchor: FollowAnchor? = null) {
+    fun render(buffer: ParticleBuffer, opts: EffectOptions, time: Double, anchor: FollowAnchor? = null, duration: Long = opts.duration) {
         val positions = buffer.list()
-        val colored = gradient.resolve(buffer, opts)
+        val colored = gradient.resolve(buffer, opts, time, duration)
         val display = opts.display
         if (display == null) {
             clearDisplays()
             spawnParticles(positions, opts, colored)
             return
         }
-        val colors = if (colored) gradient.argb() else null
+        val sizes = if (opts.sizeOverLife.isNotEmpty()) gradient.sizes() else null
+        val hasColors = buffer.hasColors() || opts.gradient.isNotEmpty() || opts.colorOverLife.isNotEmpty()
+        val colors = if (colored && hasColors) gradient.argb() else null
         // with PacketEvents the models exist only on the clients
         val clientPool = client ?: PacketDisplays.create(origin)?.also { client = it }
         if (clientPool != null) {
             displays?.clear()
-            clientPool.sync(positions, opts, display, time, anchor, colors)
+            clientPool.sync(positions, opts, display, time, anchor, colors, sizes)
         } else {
             val pool = displays ?: DisplayEntityPool(FXEngine.scheduler()).also { displays = it }
-            pool.sync(positions, opts, display, time, anchor?.frameRotation(), colors)
+            pool.sync(positions, opts, display, time, anchor?.frameRotation(), colors, sizes)
         }
         if (display.withParticles) {
             spawnParticles(positions, opts, colored)
@@ -69,6 +71,9 @@ class FrameRenderer(private val origin: Location) {
             offsetZ = opts.offsetZ,
             speed = opts.speed,
             dataAt = if (colored && gradient.colorsParticles()) gradient::dataAt else null,
+            visibleAt = if (colored && opts.sizeOverLife.isNotEmpty() &&
+                (opts.particle == Particle.DUST || opts.particle == Particle.DUST_COLOR_TRANSITION)
+            ) gradient::visibleAt else null,
             budgeted = !opts.budgetExempt,
             lod = opts.lod,
         )

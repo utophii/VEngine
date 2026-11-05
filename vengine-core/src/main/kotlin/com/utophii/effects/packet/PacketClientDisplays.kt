@@ -67,6 +67,7 @@ class PacketClientDisplays(
         time: Double,
         anchor: FollowAnchor?,
         colors: IntArray?,
+        sizes: FloatArray?,
     ) {
         val entity = anchor?.entity
         if (entity != null && !entity.isValid) {
@@ -96,7 +97,7 @@ class PacketClientDisplays(
             val dy = position.y - reference.y
             val dz = position.z - reference.z
             extentSquared = maxOf(extentSquared, dx * dx + dy * dy + dz * dz)
-            val transform = DisplayEntityPool.modelTransformation(display, opts, index, time, frameRotation)
+            val transform = DisplayEntityPool.modelTransformation(display, opts, index, time, frameRotation, sizes?.get(index) ?: 1f)
             transform.translation.add(dx.toFloat(), dy.toFloat(), dz.toFloat())
             transform
         }

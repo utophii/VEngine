@@ -326,6 +326,7 @@ class EffectScheduler(val plugin: JavaPlugin) {
         budgeted: Boolean = true,
         lod: Boolean = true,
         rankOffset: Int = 0,
+        visibleAt: ((Int) -> Boolean)? = null,
     ) {
         if (locations.isEmpty()) {
             return
@@ -335,6 +336,7 @@ class EffectScheduler(val plugin: JavaPlugin) {
         var viewers: FrameViewers? = null
         val radiusSquared = viewDistanceSquared
         for (index in locations.indices) {
+            if (visibleAt != null && !visibleAt(index)) continue
             val location = locations[index]
             val world = location.world ?: continue
             val current = viewers?.takeIf { it.world === world }

@@ -1,5 +1,6 @@
 package com.utophii.effects
 
+import com.utophii.api.ColorInterpolation
 import com.utophii.api.CompositeEffectHandle
 import com.utophii.api.EffectHandle
 import com.utophii.api.EffectOptions
@@ -94,7 +95,7 @@ class ScriptedEffect(
                 },
                 render = { time, frame ->
                     anchor?.apply(frame.positions.list())
-                    renderer.render(frame.positions, frame.options, time, anchor)
+                    renderer.render(frame.positions, frame.options, time, anchor, clampedDuration)
                 },
                 release = { frame -> ParticleBufferPool.release(frame.positions) },
                 onStop = renderer::dispose,
@@ -227,6 +228,11 @@ data class ScriptedLayer(
         runtime.color?.let(builder::color)
         runtime.toColor?.let(builder::toColor)
         if (runtime.gradient.isNotEmpty()) builder.gradient(runtime.gradient)
+        if (runtime.gradientInterpolation != ColorInterpolation.RGB) {
+            builder.gradientInterpolation(runtime.gradientInterpolation)
+        }
+        if (runtime.colorOverLife.isNotEmpty()) builder.colorOverLife(runtime.colorOverLife)
+        if (runtime.sizeOverLife.isNotEmpty()) builder.sizeOverLife(runtime.sizeOverLife)
         runtime.material?.let(builder::material)
         runtime.display?.let(builder::display)
         if (runtime.budgetExempt) builder.budgetExempt(true)

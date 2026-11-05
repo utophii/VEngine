@@ -1,8 +1,15 @@
 package com.utophii.config
 
+import com.utophii.api.ColorInterpolation
 import com.utophii.api.EffectOptions
 import com.utophii.api.ParametricConfig
 import com.utophii.effects.ImplicitEffect
+import com.utophii.effects.GradientColors
+import com.utophii.effects.ParametricEffect
+import com.utophii.effects.ParticleBuffer
+import com.utophii.effects.ScriptedEffect
+import com.utophii.effects.ScriptedLayer
+import org.bukkit.Color
 import com.utophii.engine.FXEngine
 import com.utophii.engine.PlaceholderExpression
 import com.utophii.math.ExpressionFunctions
@@ -44,6 +51,113 @@ class ExpressionLoadingTest {
     private fun file(name: String, contents: String): File = File(directory, "effects/$name.yml").apply {
         parentFile.mkdirs()
         writeText(contents.trimIndent())
+    }
+
+    @Test
+    fun `YAML age formulas support curves surfaces and local functions without requiring a value`() {
+        for (block in listOf("curve", "surface")) {
+            val source = file("age_$block", """
+                functions:
+                  'lifetime(u, tick)': '(tick - u * 40) / 40'
+                $block:
+                  variables: ${if (block == "curve") "[u]" else "[u, v]"}
+                  samples: ${if (block == "curve") "4" else "[4, 4]"}
+                  angularSpeed: 0
+                  range: [{min: 0, max: 1}, {min: 0, max: 1}]
+                  age: 'lifetime(u, time)'
+            """)
+            val effect = YamlEffectLoader(directory, logger).load(source) as ParametricEffect
+            val buffer = ParticleBuffer(center)
+            effect.calculateInto(buffer, center, EffectOptions(), 40.0)
+            assertEquals(1.0, buffer.ageAt(0), 1e-9)
+            assertEquals(0.25, buffer.ageAt(buffer.list().lastIndex), 1e-9)
+            assertTrue(!buffer.hasValues())
+        }
+        val invalid = file("invalid_age", """
+            curve:
+              age: 'unknown_function(time)'
+        """)
+        assertNull(YamlEffectLoader(directory, logger).load(invalid))
+        assertTrue(messages.any { "invalid_age.yml" in it && "formula" in it })
+    }
+
+    @Test
+    fun `bundled age wave grows and fades at different times around the ring`() {
+        val source = File("../vengine-plugin/src/main/resources/effects/age_wave.yml")
+        file("age_wave", source.readText())
+        val effect = YamlEffectLoader(directory, logger).loadAll().single() as ParametricEffect
+        val layersField = ScriptedEffect::class.java.getDeclaredField("layers").apply { isAccessible = true }
+        val layer = (layersField.get(FXEngine.effect(effect.name)) as List<*>).single() as ScriptedLayer
+        val buffer = ParticleBuffer(center)
+        val colors = GradientColors()
+
+        effect.calculateInto(buffer, center, layer.options, 0.0)
+        colors.resolve(buffer, layer.options, 0.0)
+        assertTrue(buffer.list().indices.none(colors::visibleAt))
+
+        effect.calculateInto(buffer, center, layer.options, 20.0)
+        colors.resolve(buffer, layer.options, 20.0)
+        assertTrue(colors.visibleAt(0))
+        assertTrue(!colors.visibleAt(72), "this point has not been born yet")
+        assertTrue(colors.argb()[0] != colors.argb()[72])
+
+        effect.calculateInto(buffer, center, layer.options, 80.0)
+        colors.resolve(buffer, layer.options, 80.0)
+        assertTrue(buffer.list().indices.none(colors::visibleAt))
+        assertTrue(messages.isEmpty(), messages.toString())
+    }
+
+    @Test
+    fun `lifetime options survive YAML atom wrapping and layer loading`() {
+        file("atom", """
+            id: appearance_atom
+            particle: DUST
+            gradientInterpolation: hsv
+            colorOverLife: ["#ff0000", "#0000ff"]
+            sizeOverLife: [1, 0.5, 0]
+            curve:
+              x: cos(t)
+        """)
+        file("layered", """
+            id: appearance_layered
+            layers:
+              - effect: appearance_atom
+                gradientInterpolation: HSV
+                colorOverLife: ["#ff0000", "#0000ff"]
+                sizeOverLife: [1, 0.5, 0]
+        """)
+        val loaded = YamlEffectLoader(directory, logger).loadAll()
+        assertEquals(2, loaded.size)
+        // Inspect the loaded layer options without requiring a running Bukkit scheduler.
+        val layersField = ScriptedEffect::class.java.getDeclaredField("layers").apply { isAccessible = true }
+        for (effect in loaded) {
+            val layer = (layersField.get(FXEngine.effect(effect.name)) as List<*>).single() as ScriptedLayer
+            assertEquals(ColorInterpolation.HSV, layer.options.gradientInterpolation)
+            assertEquals(listOf(Color.RED, Color.BLUE), layer.options.colorOverLife)
+            assertEquals(listOf(1f, 0.5f, 0f), layer.options.sizeOverLife)
+        }
+        assertTrue(messages.isEmpty(), messages.toString())
+    }
+
+    @Test
+    fun `malformed lifetime options warn and keep safe defaults`() {
+        file("invalid_appearance", """
+            gradientInterpolation: unknown
+            colorOverLife: ["#ff0000", invalid]
+            sizeOverLife: [1, -1, 0]
+            curve:
+              x: cos(t)
+        """)
+        val loaded = YamlEffectLoader(directory, logger).loadAll()
+        assertEquals(1, loaded.size)
+        val layersField = ScriptedEffect::class.java.getDeclaredField("layers").apply { isAccessible = true }
+        val layer = (layersField.get(FXEngine.effect(loaded.single().name)) as List<*>).single() as ScriptedLayer
+        assertEquals(ColorInterpolation.RGB, layer.options.gradientInterpolation)
+        assertTrue(layer.options.colorOverLife.isEmpty())
+        assertTrue(layer.options.sizeOverLife.isEmpty())
+        assertTrue(messages.any { "gradientInterpolation" in it })
+        assertTrue(messages.any { "colorOverLife" in it })
+        assertTrue(messages.any { "sizeOverLife" in it })
     }
 
     @Test

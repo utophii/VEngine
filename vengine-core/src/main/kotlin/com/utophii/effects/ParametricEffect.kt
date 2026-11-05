@@ -27,11 +27,14 @@ class ParametricEffect(
     // optional 0..1 gradient value of each sample
     private val valueFormula: String? = null,
     functions: ExpressionFunctions = ExpressionFunctions.EMPTY,
+    // optional normalized age, independent of the spatial gradient value
+    private val ageFormula: String? = null,
 ) : AbstractParticleEffect(name), ConfiguredPrimitive {
 
     // compiled once per axis and shared across concurrent plays
-    private val evaluators: List<ExpressionEvaluator> = listOfNotNull(xFormula, yFormula, zFormula, valueFormula)
+    private val evaluators: List<ExpressionEvaluator> = listOfNotNull(xFormula, yFormula, zFormula, valueFormula, ageFormula)
         .map { formula -> ExpressionEvaluator.compileOrThrow(formula, functions) }
+    private val ageAxis = VALUE_AXIS + if (valueFormula == null) 0 else 1
 
     // writes the sampled parametric positions into the pooled buffer
     override fun calculateInto(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
@@ -122,7 +125,7 @@ class ParametricEffect(
             val y = axes[1].evaluate(params)
             val z = axes[2].evaluate(params)
             writeParticle(buffer, index, x, y, z, center, opts, time)
-            axes.getOrNull(VALUE_AXIS)?.let { value -> buffer.value(index, value.evaluate(params)) }
+            writeAppearance(buffer, index, params, axes)
         }
     }
 
@@ -160,10 +163,20 @@ class ParametricEffect(
                 val y = axes[1].evaluate(params)
                 val z = axes[2].evaluate(params)
                 writeParticle(buffer, index, x, y, z, center, opts, time)
-                axes.getOrNull(VALUE_AXIS)?.let { value -> buffer.value(index, value.evaluate(params)) }
+                writeAppearance(buffer, index, params, axes)
                 index++
             }
         }
+    }
+
+    private fun writeAppearance(
+        buffer: ParticleBuffer,
+        index: Int,
+        params: Map<String, Double>,
+        axes: List<ExpressionEvaluator.Fork>,
+    ) {
+        if (valueFormula != null) buffer.value(index, axes[VALUE_AXIS].evaluate(params))
+        if (ageFormula != null) buffer.age(index, axes[ageAxis].evaluate(params))
     }
 
     companion object {

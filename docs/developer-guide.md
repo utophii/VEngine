@@ -67,6 +67,9 @@ All methods configure an effect and its **common** properties. The full table is
 | `color()` | `Color` | Primary color (start color for `DUST_COLOR_TRANSITION`). | `color(Color.fromRGB(0, 255, 160))` |
 | `toColor()` | `Color` | End color for `DUST_COLOR_TRANSITION`. | `toColor(Color.BLUE)` |
 | `gradient()` | `Color...` | Per-particle colors sampled from these stops, see [Gradients](writing-effects.md#gradients). | `gradient(Color.PURPLE, Color.ORANGE)` |
+| `gradientInterpolation()` | `ColorInterpolation` | Color space for spatial and lifetime gradients, defaults to `RGB`. | `gradientInterpolation(ColorInterpolation.HSV)` |
+| `colorOverLife()` | `Color...` | Evenly spaced color stops over normalized age, overrides spatial/own colors. | `colorOverLife(Color.RED, Color.YELLOW, Color.BLACK)` |
+| `sizeOverLife()` | `Float...` | Nonnegative multipliers of dust/display size over normalized age. | `sizeOverLife(0.2f, 1f, 0f)` |
 | `dustSize()` | `Float` | Dust particle size. | `dustSize(1.4f)` |
 | `material()` | `Material` | Material for `BLOCK`/`FALLING_DUST` and `ITEM`. | `material(Material.AMETHYST_BLOCK)` |
 | `count()` | `Int` | Number of particles per point (min 1). | `count(4)` |
