@@ -12,7 +12,7 @@ by hand and calling `FXEngine.play(...)`, you get a readable, self-documenting c
 can't be broken by a "wrong" signature.
 
 ```kotlin
-player.location.playEffect("torus") {
+player.location.playEffect("basic") {
     scale(2.0)
     color(Color.PURPLE)
     duration(120L)
@@ -41,10 +41,8 @@ import com.utophii.api.playEffect
 Minimal example - spawn an effect at a player's location:
 
 ```kotlin
-val handle: EffectHandle? = player.location.playEffect("helix") {
+val handle: EffectHandle? = player.location.playEffect("basic") {
     radius(1.0)
-    height(3.0)
-    turns(3.0)
     duration(80L)
 }
 ```
@@ -90,7 +88,7 @@ import org.bukkit.Color
 import org.bukkit.Material
 import org.bukkit.util.Vector
 
-player.location.playEffect("helix") {
+player.location.playEffect("basic") {
     duration(160L)
     parameters(mapOf("radius" to 1.4, "height" to 0.0, "turns" to 1.0, "points" to 6.0))
     display(
@@ -126,7 +124,7 @@ player.location.playEffect("helix") {
 
 Notes:
 
-- Works with every effect - built-in atoms, formula atoms, scripted layers and your own
+- Works with every effect - configured atoms, scripted layers and your own
   `AbstractParticleEffect` subclasses - because the swap happens in the shared frame renderer.
 - Entities are spawned on the server thread, are non-persistent, are capped at 256 per effect
   (or per scripted layer), and are removed when the handle is cancelled or the effect ends.
@@ -201,44 +199,35 @@ player.playEffect("wings", offset = Vector(0.0, 1.2, -0.3), rotation = FollowRot
 arrow.playEffect("comet_trail", rotation = FollowRotation.VELOCITY)
 ```
 
-## 3. Primitive atoms and their parameters
+## 3. Configured atoms and procedural generators
 
-VEngine is an **engine for creating effects**, not a "catalog of ready-made ones". Everything is built
-on **atoms**: a small set of building blocks from which you compose effects (YAML layers, formulas,
-modifiers, DSL). Most atoms are **formulas** (see [Parametric Effects](parametric-effects.md)). Only the
-irreducible ones - a uniform sphere and numerically integrated systems - remain as code.
-
-### Built-in atoms (Kotlin)
-`sphere`, `rk4_trajectory`, the strange attractors (`lorenz`, `aizawa`, `thomas`, `rossler`,
-`halvorsen`), the fractals (`julia`, `sierpinski_triangle`, `sierpinski_tetrahedron`,
-`sierpinski_carpet`, `menger_sponge`) and the Chladni plates (`chladni`, `chladni_circle`) are
-always registered. Every parameter with its default is listed in
-[Built-in primitives](built-in-primitives.md).
+No named geometry is registered by the engine at startup. The plugin loads `basic`, `animated`
+and `display` from YAML. Other names must come from your own files or an `EffectProvider`.
+The general classes `PointEffect`, `OdeEffect`, `IterationEffect` and `FieldEffect` are public in
+`com.utophii.effects`. Their constructors accept formula strings, numeric parameter defaults,
+local `ExpressionFunctions`, output formulas and follow defaults.
 
 ```kotlin
-location.playEffect("julia") {
-    duration(200)
-    parameter("radius", 1.8)
-    parameter("cOrbit", 0.06)
-}
+val oscillator = OdeEffect(
+    name = "oscillator",
+    initial = mapOf("x" to "1", "v" to "0"),
+    derivatives = mapOf("x" to "v", "v" to "-x"),
+    step = "0.05",
+    samples = "128",
+    output = mapOf("x" to "x", "y" to "v", "z" to "0"),
+)
+FXEngine.registerEffect(oscillator)
+location.playEffect("oscillator") { duration(200L) }
 ```
 
-### Formula atoms (YAML in `effects/`)
-Atoms defined by formulas. Their parameters are the formula variables (via `parameter`/`parameters`).
-| Name | Key parameters |
-|---|---|
-| `helix` | `radius` (1.0), `height` (3.0), `turns` (3.0) |
-| `torus` | `majorRadius` (1.4), `minorRadius` (0.45) |
-| `lissajous` | `amplitudeX` (1.6), `amplitudeZ` (1.6), `a` (3.0), `b` (2.0), `delta` (π/2) |
-| `rosette` | `majorRadius` (1.0), `minorRadius` (0.25), `distance` (0.9) |
-| `torus_knot` | `majorRadius` (1.6), `minorRadius` (0.6), `p` (2.0), `q` (3.0) |
-| `beam` | `length` (5.0), `height` (1.2), `waveSpeed` (0.2), `waveAmplitude` (0.08) |
-| `spline_beam` | `length` (6.0), `arcHeight` (1.4), `waveAmplitude` (0.12), `waveFrequency` (3.0), `waveSpeed` (0.25) |
-| `supershape` | `radius` (1.6), `m1/a1/b1/n11/n12/n13`, `m2/a2/b2/n21/n22/n23` |
+You can also call `oscillator.play(location, options)` directly. Rendering, displays, modifiers
+and follow behavior use the same `ParticleEffect` contract as other atoms. To use a generator
+inside YAML layers without registering it, put its geometry block directly inside the layer.
+See [Procedural generators](procedural-generators.md) for the available settings.
 
-> Common to all atoms: `points` / `samples` (density) and `angularSpeed` (animation) are overridden
-> on the fly and can be set in any `playEffect`/DSL/YAML layer. For example, `parameter("points", 96)`
-> increases density.
+Parameter names belong to the configured formulas. For example, `parameter("points", 96)` affects
+a procedural atom only if its `samples` formula refers to `points`. Curve and surface atoms keep
+their existing `points` / `samples` overrides.
 
 ## 4. Modifiers
 
@@ -246,7 +235,7 @@ Atoms defined by formulas. Their parameters are the formula variables (via `para
 is applied in declaration order.
 
 ```kotlin
-player.location.playEffect("torus_knot") {
+player.location.playEffect("basic") {
     scale(1.5)
     duration(200L)
     modifiers {
@@ -279,7 +268,7 @@ spawn point**: at time 0 the displacement is `(0, 0, 0)`, so the effect always s
 you spawned it.
 
 ```kotlin
-player.location.playEffect("helix") {
+player.location.playEffect("basic") {
     radius(0.8)
     duration(200L)
     modifiers {
@@ -302,7 +291,7 @@ against the spawn location, so the effect's center lands exactly on the target:
 
 ```kotlin
 val spawn = player.location
-spawn.playEffect("torus_knot") {
+spawn.playEffect("basic") {
     duration(160L)
     moveTo(spawn.clone().add(20.0, 3.0, 0.0), ticks = 100L)   // glide to an exact coordinate
     moveTo(spawn.clone().add(20.0, 8.0, 0.0), ticks = 40L)    // ...then rise another 5 blocks
@@ -335,7 +324,7 @@ val myModifier = EffectModifier { loc, _ ->
     loc.clone().add(0.0, 1.0, 0.0)   // raises the particle by one block
 }
 
-player.location.playEffect("torus") {
+player.location.playEffect("basic") {
     modifiers {
         add(myModifier)
     }
@@ -354,7 +343,7 @@ import org.bukkit.entity.Player
 import org.bukkit.util.Vector
 
 fun spawnPartyEffect(player: Player): EffectHandle? =
-    player.location.playEffect("spline_beam") {
+    player.location.playEffect("basic") {
         // material and rendering
         particle(Particle.DUST_COLOR_TRANSITION)
         color(Color.fromRGB(120, 80, 255))
@@ -379,8 +368,7 @@ fun spawnPartyEffect(player: Player): EffectHandle? =
         }
 
         // effect-specific parameters
-        parameter("length", 8.0)
-        parameter("arcHeight", 2.0)
+        parameter("radius", 2.0)
         points(160)
     }
 ```
@@ -398,7 +386,7 @@ fun spawnPartyEffect(player: Player): EffectHandle? =
 `playEffect` returns an `EffectHandle?` that lets you stop the effect early:
 
 ```kotlin
-val handle = player.location.playEffect("lorenz") {
+val handle = player.location.playEffect("basic") {
     duration(600L)
 }
 
@@ -414,7 +402,7 @@ It's handy to keep a `handle` in a `UUID -> EffectHandle` map and cancel on `Pla
 ```kotlin
 val handles = mutableMapOf<java.util.UUID, com.utophii.api.EffectHandle>()
 
-handles[player.uniqueId] = player.location.playEffect("torus") {
+handles[player.uniqueId] = player.location.playEffect("basic") {
     duration(200L)
 }
 
@@ -506,6 +494,5 @@ Key `FXEngine` methods:
 - `primitiveEffect(name)` / `effect(name)` - look up an effect/atom.
 - `stopAll()` / `stop(id)` / `activeHandles()` - manage running effects.
 
-> "Engine vs content": the built-in atoms are **examples** (in `resources/effects/`), and the real
-> product is the **ability to create effects** (formulas, layers, modifiers, and via SPI). So `effects/`
-> isn't a "catalog" but included building blocks that can be replaced or extended.
+> The plugin bundles three independent learning examples. All other recipes live outside the jar,
+> while their generation mechanisms remain available through YAML and the public classes.

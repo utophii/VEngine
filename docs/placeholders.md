@@ -19,7 +19,7 @@ without it.
 | `%vengine_effects%` | Number of registered effects |
 | `%vengine_effects_list%` | Registered effect names, comma-separated |
 | `%vengine_active%` | Spawned effects that are still running |
-| `%vengine_active_list%` | Their ids (`torus#3`), sorted |
+| `%vengine_active_list%` | Their ids (`basic#3`), sorted |
 | `%vengine_active_names%` | Unique names of those effects |
 | `%vengine_view_distance%` | Particle view distance from `config.yml` |
 | `%vengine_nearest%` | Name of the running effect closest to the player |

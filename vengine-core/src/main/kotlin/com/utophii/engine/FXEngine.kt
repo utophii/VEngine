@@ -5,18 +5,6 @@ import com.utophii.api.EffectHandle
 import com.utophii.api.EffectProvider
 import com.utophii.api.FollowOptions
 import com.utophii.api.ParticleEffect
-import com.utophii.effects.AizawaAttractorEffect
-import com.utophii.effects.ChladniEffect
-import com.utophii.effects.CircularChladniEffect
-import com.utophii.effects.ConfiguredPrimitive
-import com.utophii.effects.HalvorsenAttractorEffect
-import com.utophii.effects.JuliaEffect
-import com.utophii.effects.LorenzAttractorEffect
-import com.utophii.effects.RosslerAttractorEffect
-import com.utophii.effects.ThomasAttractorEffect
-import com.utophii.effects.RK4TrajectoryEffect
-import com.utophii.effects.SierpinskiEffect
-import com.utophii.effects.SphereEffect
 import org.bukkit.Location
 import org.bukkit.plugin.java.JavaPlugin
 import java.util.concurrent.atomic.AtomicInteger
@@ -24,6 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger
 // Central VEngine effect registry and scheduling facade
 object FXEngine {
     private val primitiveEffects = linkedMapOf<String, ParticleEffect>()
+    private val configuredEffects = linkedMapOf<String, ParticleEffect>()
     private val scriptedEffects = linkedMapOf<String, ParticleEffect>()
     private val providers = mutableListOf<EffectProvider>()
     private var scheduler: EffectScheduler? = null
@@ -36,24 +25,9 @@ object FXEngine {
 
     const val DEFAULT_MAX_EMITTED_EFFECTS = 256
 
-    // initializes the engine and registers the irreducible Kotlin primitive effects.
-    // All other shapes are formula primitives loaded from the effects/ YAML directory.
+    // initializes scheduling
     fun initialize(plugin: JavaPlugin) {
         scheduler = EffectScheduler(plugin)
-        registerPrimitive(SphereEffect())
-        registerPrimitive(RK4TrajectoryEffect())
-        registerPrimitive(LorenzAttractorEffect())
-        registerPrimitive(AizawaAttractorEffect())
-        registerPrimitive(ThomasAttractorEffect())
-        registerPrimitive(RosslerAttractorEffect())
-        registerPrimitive(HalvorsenAttractorEffect())
-        registerPrimitive(JuliaEffect())
-        registerPrimitive(SierpinskiEffect.triangle())
-        registerPrimitive(SierpinskiEffect.tetrahedron())
-        registerPrimitive(SierpinskiEffect.carpet())
-        registerPrimitive(SierpinskiEffect.mengerSponge())
-        registerPrimitive(ChladniEffect())
-        registerPrimitive(CircularChladniEffect())
     }
 
     fun nextScriptedId(): Int = scriptedIdCounter.getAndIncrement()
@@ -61,6 +35,11 @@ object FXEngine {
     // registers or replaces a primitive effect used as an engine building block
     fun registerPrimitive(effect: ParticleEffect) {
         primitiveEffects[effect.name.lowercase()] = effect
+    }
+
+    // tracks YAML ownership separately
+    internal fun registerConfigured(effect: ParticleEffect) {
+        configuredEffects[effect.name.lowercase()] = effect
     }
 
     // registers a custom effect from an external plugin; equivalent to registerPrimitive but named for the SPI
@@ -87,22 +66,22 @@ object FXEngine {
         scriptedEffects.clear()
     }
 
-    // removes the primitives that were refreshed from YAML, keeping bundled Kotlin primitives intact
+    // removes the primitives that were refreshed from YAML, keeping external provider effects intact
     fun clearParametricPrimitives() {
-        primitiveEffects.filterValues { it is ConfiguredPrimitive }.keys.forEach(primitiveEffects::remove)
+        configuredEffects.clear()
     }
 
     // returns a primitive effect by registry name
-    fun primitiveEffect(name: String): ParticleEffect? = primitiveEffects[name.lowercase()]
+    fun primitiveEffect(name: String): ParticleEffect? = configuredEffects[name.lowercase()] ?: primitiveEffects[name.lowercase()]
 
     // returns any effect by registry name; scripted effects override primitive names
     fun effect(name: String): ParticleEffect? {
         val key = name.lowercase()
-        return scriptedEffects[key] ?: primitiveEffects[key]
+        return scriptedEffects[key] ?: primitiveEffect(key)
     }
 
     // returns a sorted snapshot of all registered effect names
-    fun effectNames(): List<String> = (primitiveEffects.keys + scriptedEffects.keys).distinct().sorted()
+    fun effectNames(): List<String> = (primitiveEffects.keys + configuredEffects.keys + scriptedEffects.keys).distinct().sorted()
 
     // plays a registered effect and returns its EffectHandle
     fun play(name: String, center: Location, options: EffectOptions = EffectOptions()): EffectHandle? {
@@ -144,6 +123,7 @@ object FXEngine {
         scheduler = null
         clearScripted()
         primitiveEffects.clear()
+        configuredEffects.clear()
         providers.clear()
     }
 }

@@ -1,0 +1,27 @@
+# Formula geometry, gradients and particle lifetime.
+id: basic
+duration: 81
+particle: DUST
+dustSize: 1.2
+gradientInterpolation: hsv
+colorOverLife:
+- '#ffbb22'
+- '#ff3366'
+- '#5522cc'
+sizeOverLife:
+- 0
+- 1
+- 0
+curve:
+  variables:
+  - t
+  samples: 96
+  angularSpeed: 0
+  range:
+  - min: 0
+    max: 1
+  parameters: {radius: 2}
+  x: radius * cos(t * tau)
+  y: '0'
+  z: radius * sin(t * tau)
+  age: (time - t * 40) / 40

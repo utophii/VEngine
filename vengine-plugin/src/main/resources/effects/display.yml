@@ -1,0 +1,133 @@
+# Item, text and block displays with a particle aura.
+id: display
+functions:
+  height(i, n): 1 - i / max(1, n - 1) * 2
+  slice(i, n): sqrt(max(0, 1 - height(i, n)^2))
+  angle(i): PI * (3 - sqrt(5)) * i
+duration: 160
+layers:
+- parameters:
+    radius: 1.4
+    height: 0.0
+    turns: 1.0
+    points: 6
+    angularSpeed: 0.03
+  display:
+    type: item
+    material: AMETHYST_CLUSTER
+    size: 0.7
+    spin:
+      x: 0.0
+      y: 0.12
+      z: 0.0
+    phase: 5
+    brightness: 15
+    glow: '#B26BFF'
+  animation:
+    tracks:
+    - target: display.size
+      keyframes:
+      - tick: 0
+        value: 0.0
+      - tick: 20
+        value: 0.7
+        easing: ease_out_elastic
+      - tick: 140
+        value: 0.7
+      - tick: 160
+        value: 0.0
+  curve:
+    variables:
+    - t
+    samples: 96
+    angularSpeed: 0.12
+    range:
+    - min: 0
+      max: 6.283185307179586
+    x: radius * cos(turns * t)
+    y: height * (t / tau) - height * 0.5
+    z: radius * sin(turns * t)
+    parameters:
+      radius: 1.0
+      height: 3.0
+      turns: 3.0
+- start: 10
+  parameters:
+    radius: 2.3
+    height: 0.0
+    turns: 1.0
+    points: 8
+    angularSpeed: -0.015
+  display:
+    type: text
+    text:
+    - <#C59BFF>ᚠ
+    - <#C59BFF>ᚢ
+    - <#C59BFF>ᚦ
+    - <#C59BFF>ᚨ
+    - <#C59BFF>ᚱ
+    - <#C59BFF>ᚲ
+    - <#C59BFF>ᚷ
+    - <#C59BFF>ᚹ
+    size: 1.4
+    billboard: center
+    brightness: 15
+    background: '#00000000'
+    textShadow: true
+  curve:
+    variables:
+    - t
+    samples: 96
+    angularSpeed: 0.12
+    range:
+    - min: 0
+      max: 6.283185307179586
+    x: radius * cos(turns * t)
+    y: height * (t / tau) - height * 0.5
+    z: radius * sin(turns * t)
+    parameters:
+      radius: 1.0
+      height: 3.0
+      turns: 3.0
+- start: 5
+  parameters:
+    radius: 0.0
+    points: 4
+  display:
+    type: block
+    material: CRYING_OBSIDIAN
+    size: 0.35
+    spin:
+      x: 0.05
+      y: 0.08
+      z: 0.03
+    phase: 15
+    brightness: 12
+  points:
+    samples: max(4, points)
+    parameters:
+      points: 160
+      radius: 1.5
+      angularSpeed: 0.04
+    output:
+      x: radius * slice(index, count) * cos(angle(index))
+      y: radius * height(index, count)
+      z: radius * slice(index, count) * sin(angle(index))
+      spin: time * angularSpeed
+- particle: END_ROD
+  speed: 0.0
+  parameters:
+    radius: 1.0
+    points: 40
+    angularSpeed: 0.03
+  points:
+    samples: max(4, points)
+    parameters:
+      points: 160
+      radius: 1.5
+      angularSpeed: 0.04
+    output:
+      x: radius * slice(index, count) * cos(angle(index))
+      y: radius * height(index, count)
+      z: radius * slice(index, count) * sin(angle(index))
+      spin: time * angularSpeed

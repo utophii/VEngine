@@ -8,9 +8,10 @@ Not every shape is easy to write as a formula. With a `shape:` block an effect t
 file instead: a picture, a 3D model, a vector outline or plain text.
 
 Source files go in `plugins/VEngine/shapes/`. Effect files name them relative to that folder, and
-`/ve reload` reads them again. VEngine ships three examples there (`sun.png`, `emblem.svg`,
-`icosahedron.obj`), along with the effects that use them: `sun_picture`, `text_banner`,
-`wire_icosahedron`, `emblem_epicycles` and `fourier_emblem`.
+`/ve reload` reads them again. The folder starts empty. Optional sample assets (`sun.png`,
+`emblem.svg`, `icosahedron.obj`) are in the
+[shape archive](https://github.com/utophii/VEngine/tree/main/vengine-core/src/test/resources/shapes).
+Their effect definitions are in the [recipe archive](built-in-primitives.md).
 
 An imported shape is an atom, just like a `curve:` or `lsystem:` effect. Play it on its own, or use it
 as a layer of a layered effect.

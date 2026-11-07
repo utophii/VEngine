@@ -1,0 +1,26 @@
+id: chladni
+field:
+  samples: points
+  settle: settle
+  period: period
+  jitter: jitter
+  parameters:
+    points: 800
+    size: 1.5
+    settle: 60
+    period: 0
+    jitter: 0.02
+    angularSpeed: 0
+    n: 3
+    m: 5
+    mix: -1
+  output:
+    x: u * size
+    y: '0'
+    z: v * size
+    value: strength
+    yaw: time * angularSpeed
+  domain: square
+  peak: '2'
+  f: cos(n * (u+1) * 0.5 * PI) * cos(m * (v+1) * 0.5 * PI) + mix * cos(m * (u+1) * 0.5 * PI) * cos(n * (v+1) * 0.5
+    * PI)

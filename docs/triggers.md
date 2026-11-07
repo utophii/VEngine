@@ -11,7 +11,7 @@ fires until you write or uncomment a trigger and run `/ve reload`.
 ```yaml
 crit_spark:
   event: hit
-  effect: sphere
+  effect: basic
   at: victim
   cooldown: 10
   filter:
@@ -115,7 +115,7 @@ effect keeps its own duration.
 ```yaml
 mob_soul:
   event: death
-  effect: helix
+  effect: animated
   filter:
     entity: [ZOMBIE, SKELETON, CREEPER]
     attacker: PLAYER
@@ -124,13 +124,13 @@ mob_soul:
 
 vip_join:
   event: join
-  effect: cosmic_gate
+  effect: animated
   permission: true          # vengine.trigger.vip_join
   delay: 20
 
 pearl_trail:
   event: teleport
-  effect: cosmic_gate
+  effect: animated
   at: from
   filter:
     cause: ENDER_PEARL

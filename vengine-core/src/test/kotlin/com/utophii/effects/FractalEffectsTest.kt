@@ -21,7 +21,7 @@ class FractalEffectsTest {
 
     @Test
     fun `julia set of c = 0 is the unit circle`() {
-        val buffer = frame(JuliaEffect(), mapOf("cRe" to 0.0, "cIm" to 0.0, "points" to 200.0, "radius" to 2.0))
+        val buffer = frame(ProceduralFixtures.effect("julia"), mapOf("cRe" to 0.0, "cIm" to 0.0, "points" to 200.0, "radius" to 2.0))
         assertEquals(200, buffer.list().size)
         buffer.list().forEach { point ->
             assertEquals(1.0, sqrt(point.x * point.x + point.y * point.y), EPS)
@@ -31,7 +31,7 @@ class FractalEffectsTest {
 
     @Test
     fun `julia set of c = -2 is the real segment`() {
-        val buffer = frame(JuliaEffect(), mapOf("cRe" to -2.0, "cIm" to 0.0, "points" to 200.0, "radius" to 2.0))
+        val buffer = frame(ProceduralFixtures.effect("julia"), mapOf("cRe" to -2.0, "cIm" to 0.0, "points" to 200.0, "radius" to 2.0))
         buffer.list().forEach { point ->
             assertEquals(0.0, point.y, LOOSE_EPS)
             assertTrue(abs(point.x) <= 2.0 + EPS)
@@ -40,7 +40,7 @@ class FractalEffectsTest {
 
     @Test
     fun `julia points stay in the bounding disc and carry gradient values`() {
-        val buffer = frame(JuliaEffect(), mapOf("radius" to 2.0, "cOrbit" to 0.1), time = 17.0)
+        val buffer = frame(ProceduralFixtures.effect("julia"), mapOf("radius" to 2.0, "cOrbit" to 0.1), time = 17.0)
         assertTrue(buffer.hasValues())
         buffer.list().forEachIndexed { index, point ->
             assertTrue(sqrt(point.x * point.x + point.y * point.y) <= 2.0)
@@ -50,7 +50,7 @@ class FractalEffectsTest {
 
     @Test
     fun `julia particles keep their place between frames for a fixed c`() {
-        val effect = JuliaEffect()
+        val effect = ProceduralFixtures.effect("julia")
         val first = frame(effect, emptyMap(), time = 0.0).list().map { it.clone() }
         val second = frame(effect, emptyMap(), time = 40.0).list()
         first.indices.forEach { index -> assertEquals(first[index].x, second[index].x, EPS) }
@@ -58,7 +58,7 @@ class FractalEffectsTest {
 
     @Test
     fun `sierpinski triangle leaves the middle triangle empty`() {
-        val buffer = frame(SierpinskiEffect.triangle(), mapOf("radius" to 1.0, "angularSpeed" to 0.0))
+        val buffer = frame(ProceduralFixtures.effect("sierpinski_triangle"), mapOf("radius" to 1.0, "angularSpeed" to 0.0))
         // the removed middle triangle has its vertices at the edge midpoints: apex down, top edge at y = 0.25
         buffer.list().forEach { point ->
             val insideMiddle = point.y < 0.25 - EPS && point.y > -0.5 + EPS &&
@@ -70,7 +70,7 @@ class FractalEffectsTest {
 
     @Test
     fun `sierpinski carpet covers its eight cells evenly and skips the center`() {
-        val buffer = frame(SierpinskiEffect.carpet(), mapOf("radius" to 1.0, "points" to 64.0, "angularSpeed" to 0.0))
+        val buffer = frame(ProceduralFixtures.effect("sierpinski_carpet"), mapOf("radius" to 1.0, "points" to 64.0, "angularSpeed" to 0.0))
         val half = 1.0 / sqrt(2.0)
         val counts = IntArray(9)
         buffer.list().forEach { point ->
@@ -84,7 +84,7 @@ class FractalEffectsTest {
 
     @Test
     fun `menger sponge lies on the cube faces outside the tunnels`() {
-        val buffer = frame(SierpinskiEffect.mengerSponge(), mapOf("radius" to 1.0, "angularSpeed" to 0.0))
+        val buffer = frame(ProceduralFixtures.effect("menger_sponge"), mapOf("radius" to 1.0, "angularSpeed" to 0.0))
         val half = 1.0 / sqrt(3.0)
         buffer.list().forEachIndexed { index, point ->
             val coordinates = listOf(point.x, point.y, point.z)
@@ -97,7 +97,7 @@ class FractalEffectsTest {
 
     @Test
     fun `chladni grains start spread out and settle on the nodal lines`() {
-        val effect = ChladniEffect()
+        val effect = ProceduralFixtures.effect("chladni")
         val parameters = mapOf("size" to 1.0, "jitter" to 0.0, "settle" to 20.0)
         val start = frame(effect, parameters, time = 0.0)
         val settled = frame(effect, parameters, time = 20.0)
@@ -122,7 +122,7 @@ class FractalEffectsTest {
         // J₀(k r) with k = j₁,₁ (the peak of J₀ after its first zero) has its node at r = j₀,₁ / j₁,₁
         val node = 2.404825557695773 / 3.831705970207512
         val parameters = mapOf("n" to 0.0, "m" to 1.0, "size" to 1.0, "jitter" to 0.0, "settle" to 20.0)
-        val settled = frame(CircularChladniEffect(), parameters, time = 20.0)
+        val settled = frame(ProceduralFixtures.effect("chladni_circle"), parameters, time = 20.0)
         val onCircle = settled.list().count { abs(sqrt(it.x * it.x + it.z * it.z) - node) < 1e-3 }
         assertTrue(onCircle > settled.list().size * 95 / 100, "only $onCircle grains settled")
         settled.list().forEach { point -> assertTrue(sqrt(point.x * point.x + point.z * point.z) <= 1.0 + EPS) }
@@ -132,8 +132,8 @@ class FractalEffectsTest {
     fun `round plate sand settles on the nodal diameter of mode (1, 0)`() {
         // J₁(k r) cos θ vanishes on the diameter θ = ±π/2, the line x = 0
         val parameters = mapOf("n" to 1.0, "m" to 0.0, "size" to 1.0, "jitter" to 0.0, "settle" to 20.0)
-        val start = frame(CircularChladniEffect(), parameters, time = 0.0)
-        val settled = frame(CircularChladniEffect(), parameters, time = 20.0)
+        val start = frame(ProceduralFixtures.effect("chladni_circle"), parameters, time = 0.0)
+        val settled = frame(ProceduralFixtures.effect("chladni_circle"), parameters, time = 20.0)
         assertTrue(start.list().count { abs(it.x) < 1e-3 } < start.list().size / 10, "grains must start spread out")
         val onLine = settled.list().count { abs(it.x) < 1e-3 }
         assertTrue(onLine > settled.list().size * 95 / 100, "only $onLine grains settled")

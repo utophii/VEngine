@@ -14,6 +14,36 @@ import kotlin.math.sqrt
 class ExpressionEvaluator private constructor(
     private val parsed: ParsedFormula,
 ) {
+    // multiple coordinate or state expressions share one variable array per calculation
+    class Batch(expressions: Map<String, String>, functions: ExpressionFunctions = ExpressionFunctions.EMPTY) {
+        private val compiled = expressions.mapValues { compileOrThrow(it.value, functions) }
+        private val names = compiled.values.flatMap { it.parsed.variables }.distinct()
+        private val slots = names.withIndex().associate { it.value to it.index }
+        private val roots = compiled.mapValues { (_, expression) ->
+            expression.parsed.root.sharedSlots(expression.parsed.variables.map { slots.getValue(it) }.toIntArray())
+        }
+
+        fun frame(parameters: Map<String, Double>, dynamic: Set<String>): Frame {
+            val values = DoubleArray(names.size) { parameters[names[it]] ?: DEFAULT_CONSTANTS[names[it]] ?: 0.0 }
+            val indices = dynamic.mapNotNullTo(mutableSetOf()) { slots[it] }
+            return Frame(slots, values, roots.mapValues { it.value.frameConstants(values, indices) })
+        }
+
+        class Frame internal constructor(
+            private val slots: Map<String, Int>,
+            private val values: DoubleArray,
+            private val expressions: Map<String, FormulaNode>,
+        ) {
+            operator fun set(name: String, value: Double) { slots[name]?.let { values[it] = value } }
+            fun eval(name: String): Double = expressions.getValue(name).evaluate(values)
+            fun has(name: String): Boolean = name in expressions
+            fun constant(name: String): Double? = expressions[name]?.constantValue()
+            internal fun signature(excluded: Set<String> = emptySet()): Map<String, FormulaNode> =
+                expressions.filterKeys { it !in excluded }
+            internal fun expression(name: String): FormulaNode = expressions.getValue(name)
+        }
+    }
+
     // the set of variable names that must be supplied before evaluating
     val variableNames: Set<String> = parsed.variables.toSet()
 
@@ -115,7 +145,32 @@ class ExpressionEvaluator private constructor(
             override fun apply(vararg args: Double): Double = body(args)
         }
 
+        private class CurlSample {
+            var arguments = DoubleArray(0)
+            var value = org.bukkit.util.Vector()
+        }
+        private val curlSamples = ThreadLocal.withInitial { CurlSample() }
+
+        private fun curl(args: DoubleArray): org.bukkit.util.Vector {
+            val sample = curlSamples.get()
+            if (!sample.arguments.contentEquals(args)) {
+                sample.arguments = args.copyOf()
+                sample.value = MathUtils.curlNoise(
+                    args[0], args[1], args[2], args[3],
+                    args[4].coerceAtLeast(MathUtils.MIN_CURL_FREQUENCY),
+                    args[5].toInt().coerceIn(0, 16), args[6].coerceAtLeast(MathUtils.MIN_CURL_EPSILON),
+                )
+            }
+            return sample.value
+        }
+
         internal val FUNCTIONS: Map<String, Function> = (SDF_FUNCTIONS + listOf(
+            function("atan2", 2) { kotlin.math.atan2(it[0], it[1]) },
+            function("besselJ", 2) { Bessel.j(it[0].toInt().coerceIn(-12, 12), it[1]) },
+            function("besselMode", 3) { RadialModes.value(it[0], it[1], it[2]) },
+            function("curlX", 7) { curl(it).x },
+            function("curlY", 7) { curl(it).y },
+            function("curlZ", 7) { curl(it).z },
             function("noise", 3) { MathUtils.valueNoise(it[0], it[1], it[2]) },
             function("clamp", 3) { it[0].coerceIn(it[1], it[2]) },
             // mix extrapolates outside [0, 1]. Callers can explicitly clamp the factor when needed

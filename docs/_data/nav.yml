@@ -23,7 +23,9 @@
       url: /sdf-and-lsystems/
     - title: Imported shapes
       url: /imported-shapes/
-    - title: Built-in primitives
+    - title: Procedural generators
+      url: /procedural-generators/
+    - title: Effect recipes
       url: /built-in-primitives/
 - group: Developers
   pages:

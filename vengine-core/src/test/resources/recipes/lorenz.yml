@@ -1,0 +1,25 @@
+id: lorenz
+ode:
+  method: euler
+  step: dt
+  samples: max(10, steps)
+  parameters:
+    sigma: 10
+    rho: 28
+    beta: 2.6666666666666665
+    dt: 0.015
+    steps: 220
+    angularSpeed: 0.03
+  initial:
+    x: 0.1
+    y: 0
+    z: 0
+  derivatives:
+    x: sigma * (y - x)
+    y: x * (rho - z) - y
+    z: x * y - beta * z
+  output:
+    x: x * 0.085
+    y: (z - 25) * 0.085
+    z: y * 0.085
+    yaw: time * angularSpeed

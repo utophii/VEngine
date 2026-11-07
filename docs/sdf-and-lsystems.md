@@ -156,5 +156,5 @@ can animate them:
 The gradient value of a particle is its distance from the root along the branches, so colors run
 from the trunk (first stop) to the tips (last stop).
 
-Bundled examples: `fern.yml`, `bush.yml` (3D), `koch_snowflake.yml`, `wild_weed.yml`
+Optional [archived recipes](built-in-primitives.md): `fern.yml`, `bush.yml` (3D), `koch_snowflake.yml`, `wild_weed.yml`
 (stochastic), and `living_tree.yml`, which layers two plants.

@@ -15,7 +15,11 @@ follow:
   rotation: body
   stopWithEntity: true
 layers:
-  - effect: torus
+  - curve:
+      samples: 96
+      x: 'cos(t)'
+      y: '0'
+      z: 'sin(t)'
     particle: END_ROD
     scale: 0.4
 ```

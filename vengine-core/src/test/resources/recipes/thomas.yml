@@ -1,0 +1,23 @@
+id: thomas
+ode:
+  method: euler
+  step: dt
+  samples: max(10, steps)
+  parameters:
+    b: 0.211
+    dt: 0.025
+    steps: 220
+    angularSpeed: 0.03
+  initial:
+    x: 1
+    y: 1
+    z: 1
+  derivatives:
+    x: sin(y) - b*x
+    y: sin(z) - b*y
+    z: sin(x) - b*z
+  output:
+    x: x * 0.25
+    y: y * 0.25
+    z: z * 0.25
+    yaw: time * angularSpeed

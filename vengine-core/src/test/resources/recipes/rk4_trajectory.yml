@@ -1,0 +1,41 @@
+id: rk4_trajectory
+ode:
+  method: rk4
+  step: max(0.0001, timeStep)
+  samples: min(512, steps)
+  includeInitial: true
+  reveal: max(1 / min(512, max(1, steps)), (time + 1) / max(1, duration))
+  parameters:
+    steps: 120
+    timeStep: 0.08
+    initialX: 0
+    initialY: 0
+    initialZ: 0
+    initialVelocityX: 0.46
+    initialVelocityY: 0.66
+    initialVelocityZ: 0
+    gravityX: 0
+    gravityY: -0.2
+    gravityZ: 0
+    drag: 0.06
+    curlStrength: 0.18
+    curlFrequency: 0.85
+    curlOctaves: 3
+    curlEpsilon: 0.04
+  initial:
+    x: initialX
+    y: initialY
+    z: initialZ
+    vx: initialVelocityX
+    vy: initialVelocityY
+    vz: initialVelocityZ
+  derivatives:
+    x: vx
+    y: vy
+    z: vz
+    vx: gravityX - max(0, drag) * vx + if(curlStrength != 0 && curlOctaves > 0, curlStrength * curlX(x, y, z, integrationTime,
+      curlFrequency, curlOctaves, curlEpsilon), 0)
+    vy: gravityY - max(0, drag) * vy + if(curlStrength != 0 && curlOctaves > 0, curlStrength * curlY(x, y, z, integrationTime,
+      curlFrequency, curlOctaves, curlEpsilon), 0)
+    vz: gravityZ - max(0, drag) * vz + if(curlStrength != 0 && curlOctaves > 0, curlStrength * curlZ(x, y, z, integrationTime,
+      curlFrequency, curlOctaves, curlEpsilon), 0)

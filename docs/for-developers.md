@@ -24,7 +24,7 @@ your local Maven repository with `./gradlew publishToMavenLocal`.
 ```kotlin
 import com.utophii.api.playEffect
 
-player.location.playEffect("helix") {
+player.location.playEffect("basic") {
     radius(0.8)
     duration(200L)                                   // ticks
     orientation(pitch = Math.PI / 2)                 // lay it flat

@@ -83,7 +83,7 @@ class ExpressionLoadingTest {
 
     @Test
     fun `bundled age wave grows and fades at different times around the ring`() {
-        val source = File("../vengine-plugin/src/main/resources/effects/age_wave.yml")
+        val source = File("src/test/resources/recipes/age_wave.yml")
         file("age_wave", source.readText())
         val effect = YamlEffectLoader(directory, logger).loadAll().single() as ParametricEffect
         val layersField = ScriptedEffect::class.java.getDeclaredField("layers").apply { isAccessible = true }
@@ -266,15 +266,15 @@ class ExpressionLoadingTest {
     }
 
     @Test
-    fun `bundled formula atoms still load`() {
-        val resources = File("../vengine-plugin/src/main/resources/effects")
+    fun `formula recipes still load`() {
+        val resources = File("src/test/resources/recipes")
         val yaml = Yaml()
         val loader = YamlEffectLoader(directory, logger)
         val sources = resources.walkTopDown().filter { it.isFile && it.extension == "yml" }.filter { source ->
             val raw = source.inputStream().use { yaml.load<Map<String, Any?>>(it) }
             raw.keys.any { it in setOf("curve", "surface", "sdf") }
         }.toList()
-        assertTrue(sources.size > 10, "Expected bundled formula fixtures")
+        assertTrue(sources.isNotEmpty(), "Expected formula fixtures")
         sources.forEach { assertNotNull(loader.load(it), "${it.name}: $messages") }
     }
 

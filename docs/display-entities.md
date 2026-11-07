@@ -13,8 +13,12 @@ No resource pack or client mod is needed - display entities are vanilla.
 
 ```yaml
 layers:
-  - effect: helix
-    parameters: {radius: 1.4, height: 0.0, turns: 1.0, points: 6}
+  - curve:
+      samples: 6
+      x: '1.4 * cos(t)'
+      y: '0'
+      z: '1.4 * sin(t)'
+    parameters: {points: 6}
     display:
       type: item
       material: AMETHYST_CLUSTER
@@ -27,9 +31,9 @@ The atom decides **where** the entities go (6 points on a ring here), the `displ
 **what** stands there. Everything else about the layer - `scale`, rotation, modifiers, motion paths,
 `start`/`duration`, keyframe animation - works exactly as with particles.
 
-The bundled `crystal_ward.yml` is the reference build: a ring of glowing amethyst crystals, a
+The bundled `display.yml` is the reference build: a ring of glowing amethyst crystals, a
 counter-rotating ring of runes and a tumbling obsidian core, framed by an `END_ROD` particle aura.
-Try it with `/ve play crystal_ward`.
+Try it with `/ve play display`.
 
 > In YAML, `display:` is a **layer** key of a scripted effect. To give a single atom a display
 > look, wrap it in a one-layer scripted effect. From code, use `display(...)` in the DSL - see
@@ -66,7 +70,7 @@ Tips:
 - **`spin` vs `angularSpeed`.** `angularSpeed` on the atom moves the points around the shape,
   `spin` turns each model in place. Combine them for orbiting, self-rotating pieces.
 - **Mixing.** Use `particles: true` to draw particles on top of the same points, or add a separate
-  particle layer (as `crystal_ward` does) for an aura.
+  particle layer (as `display` does) for an aura.
 
 ## Animating displays
 
@@ -81,7 +85,7 @@ targets:
 | `display.rotation.y` | Base rotation around Y, radians |
 | `display.rotation.z` | Base rotation around Z, radians |
 
-A pop-in / pop-out, as in `crystal_ward`:
+A pop-in / pop-out, as in `display`:
 
 ```yaml
 animation:

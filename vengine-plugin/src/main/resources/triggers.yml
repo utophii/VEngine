@@ -5,7 +5,7 @@
 #
 # event:       hit | death | join | teleport | item_use
 # effect:      any effect from /ve list
-# skill:       MythicMobs skill to cast as well (or instead of effect). Cast by the entity of `at`;
+# skill:       MythicMobs skill to cast as well (or instead of effect). Cast by the entity of `at`.
 #              at a fixed place (death victim, teleport from, block) by the attacker/killer or player.
 #              @trigger is the other side of the event: the attacker for the victim and the other way round.
 # at:          where the effect plays (the first value is the default)
@@ -15,14 +15,14 @@
 #                teleport: to | from
 #                item_use: player | block       (block = on top of the clicked block)
 #              If the effect has a `follow:` block and `at` is an entity, it follows that entity.
-# permission:  true (= vengine.trigger.<id>) or any permission node; leave out to let everyone trigger it.
+# permission:  true (= vengine.trigger.<id>) or any permission node, leave out to let everyone trigger it.
 #              Checked on the attacker/killer when it is a player, otherwise on the victim/player.
 # cooldown:    ticks before the same trigger may fire again for the same attacker/player
 # chance:      0..1 probability to fire
 # delay:       ticks to wait before playing (useful for join)
 # filter:      all optional, a single value or a list
 #                entity:   victim types (hit, death), e.g. [ZOMBIE, PLAYER]
-#                attacker: attacker/killer types (hit, death); arrows count as their shooter
+#                attacker: attacker/killer types (hit, death), arrows count as their shooter
 #                cause:    damage cause (hit, death) or teleport cause, e.g. ENDER_PEARL
 #                item:     item in hand (item_use), e.g. BLAZE_ROD
 #                mythic:          MythicMobs mob type of the victim/player, e.g. [SkeletonKing]
@@ -38,7 +38,7 @@
 
 #crit_spark:
 #  event: hit
-#  effect: sphere
+#  effect: basic
 #  at: victim
 #  cooldown: 10
 #  filter:
@@ -49,7 +49,7 @@
 #
 #mob_soul:
 #  event: death
-#  effect: helix
+#  effect: animated
 #  filter:
 #    entity: [ZOMBIE, SKELETON, CREEPER]
 #    attacker: PLAYER
@@ -58,13 +58,13 @@
 #
 #vip_join:
 #  event: join
-#  effect: cosmic_gate
+#  effect: animated
 #  permission: true
 #  delay: 20
 #
 #pearl_trail:
 #  event: teleport
-#  effect: cosmic_gate
+#  effect: animated
 #  at: from
 #  filter:
 #    cause: ENDER_PEARL
@@ -74,14 +74,14 @@
 #
 #king_fall:
 #  event: death
-#  effect: cosmic_gate
+#  effect: animated
 #  skill: KingDeathCurse
 #  filter:
 #    mythic: SkeletonKing
 #
 #staff_cast:
 #  event: item_use
-#  effect: rk4_comet
+#  effect: animated
 #  cooldown: 40
 #  filter:
 #    item: BLAZE_ROD

@@ -1,0 +1,25 @@
+id: aizawa
+ode:
+  method: euler
+  step: dt
+  samples: max(10, steps)
+  parameters:
+    alpha: 0.060000000000000005
+    beta: 0.235
+    gamma: 12.466666666666667
+    dt: 0.015
+    steps: 220
+    angularSpeed: 0.03
+  initial:
+    x: 0.1
+    y: 0
+    z: 0
+  derivatives:
+    x: x * (cos(beta) + sin(alpha)) - z * sin(alpha - beta)
+    y: y * (cos(beta) - sin(alpha)) + z * (cos(alpha - beta) + 1)
+    z: z * sin(gamma) + (x*x + y*y) * (alpha - cos(beta))
+  output:
+    x: x * 0.03
+    y: (z - 100) * 0.03
+    z: y * 0.03
+    yaw: time * angularSpeed

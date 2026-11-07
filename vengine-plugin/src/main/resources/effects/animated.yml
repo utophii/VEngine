@@ -1,0 +1,117 @@
+# Inline geometry, shared motion paths, layers and keyframes.
+id: animated
+functions:
+  height(i, n): 1 - i / max(1, n - 1) * 2
+  slice(i, n): sqrt(max(0, 1 - height(i, n)^2))
+  angle(i): PI * (3 - sqrt(5)) * i
+duration: 240
+layers:
+- duration: 240
+  particle: FLAME
+  count: 2
+  parameters:
+    radius: 0.4
+    points: 24
+  modifiers: &flight
+  - type: motion
+    mode: hold
+    easing: ease_in_out_sine
+    path:
+    - x: 8
+      y: 1.5
+      z: 0
+      ticks: 60
+    - x: 16
+      y: 3.0
+      z: 4
+      ticks: 60
+      easing: linear
+    - x: 24
+      y: 0.5
+      z: 0
+      ticks: 40
+      easing: ease_out_cubic
+  points:
+    samples: max(4, points)
+    parameters:
+      points: 160
+      radius: 1.5
+      angularSpeed: 0.04
+    output:
+      x: radius * slice(index, count) * cos(angle(index))
+      y: radius * height(index, count)
+      z: radius * slice(index, count) * sin(angle(index))
+      spin: time * angularSpeed
+  animation:
+    tracks:
+    - target: scale
+      keyframes:
+      - tick: 0
+        value: 0.1
+      - tick: 20
+        value: 1
+        easing: ease_out_cubic
+      - tick: 220
+        value: 1
+      - tick: 240
+        value: 0.1
+- duration: 240
+  particle: END_ROD
+  count: 1
+  rotationRoll: 1.5708
+  parameters:
+    radius: 0.5
+    height: 2.0
+    turns: 4
+    points: 64
+  modifiers: *flight
+  curve:
+    variables:
+    - t
+    samples: 96
+    angularSpeed: 0.12
+    range:
+    - min: 0
+      max: 6.283185307179586
+    x: radius * cos(turns * t)
+    y: height * (t / tau) - height * 0.5
+    z: radius * sin(turns * t)
+    parameters:
+      radius: 1.0
+      height: 3.0
+      turns: 3.0
+- duration: 240
+  particle: DUST
+  color:
+    r: 120
+    g: 80
+    b: 255
+  dustSize: 1.2
+  parameters:
+    majorRadius: 1.2
+    minorRadius: 0.4
+    distance: 0.7
+  modifiers:
+  - type: motion
+    mode: ping_pong
+    easing: ease_in_out_sine
+    path:
+    - x: 0
+      y: 2.5
+      z: 0
+      ticks: 50
+  curve:
+    variables:
+    - t
+    samples: 180
+    angularSpeed: 0.04
+    range:
+    - min: 0
+      max: 6.283185307179586
+    x: (majorRadius + minorRadius) * cos(t) - distance * cos((majorRadius + minorRadius) / minorRadius * t)
+    y: '0'
+    z: (majorRadius + minorRadius) * sin(t) - distance * sin((majorRadius + minorRadius) / minorRadius * t)
+    parameters:
+      majorRadius: 1.0
+      minorRadius: 0.25
+      distance: 0.9

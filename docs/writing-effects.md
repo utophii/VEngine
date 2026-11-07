@@ -10,7 +10,7 @@ Broken files never crash the plugin - they are skipped with a warning in the con
 
 There are two kinds of effect files:
 
-1. **Formula atom** - a shape described by math (`curve:` or `surface:` block)
+1. **Atom** - geometry described by a formula, procedural generator, L-system or imported shape
 2. **Scripted effect** - a show composed of `layers:`, each layer playing an atom with its own
    timing, particle and modifiers
 
@@ -55,9 +55,12 @@ then call `wave(t, 0.5)` in a formula. See [formula helpers and local functions]
 
 Other kinds of atoms: implicit surfaces and L-system plants ([SDF surfaces and
 L-systems](sdf-and-lsystems.md)), and pictures, text, OBJ models and SVG outlines ([Imported
-shapes](imported-shapes.md)). Atoms built into the plugin - `sphere`, physics, strange attractors,
-fractals and Chladni figures - are listed with all their parameters in [Built-in
-primitives](built-in-primitives.md).
+shapes](imported-shapes.md)). Points, differential equations, iterated maps and settling on
+nodal fields use [procedural generators](procedural-generators.md).
+
+Every geometry block also works directly inside a layer. Inline atoms belong to that layer and
+are not added to `/ve list`. A layer accepts either a geometry block or `effect: <registered-atom>`.
+Local `functions:` at the file root are available to every inline layer.
 
 ## Scripted effects
 
@@ -67,7 +70,12 @@ A scripted effect layers atoms into a show:
 id: my_show
 duration: 200
 layers:
-  - effect: helix             # any atom or scripted effect name
+  - curve:
+      samples: 96
+      x: 'cos(turns * t)'
+      y: 't / tau * 3'
+      z: 'sin(turns * t)'
+      parameters: {turns: 3}
     start: 0                  # first tick this layer appears (default 0)
     duration: 160             # how long this layer runs (default: rest of the show)
     particle: END_ROD
@@ -98,13 +106,13 @@ a layer can start after another one ends: give that layer an `id` and refer to i
 duration: 200
 layers:
   - id: charge
-    effect: sphere
+    curve: {samples: 64, x: 'cos(t)', y: '0', z: 'sin(t)'}
     duration: 60
   - id: burst
-    effect: torus
+    curve: {samples: 64, x: '2*cos(t)', y: '0', z: '2*sin(t)'}
     after: charge             # starts at tick 60
     duration: 40
-  - effect: helix
+  - curve: {samples: 64, x: 'cos(t)', y: 't/tau*3', z: 'sin(t)'}
     after: burst
     delay: 10                 # starts 10 ticks after burst ends, at tick 110
 ```
@@ -162,7 +170,7 @@ start their own age at zero. Layers cut short by their parent use the shortened 
 A one-tick or infinite layer stays at age zero. Custom effects can assign individual ages through
 `ParticleBuffer.age(index, normalizedAge)`. Unassigned points still use the layer's age.
 YAML curves and surfaces can assign ages with an [`age` formula](parametric-effects.md#individual-point-age).
-The bundled `age_wave.yml` demonstrates staggered birth and fading around a ring.
+The bundled `basic.yml` demonstrates staggered birth and fading around a ring.
 
 `colorOverLife` overrides both `gradient` and image/point colors and uses the same
 `gradientInterpolation` setting. It supports `DUST`, `DUST_COLOR_TRANSITION`, `ENTITY_EFFECT`
@@ -231,7 +239,7 @@ modifiers:
 
 Waypoint offsets are relative to the effect's spawn point: at tick 0 the layer is exactly where
 it was played. To give several layers the same path, write it once and reuse it with a YAML
-anchor (`&name` / `*name`) - see `traveling_comet.yml` for a working example.
+anchor (`&name` / `*name`) - see `animated.yml` for a working example.
 
 ### Keyframe animation
 
@@ -265,10 +273,10 @@ A scripted effect can start other effects on its timeline. `emitters:` fire whil
 id: firework
 duration: 40
 layers:
-  - effect: helix
+  - curve: {samples: 64, x: 'cos(t)', y: 't/tau*3', z: 'sin(t)'}
     duration: 40
 emitters:
-  - effect: sphere
+  - effect: basic
     start: 10                 # first emission at tick 10
     every: 5                  # then every 5 ticks...
     count: 4                  # ...4 times in total
@@ -276,7 +284,7 @@ emitters:
     scale: 0.5
     duration: 20
 then:
-  - effect: cosmic_gate
+  - effect: animated
     delay: 5                  # 5 ticks after the layers end
 ```
 
@@ -288,9 +296,9 @@ then:
 | `count` | unlimited | Number of emissions. Without it, repeating emitters fire until the layers end |
 | `offset` | `0, 0, 0` | Position relative to the effect, scaled with it |
 | `scale` | `1` | Multiplies the parent's scale |
-| `duration` | effect's own | Ticks the spawned effect plays. [Built-in primitives](built-in-primitives.md) have no duration of their own and play for 60 ticks |
+| `duration` | effect's own | Ticks the spawned effect plays, using its configured duration when omitted |
 
-A shorthand `emitters: sphere` (or a list of names) fires each effect once at tick 0.
+A shorthand `emitters: basic` (or a list of names) fires each effect once at tick 0.
 
 - The parent counts as running until everything it spawned has finished, and `/ve stop` on the
   parent stops its children as well. Spawned effects are not listed separately in `/ve list`.
@@ -308,7 +316,11 @@ placeholders. They are evaluated once, when the effect starts:
 ```yaml
 duration: "40 + %player_level% * 2"     # top-level duration of a scripted effect
 layers:
-  - effect: helix
+  - curve:
+      samples: 64
+      x: 'cos(turns*t)'
+      y: 't/tau*3'
+      z: 'sin(turns*t)'
     scale: "0.5 + %player_level% / 50"
     parameters:
       turns: "2 + %statistic_deaths% % 5"
@@ -329,10 +341,9 @@ the layer tilts in its own frame first, then turns around the world's vertical a
 
 ## A complete example
 
-`traveling_comet.yml` (bundled) is the reference build: a sphere head and a helix trail share a
+`animated.yml` (bundled) is the reference build: a sphere head and a helix trail share a
 three-leg flight path through a YAML anchor, while a rosette gate ping-pongs at the spawn point.
-Open it in `plugins/VEngine/effects/` and read it top to bottom - it uses nearly every feature on
-this page. For display entities, read `crystal_ward.yml` next.
+Each layer includes its own geometry, so the file works on its own. For display entities, read `display.yml` next.
 
 ## Troubleshooting
 

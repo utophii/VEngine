@@ -1,0 +1,28 @@
+id: chladni_circle
+field:
+  samples: points
+  settle: settle
+  period: period
+  jitter: jitter
+  parameters:
+    points: 800
+    size: 1.5
+    settle: 60
+    period: 0
+    jitter: 0.02
+    angularSpeed: 0
+    n: 2
+    m: 1
+    n2: 0
+    m2: 2
+    mix: 0
+  output:
+    x: u * size
+    y: '0'
+    z: v * size
+    value: strength
+    yaw: time * angularSpeed
+  domain: disk
+  peak: 1 + abs(mix)
+  f: besselMode(n, m, sqrt(u*u + v*v)) * cos(clamp(round(n),0,12) * atan2(v,u)) + if(mix == 0, 0, mix * besselMode(n2,
+    m2, sqrt(u*u + v*v)) * cos(clamp(round(n2),0,12) * atan2(v,u)))

@@ -27,7 +27,7 @@ annotation class VEngineDsl
  * Type-safe Kotlin DSL entry point: spawns a registered effect at this location.
  *
  * ```
- * player.location.playEffect("torus") {
+ * player.location.playEffect("basic") {
  *     scale(2.0)
  *     color(Color.PURPLE)
  *     duration(120L)

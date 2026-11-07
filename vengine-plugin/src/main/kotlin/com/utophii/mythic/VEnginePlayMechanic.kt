@@ -22,7 +22,7 @@ import org.bukkit.Location
 import org.bukkit.entity.Player
 import java.io.File
 
-// - vengine{effect=torus;scale=2;duration=60;p.radius=3} @target
+// - vengine{effect=basic;scale=2;duration=60;p.radius=3} @target
 // plays a VEngine effect at every target of the line. Entity targets are followed when the effect has a
 // follow: block, follow=false keeps it where the entity stood
 class VEnginePlayMechanic(

@@ -13,8 +13,8 @@ VEngine registers two skill mechanics. Nothing needs to be configured: the conso
 ```yaml
 SkeletonKingRoar:
   Skills:
-  - vengine{effect=cosmic_gate;scale=1.5;duration=80} @self
-  - vengine{effect=sphere;p.radius=3;p.points=240} @PlayersInRadius{r=10}
+  - vengine{effect=animated;scale=1.5;duration=80} @self
+  - vengine{effect=basic;p.radius=3;p.points=240} @PlayersInRadius{r=10}
 ```
 
 | Option | Alias | Default | Description |
@@ -39,7 +39,7 @@ The mechanic is also available as `vfx{...}`.
 ## Stopping effects
 
 ```yaml
-- vengine-stop{effect=cosmic_gate} @self
+- vengine-stop{effect=animated} @self
 - vengine-stop @self
 ```
 
@@ -51,10 +51,10 @@ A typical use is an aura for the lifetime of a phase:
 ```yaml
 PhaseTwoStart:
   Skills:
-  - vengine{effect=crystal_ward;duration=6000} @self
+  - vengine{effect=display;duration=6000} @self
 PhaseTwoEnd:
   Skills:
-  - vengine-stop{effect=crystal_ward} @self
+  - vengine-stop{effect=display} @self
 ```
 
 ## Skills from triggers
@@ -65,7 +65,7 @@ VEngine effect, and can filter by MythicMobs mob type:
 ```yaml
 king_fall:
   event: death
-  effect: cosmic_gate
+  effect: animated
   skill: KingDeathCurse
   filter:
     mythic: SkeletonKing        # the victim's mob type

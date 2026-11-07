@@ -49,7 +49,7 @@ class ScriptedEffect(
         }
 
         layers.map { it.bind(subject) }.forEach { bound ->
-            val primitive = FXEngine.primitiveEffect(bound.effect) ?: return@forEach
+            val primitive = (bound.inlineEffect ?: FXEngine.primitiveEffect(bound.effect)) ?: return@forEach
             val layer = withPlayParameters(bound, primitive, opts, subject)
             val startTick = layer.startTick.coerceAtLeast(MIN_START_TICKS)
             if (startTick >= totalDuration) {
@@ -127,7 +127,7 @@ class ScriptedEffect(
             .filter { layer -> layer.isActiveAt(time, totalDuration) }
             .map { layer -> layer.bind(subject) }
             .flatMap { layer ->
-                val primitive = FXEngine.primitiveEffect(layer.effect) ?: return@flatMap emptySequence<Location>()
+                val primitive = (layer.inlineEffect ?: FXEngine.primitiveEffect(layer.effect)) ?: return@flatMap emptySequence<Location>()
                 val localTime = time - layer.startTick
                 val resolvedOptions = layer.resolveOptions(opts, localTime)
                 primitive.calculate(center, resolvedOptions, localTime).asSequence()
@@ -176,6 +176,7 @@ data class ScriptedLayer(
     // values written as placeholder formulas
     val scaleFormula: PlaceholderExpression? = null,
     val parameterFormulas: Map<String, PlaceholderExpression> = emptyMap(),
+    val inlineEffect: ParticleEffect? = null,
 ) {
 
     // this layer with its placeholder formulas evaluated for one play

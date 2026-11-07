@@ -10,7 +10,7 @@ import io.lumine.mythic.core.skills.SkillExecutor
 import io.lumine.mythic.core.skills.SkillMechanic
 import java.io.File
 
-// - vengine-stop{effect=torus} @self
+// - vengine-stop{effect=basic} @self
 // stops the effects the vengine mechanic played on the target or that the target cast
 class VEngineStopMechanic(
     executor: SkillExecutor,

@@ -12,14 +12,14 @@ All commands live under `/vengine`, alias `/ve`. They default to operators.
 |---|---|---|
 | `/ve help` | In-game command overview | `/ve help` |
 | `/ve list` | Registered effects, plus currently running instances with their IDs | `/ve list` |
-| `/ve play <name> [x y z [world]] [scale] [duration]` | Plays an effect at your position, or at the given coordinates. `scale` multiplies the size, `duration` overrides the effect's duration in ticks (20 ticks = 1 s) | `/ve play torus 2.0 200` |
-| `/ve stop [all\|<id>]` | Stops one running effect by ID, or everything with `all` | `/ve stop torus#3` |
+| `/ve play <name> [x y z [world]] [scale] [duration]` | Plays an effect at your position, or at the given coordinates. `scale` multiplies the size, `duration` overrides the effect's duration in ticks (20 ticks = 1 s) | `/ve play basic 2.0 200` |
+| `/ve stop [all\|<id>]` | Stops one running effect by ID, or everything with `all` | `/ve stop basic#3` |
 | `/ve reload` | Reloads `config.yml`, every file in `plugins/VEngine/effects/` and `triggers.yml` | `/ve reload` |
 
 Notes:
 
 - Without coordinates the effect spawns at the caller (a player, an entity or a command block).
-  Coordinates accept `~` relative values (`/ve play helix ~ ~2 ~`). The console has no position,
+  Coordinates accept `~` relative values (`/ve play basic ~ ~2 ~`). The console has no position,
   so it needs absolute coordinates. Without a world name the first loaded world is used.
 - Running effects finish by themselves, `/ve stop` is only needed to end them early.
   Finished effects disappear from `/ve list` automatically.

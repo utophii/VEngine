@@ -7,6 +7,12 @@ import com.utophii.api.EffectModifier
 import com.utophii.api.FollowDefaults
 import com.utophii.api.FollowRotation
 import com.utophii.api.ParticleEffect
+import com.utophii.effects.PointEffect
+import com.utophii.effects.OdeEffect
+import com.utophii.effects.IterationEffect
+import com.utophii.effects.FieldEffect
+import com.utophii.effects.FormulaEffect
+import com.utophii.math.OdeIntegrator
 import com.utophii.effects.AbstractParticleEffect
 import com.utophii.effects.EffectEmitter
 import com.utophii.effects.FourierEffect
@@ -95,7 +101,7 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
                             "Use it as a layer of a layered effect to spawn other effects.",
                     )
                 }
-                FXEngine.registerPrimitive(effect)
+                FXEngine.registerConfigured(effect)
                 // played on its own, the atom renders with the particle/color/gradient written next to its block
                 FXEngine.registerScripted(standaloneAtom(effect, raw, file.name, functions))
                 loaded += effect
@@ -180,6 +186,7 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
             options = parseOptions(raw),
             scaleFormula = parseFormula(raw[SCALE_KEY], SCALE_KEY, fileName, functions),
             parameterFormulas = parseParameterFormulas(raw, fileName, functions),
+            inlineEffect = atom,
         )
         return ScriptedEffect(
             atom.name, duration, listOf(layer), atom.followDefaults,
@@ -188,11 +195,74 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
     }
 
     // builds a formula atom
-    private fun parseAtom(id: String, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions): AbstractParticleEffect? = when {
-        raw.containsKey(SDF_KEY) -> parseImplicit(id, raw, fileName, functions)
-        raw.containsKey(LSYSTEM_KEY) -> parseLSystem(id, raw, fileName)
-        raw.containsKey(SHAPE_KEY) -> parseShape(id, raw, fileName)
-        else -> parseParametric(id, raw, fileName, functions)
+    private fun parseAtom(id: String, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions): AbstractParticleEffect? {
+        val blocks = (PROCEDURAL_KEYS + setOf(CURVE_KEY, SURFACE_KEY, SDF_KEY, LSYSTEM_KEY, SHAPE_KEY)).count(raw::containsKey)
+        if (blocks > 1) {
+            logger.warning("Skipping effect '$fileName': use exactly one geometry block per atom or layer.")
+            return null
+        }
+        return when {
+            PROCEDURAL_KEYS.any(raw::containsKey) -> parseProcedural(id, raw, fileName, functions)
+            raw.containsKey(SDF_KEY) -> parseImplicit(id, raw, fileName, functions)
+            raw.containsKey(LSYSTEM_KEY) -> parseLSystem(id, raw, fileName)
+            raw.containsKey(SHAPE_KEY) -> parseShape(id, raw, fileName)
+            else -> parseParametric(id, raw, fileName, functions)
+        }
+    }
+
+    private fun boolean(block: Map<*, *>, key: String): Boolean {
+        val value = block[key] ?: return false
+        require(value is Boolean) { "$key must be boolean" }
+        return value
+    }
+
+    private fun parseProcedural(id: String, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions): AbstractParticleEffect? = try {
+        val keys = PROCEDURAL_KEYS.filter(raw::containsKey)
+        require(keys.size == 1) { "Expected exactly one procedural generator" }
+        val key = keys.single()
+        val block = raw[key] as? Map<*, *> ?: error("'$key' must be a block")
+        fun formula(name: String, default: String): String = block[name]?.toString() ?: default
+        fun formulas(value: Any?, label: String): Map<String, String> {
+            require(value is Map<*, *> && value.isNotEmpty()) { "'$label' must be a nonempty formula map" }
+            return value.entries.associate { (k, v) ->
+                require(k is String && (v is String || v is Number)) { "Invalid '$label' entry" }
+                k to v.toString()
+            }
+        }
+        val parameters = parseParameters(block[PARAMETERS_KEY])
+        val follow = parseFollow(raw[FOLLOW_KEY], fileName)
+        val output = block["output"]?.let { formulas(it, "output") }
+        when (key) {
+            "points" -> PointEffect(id, formula("samples", "128"), output ?: error("points requires output"), parameters, functions, follow)
+            "ode" -> OdeEffect(
+                id, formulas(block["initial"], "initial"), formulas(block["derivatives"], "derivatives"),
+                OdeIntegrator.Method.valueOf(formula("method", "rk4").uppercase()),
+                formula("step", "0.01"), formula("samples", "256"),
+                boolean(block, "includeInitial"),
+                formula("reveal", "1"), output ?: FormulaEffect.XYZ, parameters, functions, follow,
+            )
+            "iteration" -> {
+                val branches = block["branches"] as? List<*> ?: error("iteration requires branches")
+                IterationEffect(
+                    id, formulas(block["initial"], "initial"), branches.map { formulas(it, "branches") },
+                    IterationEffect.Selection.valueOf(formula("selection", "hash").uppercase()),
+                    boolean(block, "reverse"),
+                    formula("iterations", "24"), formula("samples", "512"), formula("copies", "1"),
+                    output ?: FormulaEffect.XYZ, parameters, functions, follow,
+                )
+            }
+            else -> FieldEffect(
+                id, block["f"]?.toString() ?: error("field requires f"),
+                FieldEffect.Domain.valueOf(formula("domain", "square").uppercase()),
+                formula("samples", "256"), formula("peak", "1"), formula("settle", "60"),
+                formula("period", "0"), formula("jitter", "0"),
+                output ?: mapOf("x" to "u", "y" to "0", "z" to "v", "value" to "strength"),
+                parameters, functions, follow,
+            )
+        }
+    } catch (error: RuntimeException) {
+        logger.warning("Skipping procedural effect '$fileName': ${error.message}")
+        null
     }
 
     // builds an implicit surface effect from an sdf YAML block
@@ -575,7 +645,7 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
         val hasBlock = raw.containsKey(CURVE_KEY) || raw.containsKey(SURFACE_KEY) || raw.containsKey(SDF_KEY) ||
             raw.containsKey(LSYSTEM_KEY) || raw.containsKey(SHAPE_KEY)
         val type = raw[TYPE_KEY]?.toString()?.lowercase()
-        return hasBlock || type in PARAMETRIC_TYPES
+        return hasBlock || PROCEDURAL_KEYS.any(raw::containsKey) || type in PARAMETRIC_TYPES
     }
 
     private fun curveOrSurfaceKey(raw: Map<String, Any?>): String {
@@ -642,8 +712,15 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
     )
 
     private fun parseLayer(raw: Map<*, *>, startTick: Long, fileName: String, functions: ExpressionFunctions): ScriptedLayer? {
-        val effectName = raw[EFFECT_KEY]?.toString()?.lowercase()?.takeIf(String::isNotBlank) ?: return null
-        if (FXEngine.primitiveEffect(effectName) == null) {
+        val atomSource = raw.entries.associate { it.key.toString() to it.value }
+        val embedded = isAtom(atomSource)
+        if (embedded && raw.containsKey(EFFECT_KEY)) {
+            logger.warning("In '$fileName': a layer must use either 'effect' or inline geometry.")
+            return null
+        }
+        val inline = if (embedded) parseAtom("$fileName:${raw[ID_KEY] ?: startTick}", atomSource, fileName, functions) ?: return null else null
+        val effectName = inline?.name ?: raw[EFFECT_KEY]?.toString()?.lowercase()?.takeIf(String::isNotBlank) ?: return null
+        if (inline == null && FXEngine.primitiveEffect(effectName) == null) {
             logger.warning("Skipping layer for unknown primitive effect '$effectName'.")
             return null
         }
@@ -660,6 +737,7 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
             animation = animation,
             scaleFormula = parseFormula(raw[SCALE_KEY], SCALE_KEY, fileName, functions),
             parameterFormulas = parseParameterFormulas(raw, fileName, functions),
+            inlineEffect = inline,
         )
     }
 
@@ -985,6 +1063,7 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
     private fun Int.coerceColor(): Int = coerceIn(MIN_COLOR_CHANNEL, MAX_COLOR_CHANNEL)
 
     companion object {
+        private val PROCEDURAL_KEYS = setOf("points", "ode", "iteration", "field")
         private fun parseFunctions(value: Any?): ExpressionFunctions {
             if (value == null) return ExpressionFunctions.EMPTY
             require(value is Map<*, *>) { "'functions' must map signatures to formula strings" }

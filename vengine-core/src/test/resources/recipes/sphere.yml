@@ -1,0 +1,16 @@
+id: sphere
+functions:
+  height(i, n): 1 - i / max(1, n - 1) * 2
+  slice(i, n): sqrt(max(0, 1 - height(i, n)^2))
+  angle(i): PI * (3 - sqrt(5)) * i
+points:
+  samples: max(4, points)
+  parameters:
+    points: 160
+    radius: 1.5
+    angularSpeed: 0.04
+  output:
+    x: radius * slice(index, count) * cos(angle(index))
+    y: radius * height(index, count)
+    z: radius * slice(index, count) * sin(angle(index))
+    spin: time * angularSpeed

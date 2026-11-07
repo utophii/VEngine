@@ -7,8 +7,8 @@ lede: "Describe new shapes with math formulas: curves, surfaces, syntax and sche
 VEngine lets you **create new effects directly in configuration**, describing them with mathematical
 formulas. No Kotlin class needed - just YAML or the DSL.
 
-This is the core of "engine-ness": the bundled effects (`helix`, `torus`, `lorenz`, …) are only
-**built-in atoms**, and an arbitrary shape is defined by a formula.
+The three bundled examples are `basic`, `animated` and `display`. Geometry comes from
+configuration. Differential equations and iterated maps use [procedural generators](procedural-generators.md).
 
 ## How it works
 
@@ -30,9 +30,8 @@ Supported:
 - the **magic variable `time`** - the current effect time (in ticks). It is available in every formula
   and lets you animate the shape directly (e.g. a wave) independently of `angularSpeed`.
 
-> The built-in atoms (`helix`, `torus`, `lissajous`, `rosette`, `torus_knot`, `beam`, `spline_beam`,
-> `supershape`) are themselves defined by **formulas** - their configs live in `resources/effects/`
-> and can be used as ready-made examples or copied.
+> Curves such as helixes and torus knots are formula recipes. Optional definitions are kept in
+> the [recipe archive](built-in-primitives.md), outside the plugin jar.
 
 > ⚠️ Multiplication is **explicit**: write `R * cos(t)`, not `R cos(t)`.
 
@@ -170,7 +169,7 @@ sampling variables, `time` in ticks, parameters and local functions, just like t
 formulas. `age` and `value` are independent: a spatial gradient can stay fixed while size changes
 with age. Without `age`, points use the [layer's age](writing-effects.md#color-and-size-over-life).
 
-The bundled `age_wave` effect grows and fades around a ring:
+The bundled `basic` effect grows and fades around a ring:
 
 ```yaml
 id: age_wave

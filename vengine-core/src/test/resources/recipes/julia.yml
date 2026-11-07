@@ -1,0 +1,34 @@
+id: julia
+functions:
+  realC(base, orbit, speed, tick): base + orbit * cos(tick * speed)
+  imagC(base, orbit, speed, tick): base + orbit * sin(tick * speed)
+  rootRe(a, b): sqrt(max(0, (sqrt(a*a + b*b) + a) * 0.5))
+  rootIm(a, b): if(b < 0, -1, 1) * sqrt(max(0, (sqrt(a*a + b*b) - a) * 0.5))
+iteration:
+  samples: points
+  iterations: depth
+  selection: bits
+  parameters:
+    points: 600
+    depth: 24
+    radius: 1.5
+    cRe: -0.8
+    cIm: 0.156
+    cOrbit: 0
+    cSpeed: 0.02
+    colorMode: 0
+    angularSpeed: 0
+  initial:
+    re: 1
+    im: 0
+  branches:
+  - re: rootRe(re - realC(cRe, cOrbit, cSpeed, time), im - imagC(cIm, cOrbit, cSpeed, time))
+    im: rootIm(re - realC(cRe, cOrbit, cSpeed, time), im - imagC(cIm, cOrbit, cSpeed, time))
+  - re: -rootRe(re - realC(cRe, cOrbit, cSpeed, time), im - imagC(cIm, cOrbit, cSpeed, time))
+    im: -rootIm(re - realC(cRe, cOrbit, cSpeed, time), im - imagC(cIm, cOrbit, cSpeed, time))
+  output:
+    x: (re * cos(time * angularSpeed) - im * sin(time * angularSpeed)) * radius / 2
+    y: (re * sin(time * angularSpeed) + im * cos(time * angularSpeed)) * radius / 2
+    z: '0'
+    value: if(colorMode >= 1, sqrt(re*re + im*im) / ((1 + sqrt(1 + 4 * sqrt(realC(cRe,cOrbit,cSpeed,time)^2 + imagC(cIm,cOrbit,cSpeed,time)^2)))
+      / 2), address)

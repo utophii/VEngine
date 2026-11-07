@@ -1,0 +1,50 @@
+id: menger_sponge
+iteration:
+  samples: points
+  iterations: min(16, depth)
+  selection: stratified
+  reverse: true
+  parameters:
+    points: 1200
+    depth: 6
+    radius: 1.5
+    pulse: 0
+    pulseSpeed: 0.08
+    angularSpeed: 0.02
+    ratio: 0.3333333333333333
+  initial:
+    x: 0
+    y: 0
+    z: 0
+  branches:
+  - x: ratio * x + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (-1)
+    y: ratio * y + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (-1)
+    z: ratio * z + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (0)
+  - x: ratio * x + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (-1)
+    y: ratio * y + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (0)
+    z: ratio * z + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (0)
+  - x: ratio * x + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (-1)
+    y: ratio * y + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (1)
+    z: ratio * z + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (0)
+  - x: ratio * x + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (0)
+    y: ratio * y + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (-1)
+    z: ratio * z + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (0)
+  - x: ratio * x + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (0)
+    y: ratio * y + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (1)
+    z: ratio * z + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (0)
+  - x: ratio * x + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (1)
+    y: ratio * y + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (-1)
+    z: ratio * z + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (0)
+  - x: ratio * x + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (1)
+    y: ratio * y + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (0)
+    z: ratio * z + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (0)
+  - x: ratio * x + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (1)
+    y: ratio * y + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (1)
+    z: ratio * z + (1 - ratio) * (1 + pulse * sin(time * pulseSpeed)) * (0)
+  output:
+    x: if(copy < 2, if(copy % 2 == 0, 1, -1), x) * radius / sqrt(3)
+    y: if(copy < 2, x, if(copy < 4, if(copy % 2 == 0, 1, -1), y)) * radius / sqrt(3)
+    z: if(copy < 4, y, if(copy % 2 == 0, 1, -1)) * radius / sqrt(3)
+    value: (copy + address) / 6
+    yaw: time * angularSpeed
+  copies: 6
