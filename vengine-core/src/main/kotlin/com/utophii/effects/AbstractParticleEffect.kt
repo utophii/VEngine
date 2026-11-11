@@ -17,6 +17,14 @@ import org.bukkit.util.Vector
 // shared async calculation and sync rendering for parametric effects
 abstract class AbstractParticleEffect(final override val name: String) : ParticleEffect {
 
+    // world-dependent geometry is calculated immediately before rendering on the server thread
+    internal open val calculateOnRender: Boolean = false
+
+    internal open fun calculateForRender(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double, anchor: FollowAnchor?) {
+        calculateInto(buffer, center, opts, time)
+        anchor?.apply(buffer.list())
+    }
+
     // plays the effect through the pooled render buffer, writing positions per frame without new allocations
     override fun play(center: Location, opts: EffectOptions): EffectHandle {
         val extra = playParameters(opts.parameters, opts.subject ?: opts.follow?.entity as? Player)
@@ -33,7 +41,7 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
             calculate = { time ->
                 val buffer = ParticleBufferPool.obtain(stableCenter, lastSize)
                 try {
-                    calculateInto(buffer, stableCenter, played, time)
+                    if (calculateOnRender) buffer.acquire(0) else calculateInto(buffer, stableCenter, played, time)
                     lastSize = buffer.list().size
                     buffer
                 } catch (t: Throwable) {
@@ -42,7 +50,12 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
                 }
             },
             render = { time, buffer ->
-                anchor?.apply(buffer.list())
+                if (calculateOnRender) {
+                    calculateForRender(buffer, stableCenter, played, time, anchor)
+                    lastSize = buffer.list().size
+                } else {
+                    anchor?.apply(buffer.list())
+                }
                 renderer.render(buffer, played, time, anchor)
             },
             release = { buffer -> ParticleBufferPool.release(buffer) },

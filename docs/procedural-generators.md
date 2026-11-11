@@ -95,6 +95,62 @@ equal to velocity and velocity derivatives equal to acceleration. Gravity, drag 
 can be combined in those formulas. Former attractor recipes select `euler` to preserve their
 original numerical behavior.
 
+### Block collisions
+
+Add `collision` inside `ode` to make the physical trajectory react to Minecraft blocks.
+It works in standalone atoms and inline layers, with either `rk4` or `euler` integration.
+
+```yaml
+ode:
+  method: rk4
+  step: 0.05
+  samples: 160
+  includeInitial: true
+  reveal: '(time + 1) / duration'
+  initial: {x: 0, y: 1, z: 0, vx: 2, vy: 3, vz: 0}
+  derivatives: {x: vx, y: vy, z: vz, vx: 0, vy: -9.81, vz: 0}
+  collision:
+    response: bounce
+    restitution: 0.7
+    substeps: 4
+    maxBounces: 8
+```
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `response` | `none` | `none`, `terminate`, `stop` or `bounce` |
+| `restitution` | `1` | Fraction of the normal speed retained after a bounce, from 0 through 1. Tangential velocity is preserved |
+| `substeps` | `1` | Collision segments per integration step, integer from 1 through 64 |
+| `maxBounces` | `8` | Maximum contacts handled during one full integration step, integer from 1 through 64. Reaching the limit stops the trajectory at the last contact |
+
+`terminate` ends the path at the first hit and includes the contact point. `stop` keeps the
+remaining samples at that point with zero velocity. `bounce` reflects velocity at the contact
+and integrates the remaining time in the step, including further collisions. These responses
+affect the generated path, the effect still runs for its configured duration.
+
+Each movement segment uses Paper's [block ray trace](https://jd.papermc.io/paper/1.21.6/org/bukkit/World.html#rayTraceBlocks(org.bukkit.Location,org.bukkit.util.Vector,double,org.bukkit.FluidCollisionMode,boolean))
+with precise block collision shapes. Fluids and passable blocks are ignored. Particles are
+treated as points, display size does not enlarge the collision shape. The first segment is
+checked even when `includeInitial` is false. Curved motion is approximated by straight
+segments, increase `substeps` or reduce `step` for strongly curved paths.
+
+Collisions require state variables `x`, `y`, `z`, `vx`, `vy`, `vz`, position derivatives
+`{x: vx, y: vy, z: vz}` and output coordinates `{x: x, y: y, z: z}`. Additional state variables
+and `output.value` / `output.age` are supported. Output `yaw` and `spin` may depend on parameters,
+`time` and `duration`, but cannot vary with the sample or integrated state.
+
+Scale, rotation, tilt, motion and rotation modifiers, and the current follow pose are applied
+before tracing. Color modifiers are also supported. Other position modifiers, including
+turbulence and vortex, are rejected when collisions are enabled. Express those forces through
+the velocity derivatives instead, as in the RK4 recipe.
+
+World-dependent trajectories are recalculated on the server thread immediately before rendering
+and are not cached across frames or plays. Changes to blocks are picked up on the next frame.
+Keep `samples` and `substeps` moderate. This is a recomputed trajectory rather than a persistent
+particle simulation. Direct API calls to `calculate` or `calculateInto` with a world must run on
+the server thread when collisions are enabled. Worldless calculations remain available for previews.
+Omitting `collision`, or using `response: none`, preserves the usual cached asynchronous calculation.
+
 ## Iterated maps
 
 `iteration` starts a separate state for each point and repeatedly applies a branch map.

@@ -2,6 +2,8 @@ package com.utophii.config
 
 import com.utophii.api.EffectOptions
 import com.utophii.effects.PointEffect
+import com.utophii.effects.OdeEffect
+import com.utophii.effects.OdeCollision
 import com.utophii.effects.ScriptedEffect
 import com.utophii.engine.FXEngine
 import org.bukkit.Location
@@ -111,6 +113,50 @@ class ProceduralLoadingTest {
         )
         invalid.forEachIndexed { i, contents -> assertNull(loader.load(source("invalid_$i", contents)), contents) }
         assertTrue(warnings.size >= invalid.size)
+    }
+
+    @Test
+    fun `physical collision settings load in named atoms and inline layers`() {
+        val ode = """
+            ode:
+              initial: {x: 0, y: 1, z: 0, vx: 2, vy: 0, vz: 0}
+              derivatives: {x: vx, y: vy, z: vz, vx: 0, vy: -1, vz: 0}
+              samples: 2
+              collision: {response: bounce, restitution: 0.6, substeps: 4, maxBounces: 3}
+        """.trimIndent()
+        val atom = loader.load(source("bouncing", ode)) as OdeEffect
+        assertEquals(OdeCollision(OdeCollision.Response.BOUNCE, 0.6, 4, 3), atom.collision)
+        assertTrue(atom.calculateOnRender)
+        val inline = "layers:\n  - " + ode.replace("\n", "\n    ")
+        val script = loader.load(source("inline_bouncing", inline)) as ScriptedEffect
+        assertEquals(atom.calculate(center, EffectOptions(), 0.0), script.calculate(center, EffectOptions(), 0.0))
+        assertTrue(warnings.isEmpty(), warnings.toString())
+    }
+
+    @Test
+    fun `invalid collision policies limits and physical state are rejected`() {
+        val base = """
+            ode:
+              initial: {x: 0, y: 1, z: 0, vx: 2, vy: 0, vz: 0}
+              derivatives: {x: vx, y: vy, z: vz, vx: 0, vy: -1, vz: 0}
+        """.trimIndent()
+        val invalid = listOf(
+            "true", "{response: explode}", "{response: bounce, restitution: -1}",
+            "{restitution: 1.1}", "{restitution: .nan}", "{substeps: 0}", "{substeps: 65}",
+            "{substeps: 1.5}", "{maxBounces: 0}", "{maxBounces: 65}", "{unknown: 1}",
+        )
+        invalid.forEachIndexed { i, settings ->
+            assertNull(loader.load(source("bad_collision_$i", "$base\n  collision: $settings")), settings)
+        }
+        assertNull(loader.load(source("missing_velocity", """
+            ode:
+              initial: {x: 0, y: 0, z: 0}
+              derivatives: {x: 1, y: 0, z: 0}
+              collision: {response: stop}
+        """)))
+        assertNull(loader.load(source("projected", "$base\n  collision: {response: bounce}\n  output: {x: 'x * 2', y: y, z: z}")))
+        assertNull(loader.load(source("nonphysical", base.replace("x: vx", "x: 'vx + 1'") + "\n  collision: {response: stop}")))
+        assertTrue(warnings.size >= invalid.size + 3)
     }
 
     @Test

@@ -34,7 +34,7 @@ abstract class FormulaEffect(
 
     // immutable cached local geometry is independent of the world, render options and play instance.
     // Frame specialization makes unchanged equations equal even when their output yaw changes
-    final override fun calculateInto(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
+    override fun calculateInto(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
         val frame = frame(opts, time)
         val yaw = frame.constant("out.yaw")
         val spin = frame.constant("out.spin")

@@ -9,6 +9,7 @@ import com.utophii.api.FollowRotation
 import com.utophii.api.ParticleEffect
 import com.utophii.effects.PointEffect
 import com.utophii.effects.OdeEffect
+import com.utophii.effects.OdeCollision
 import com.utophii.effects.IterationEffect
 import com.utophii.effects.FieldEffect
 import com.utophii.effects.FormulaEffect
@@ -240,6 +241,7 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
                 formula("step", "0.01"), formula("samples", "256"),
                 boolean(block, "includeInitial"),
                 formula("reveal", "1"), output ?: FormulaEffect.XYZ, parameters, functions, follow,
+                collision = parseOdeCollision(block["collision"]),
             )
             "iteration" -> {
                 val branches = block["branches"] as? List<*> ?: error("iteration requires branches")
@@ -263,6 +265,27 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
     } catch (error: RuntimeException) {
         logger.warning("Skipping procedural effect '$fileName': ${error.message}")
         null
+    }
+
+    private fun parseOdeCollision(value: Any?): OdeCollision {
+        if (value == null) return OdeCollision()
+        require(value is Map<*, *>) { "collision must be a block" }
+        require(value.keys.all { it in setOf("response", "restitution", "substeps", "maxBounces") }) { "Unknown collision setting" }
+        fun number(key: String, default: Double): Double {
+            if (!value.containsKey(key)) return default
+            return requireNotNull(value[key]?.toString()?.toDoubleOrNull()) { "collision.$key must be numeric" }
+        }
+        fun integer(key: String, default: Int): Int {
+            val number = number(key, default.toDouble())
+            require(number.isFinite() && number == number.toInt().toDouble()) { "collision.$key must be an integer" }
+            return number.toInt()
+        }
+        return OdeCollision(
+            response = OdeCollision.Response.valueOf((value["response"]?.toString() ?: "none").uppercase()),
+            restitution = number("restitution", 1.0),
+            substeps = integer("substeps", 1),
+            maxBounces = integer("maxBounces", 8),
+        )
     }
 
     // builds an implicit surface effect from an sdf YAML block

@@ -74,7 +74,9 @@ class ScriptedEffect(
                     try {
                         // primitives write directly into the pooled buffer; fall back to a copy for non-primitive effects
                         val cast = primitive as? AbstractParticleEffect
-                        if (cast != null) {
+                        if (cast?.calculateOnRender == true) {
+                            buffer.acquire(0)
+                        } else if (cast != null) {
                             cast.calculateInto(buffer, stableCenter, resolvedOptions, time)
                         } else {
                             val fallback = primitive.calculate(stableCenter, resolvedOptions, time)
@@ -94,7 +96,13 @@ class ScriptedEffect(
                     }
                 },
                 render = { time, frame ->
-                    anchor?.apply(frame.positions.list())
+                    val cast = primitive as? AbstractParticleEffect
+                    if (cast?.calculateOnRender == true) {
+                        cast.calculateForRender(frame.positions, stableCenter, frame.options, time, anchor)
+                        lastSize = frame.positions.list().size
+                    } else {
+                        anchor?.apply(frame.positions.list())
+                    }
                     renderer.render(frame.positions, frame.options, time, anchor, clampedDuration)
                 },
                 release = { frame -> ParticleBufferPool.release(frame.positions) },
