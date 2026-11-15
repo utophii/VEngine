@@ -50,6 +50,8 @@ class VEngine : JavaPlugin() {
         applyConfig()
         yamlEffectLoader = YamlEffectLoader(this)
         yamlEffectLoader.ensureDirectories()
+        // keep editor validation aligned with the schema bundled in this plugin version
+        saveResource("schemas/effect.schema.json", true)
         saveBundledEffectExamples()
         context.ready()
 
@@ -84,6 +86,10 @@ class VEngine : JavaPlugin() {
         logger.info("VEngine effects reloaded: ${loaded.size} YAML effects available.")
         loadTriggers()
     }
+
+    fun validateEffects() = yamlEffectLoader.validate()
+
+    fun effectFileNames() = yamlEffectLoader.fileNames()
 
     // reads triggers.yml after the effects
     private fun loadTriggers() {

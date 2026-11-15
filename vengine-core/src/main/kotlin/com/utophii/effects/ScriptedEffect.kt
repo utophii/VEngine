@@ -19,13 +19,17 @@ import org.bukkit.util.Vector
 // a scripted effect is composed from layers. Each layer references a primitive effect, has its own timing window, static options, and animated numeric tracks
 class ScriptedEffect(
     override val name: String,
-    private val defaultDurationTicks: Long,
+    val defaultDurationTicks: Long,
     private val layers: List<ScriptedLayer>,
     override val followDefaults: FollowDefaults? = null,
     private val emitters: List<EffectEmitter> = emptyList(),
     // duration: written as a placeholder formula
     private val durationFormula: PlaceholderExpression? = null,
 ) : ParticleEffect {
+
+    val layerCount: Int get() = layers.size
+
+    val hasDurationFormula: Boolean get() = durationFormula != null
 
     // registry names this effect spawns through emitters: and then:
     val emittedEffects: List<String>

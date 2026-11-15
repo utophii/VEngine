@@ -74,6 +74,9 @@ object FXEngine {
     // returns a primitive effect by registry name
     fun primitiveEffect(name: String): ParticleEffect? = configuredEffects[name.lowercase()] ?: primitiveEffects[name.lowercase()]
 
+    // validation resolves disk files independently of the currently loaded YAML registry
+    internal fun externalPrimitives(): Map<String, ParticleEffect> = primitiveEffects.toMap()
+
     // returns any effect by registry name; scripted effects override primitive names
     fun effect(name: String): ParticleEffect? {
         val key = name.lowercase()

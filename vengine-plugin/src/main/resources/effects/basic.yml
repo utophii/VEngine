@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../schemas/effect.schema.json
 # Formula geometry, gradients and particle lifetime.
 id: basic
 duration: 81

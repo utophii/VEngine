@@ -29,6 +29,10 @@ dependencies {
 
     // Safe math expression evaluator for user-defined parametric effects (no arbitrary code execution)
     implementation("net.objecthunter:exp4j:0.4.8")
+    implementation("com.networknt:json-schema-validator:1.5.9") {
+        exclude(group = "com.fasterxml.jackson.dataformat", module = "jackson-dataformat-yaml")
+        exclude(group = "com.ethlo.time", module = "itu")
+    }
 
     // Tests: JUnit 5 + kotlin-test, plus Paper API on the runtime classpath for Bukkit types
     testImplementation(kotlin("test"))
@@ -37,6 +41,13 @@ dependencies {
 
     // Benchmarks: Bukkit types (Location, Vector) on the runtime classpath
     jmhImplementation("io.papermc.paper:paper-api:1.21.6-R0.1-SNAPSHOT")
+}
+
+// Publish and bundle one schema source so editor and command validation stay in sync
+tasks.processResources {
+    from(rootProject.file("docs/schemas")) {
+        into("schemas")
+    }
 }
 
 // ./gradlew :vengine-core:hotpath - a small single-JVM harness, safe to run on a busy or tiny machine

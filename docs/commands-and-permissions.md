@@ -15,6 +15,8 @@ All commands live under `/vengine`, alias `/ve`. They default to operators.
 | `/ve play <name> [x y z [world]] [scale] [duration]` | Plays an effect at your position, or at the given coordinates. `scale` multiplies the size, `duration` overrides the effect's duration in ticks (20 ticks = 1 s) | `/ve play basic 2.0 200` |
 | `/ve stop [all\|<id>]` | Stops one running effect by ID, or everything with `all` | `/ve stop basic#3` |
 | `/ve reload` | Reloads `config.yml`, every file in `plugins/VEngine/effects/` and `triggers.yml` | `/ve reload` |
+| `/ve validate [effect]` | Checks effect YAML files on disk without reloading or playing them. Omit the name to check every file | `/ve validate basic` |
+| `/ve info [effect]` | Shows engine statistics, or details of a loaded effect | `/ve info basic` |
 
 Notes:
 
@@ -33,8 +35,33 @@ Notes:
 | `vengine.effect.stop` | `/ve stop` | op |
 | `vengine.list` | `/ve list` | op |
 | `vengine.reload` | `/ve reload` | op |
+| `vengine.validate` | `/ve validate` | op |
+| `vengine.info` | `/ve info` | op |
 | `vengine.trigger.<id>` | Firing a [trigger](triggers.md) that has `permission: true`. Registered for every such trigger on load and `/ve reload` | op |
 | `vengine.trigger.*` | Every trigger with `permission: true` | op |
+
+## Validation and inspection
+
+`/ve validate` checks YAML syntax, duplicate keys, field names and types against the bundled
+[JSON Schema](schemas/effect.schema.json), then builds effects with the normal parser to check
+formulas, imported shape files, layer references and timing. It also reports duplicate effect IDs,
+missing emitter targets and cycles in `emitters:` / `then:`. Each diagnostic names its file,
+schema errors also identify the field path. YAML syntax errors include the parser's line and column.
+Warnings identify settings the loader ignores or replaces with defaults, errors identify invalid
+files or references. More than 20 diagnostics are written in full to the server log.
+
+`/ve validate <effect>` accepts an effect ID, a file name without `.yml`, or a full file name.
+It reads the whole effect directory to resolve dependencies, then shows the matching files.
+Validation uses the files currently on disk and primitives supplied by other plugins. It does
+not reload configuration, change registered effects, stop instances, or play effects.
+It does not evaluate every animation frame or resolve player-specific placeholder values.
+`config.yml` and `triggers.yml` are outside this command's scope.
+
+`/ve info` shows the plugin version, registered and running effect counts, view distance,
+particles sent last tick, current quality percentage and emitted effect limit.
+`/ve info <effect>` describes the loaded effect, including its type, layer count and default
+duration when available, emitted effects, follow configuration and running instance count.
+Disk edits appear in `info` only after `/ve reload`.
 
 ## Configuration
 

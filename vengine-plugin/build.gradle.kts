@@ -48,6 +48,8 @@ tasks {
         // libraries are relocated so other plugins that shade the same ones (exp4j, faststats) cannot clash
         relocate("net.objecthunter.exp4j", "com.utophii.libs.exp4j")
         relocate("dev.faststats", "com.utophii.libs.faststats")
+        relocate("com.networknt.schema", "com.utophii.libs.schema")
+        relocate("com.fasterxml.jackson", "com.utophii.libs.jackson")
         mergeServiceFiles()
         // kotlin-stdlib stays unrelocated on purpose: Paper ships its own Kotlin runtime and relocating
         // kotlin.* breaks every other Kotlin plugin sharing the server

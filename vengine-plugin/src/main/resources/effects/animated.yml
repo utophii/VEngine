@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../schemas/effect.schema.json
 # Inline geometry, shared motion paths, layers and keyframes.
 id: animated
 functions:

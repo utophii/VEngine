@@ -4,6 +4,8 @@ import com.utophii.VEngine
 import com.utophii.api.EffectOptions
 import com.utophii.api.FollowOptions
 import com.utophii.engine.FXEngine
+import com.utophii.effects.ScriptedEffect
+import com.utophii.config.EffectValidation
 import com.utophii.util.LegacyFormat
 import org.bukkit.Bukkit
 import org.bukkit.Location
@@ -15,10 +17,17 @@ import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Entity
 import org.bukkit.entity.Player
 
-class VEngineCommand(
-    private val plugin: VEngine,
+class VEngineCommand internal constructor(
+    private val reload: () -> Unit,
+    private val validateEffects: () -> List<EffectValidation>,
+    private val effectFileNames: () -> List<String>,
+    private val version: () -> String,
+    private val logDiagnostic: (String) -> Unit,
 ) : CommandExecutor, TabCompleter {
-
+    constructor(plugin: VEngine) : this(
+        plugin::reload, plugin::validateEffects, plugin::effectFileNames,
+        { plugin.pluginMeta.version }, plugin.logger::warning,
+    )
 
     override fun onCommand(
         sender: CommandSender,
@@ -37,6 +46,8 @@ class VEngineCommand(
             "play"   -> cmdPlay(sender, args)
             "stop"   -> cmdStop(sender, args)
             "reload" -> cmdReload(sender)
+            "validate" -> cmdValidate(sender, args)
+            "info" -> cmdInfo(sender, args)
             else     -> {
                 sender.sendMessage(LegacyFormat.format(
                     "<red>Unknown subcommand. Use <gold>/vengine help</gold>.</red>"
@@ -55,6 +66,8 @@ class VEngineCommand(
             <gold>/ve play <effect> [x y z [world]] [scale] [duration]</gold> <gray>— spawn effect at your position or the given one</gray>
             <gold>/ve stop [all|<id>]</gold> <gray>— stop active running effect(s)</gray>
             <gold>/ve reload</gold> <gray>— reload effect YAML files</gray>
+            <gold>/ve validate [effect]</gold> <gray>— check effect files without reloading</gray>
+            <gold>/ve info [effect]</gold> <gray>— show engine or loaded effect details</gray>
             """.trimIndent()
         ))
     }
@@ -232,10 +245,82 @@ class VEngineCommand(
         if (!sender.hasPermission(PERM_RELOAD)) {
             noPermission(sender); return true
         }
-        plugin.reload()
+        reload()
         sender.sendMessage(LegacyFormat.format(
             "<green>VEngine effects reloaded successfully.</green>"
         ))
+        return true
+    }
+
+    private fun cmdValidate(sender: CommandSender, args: Array<out String>): Boolean {
+        if (!sender.hasPermission(PERM_VALIDATE)) {
+            noPermission(sender)
+            return true
+        }
+        if (args.size > 2) {
+            sender.sendMessage("Usage: /ve validate [effect]")
+            return true
+        }
+        val target = args.getOrNull(1)
+        val reports = validateEffects().filter {
+            target == null || it.id.equals(target, true) || it.file.equals(target, true) ||
+                it.file.substringBeforeLast('.').equals(target, true)
+        }
+        if (reports.isEmpty()) {
+            sender.sendMessage(if (target == null) "No effect YAML files found." else "No effect YAML file matches '$target'.")
+            return true
+        }
+        val errors = reports.sumOf { report -> report.issues.count { !it.warning } }
+        val warnings = reports.sumOf { report -> report.issues.count { it.warning } }
+        sender.sendMessage("Validation: ${reports.size} file(s), $errors error(s), $warnings warning(s).")
+        val diagnostics = reports.flatMap { report ->
+            report.issues.map { issue ->
+                "${report.file} (${report.id}) [${if (issue.warning) "WARN" else "ERROR"}] ${issue.message}"
+            }
+        }
+        // diagnostics are plain text so formula text and names cannot become formatting tags
+        diagnostics.take(MAX_DIAGNOSTICS).forEach { sender.sendMessage(it) }
+        if (diagnostics.size > MAX_DIAGNOSTICS) {
+            diagnostics.forEach(logDiagnostic)
+            sender.sendMessage("Showing $MAX_DIAGNOSTICS diagnostics. Full report written to the server log.")
+        }
+        sender.sendMessage("Loaded and running effects were not changed.")
+        return true
+    }
+
+    private fun cmdInfo(sender: CommandSender, args: Array<out String>): Boolean {
+        if (!sender.hasPermission(PERM_INFO)) {
+            noPermission(sender)
+            return true
+        }
+        if (args.size > 2) {
+            sender.sendMessage("Usage: /ve info [effect]")
+            return true
+        }
+        val name = args.getOrNull(1)
+        if (name == null) {
+            sender.sendMessage("VEngine ${version()}")
+            sender.sendMessage("Registered effects: ${FXEngine.effectNames().size}, running instances: ${FXEngine.runningEffects().size}")
+            sender.sendMessage("View distance: ${FXEngine.viewDistance()} blocks, particles last tick: ${FXEngine.particlesLastTick()}")
+            sender.sendMessage("Particle quality: ${(FXEngine.particleQuality() * 100).toInt()}%, emitted effect limit: ${FXEngine.maxEmittedEffects}")
+            return true
+        }
+        val effect = FXEngine.effect(name)
+        if (effect == null) {
+            sender.sendMessage("Unknown loaded effect '$name'. Use /ve list.")
+            return true
+        }
+        sender.sendMessage("Effect: ${effect.name}")
+        sender.sendMessage("Type: ${effect.javaClass.simpleName}")
+        if (effect is ScriptedEffect) {
+            val duration = if (effect.hasDurationFormula) "formula (fallback ${effect.defaultDurationTicks} ticks)" else "${effect.defaultDurationTicks} ticks"
+            sender.sendMessage("Layers: ${effect.layerCount}, default duration: $duration")
+            if (effect.emittedEffects.isNotEmpty()) {
+                sender.sendMessage("Emits: ${effect.emittedEffects.distinct().joinToString()}")
+            }
+        }
+        sender.sendMessage("Follow configured: ${effect.followDefaults != null}")
+        sender.sendMessage("Running instances: ${FXEngine.runningEffects().count { it.effectName.equals(name, true) }}")
         return true
     }
 
@@ -247,7 +332,16 @@ class VEngineCommand(
     ): List<String> {
         return when {
             args.size == 1 -> SUBCOMMANDS
+                .filter { it != "validate" || sender.hasPermission(PERM_VALIDATE) }
+                .filter { it != "info" || sender.hasPermission(PERM_INFO) }
                 .filter { it.startsWith(args[0].lowercase()) }
+
+            args.size == 2 && args[0].equals("validate", true) && sender.hasPermission(PERM_VALIDATE) ->
+                (effectFileNames() + FXEngine.effectNames()).distinct().sorted()
+                    .filter { it.startsWith(args[1], true) }
+
+            args.size == 2 && args[0].equals("info", true) && sender.hasPermission(PERM_INFO) ->
+                FXEngine.effectNames().filter { it.startsWith(args[1], true) }
 
             args.size == 2 && args[0].equals("play", ignoreCase = true) ->
                 FXEngine.effectNames()
@@ -298,13 +392,16 @@ class VEngineCommand(
         private const val PERM_STOP   = "vengine.effect.stop"
         private const val PERM_RELOAD = "vengine.reload"
         private const val PERM_LIST   = "vengine.list"
+        private const val PERM_VALIDATE = "vengine.validate"
+        private const val PERM_INFO = "vengine.info"
+        private const val MAX_DIAGNOSTICS = 20
 
         private const val DEFAULT_SCALE = 1.0
         private const val DEFAULT_DURATION_TICKS = 60L
 
         private const val PLAY_USAGE = "/vengine play <effect> [x y z [world]] [scale] [duration]"
 
-        private val SUBCOMMANDS    = listOf("help", "list", "play", "stop", "reload")
+        private val SUBCOMMANDS    = listOf("help", "list", "play", "stop", "reload", "validate", "info")
         private val SCALE_HINTS    = listOf("0.5", "1.0", "1.5", "2.0", "3.0")
         private val DURATION_HINTS = listOf("20", "40", "60", "100", "200", "400")
     }

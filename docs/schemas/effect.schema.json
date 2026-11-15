@@ -1,0 +1,1654 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://utophii.github.io/VEngine/schemas/effect.schema.json",
+  "title": "VEngine effect",
+  "description": "One VEngine YAML effect. Geometry formulas are checked by /ve validate on the server.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Registry name used by /ve play. Defaults to the file name without .yml."
+    },
+    "effect": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Name of a primitive supplied by a YAML atom or another plugin."
+    },
+    "type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "duration": {
+      "$ref": "#/$defs/formula",
+      "description": "Default duration in ticks, or a formula resolved when played. 20 ticks equal one second."
+    },
+    "scale": {
+      "$ref": "#/$defs/formula",
+      "description": "Size multiplier, or a formula resolved when played."
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/formula"
+      },
+      "description": "Named numeric parameters or formulas resolved when played."
+    },
+    "particle": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Bukkit particle name, checked against the installed server by /ve validate."
+    },
+    "material": {
+      "type": "string",
+      "minLength": 1
+    },
+    "start": {
+      "$ref": "#/$defs/number",
+      "description": "Start time in ticks."
+    },
+    "delay": {
+      "$ref": "#/$defs/number",
+      "description": "Additional delay in ticks after the referenced layer."
+    },
+    "rotationYaw": {
+      "$ref": "#/$defs/number"
+    },
+    "rotationPitch": {
+      "$ref": "#/$defs/number"
+    },
+    "rotationRoll": {
+      "$ref": "#/$defs/number"
+    },
+    "tiltAngle": {
+      "$ref": "#/$defs/number"
+    },
+    "dustSize": {
+      "$ref": "#/$defs/number"
+    },
+    "count": {
+      "$ref": "#/$defs/number"
+    },
+    "speed": {
+      "$ref": "#/$defs/number"
+    },
+    "color": {
+      "$ref": "#/$defs/color"
+    },
+    "toColor": {
+      "$ref": "#/$defs/color"
+    },
+    "transitionColor": {
+      "$ref": "#/$defs/color"
+    },
+    "after": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Layer ID to start after. Used inside layers."
+    },
+    "tiltAxis": {
+      "$ref": "#/$defs/vector"
+    },
+    "offset": {
+      "$ref": "#/$defs/offset"
+    },
+    "gradient": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/color"
+      },
+      "minItems": 0
+    },
+    "gradientInterpolation": {
+      "type": "string",
+      "enum": [
+        "rgb",
+        "hsv",
+        "RGB",
+        "HSV"
+      ]
+    },
+    "colorOverLife": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/color"
+      },
+      "minItems": 0
+    },
+    "sizeOverLife": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": 0
+      },
+      "minItems": 0
+    },
+    "display": {
+      "$ref": "#/$defs/display"
+    },
+    "follow": {
+      "$ref": "#/$defs/follow",
+      "description": "Default attachment and orientation when played by an entity."
+    },
+    "modifiers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/modifier"
+      },
+      "minItems": 0
+    },
+    "animation": {
+      "$ref": "#/$defs/animation",
+      "description": "Numeric keyframe tracks for a layer."
+    },
+    "budget": {
+      "type": "string",
+      "enum": [
+        "normal",
+        "exempt"
+      ],
+      "description": "Use exempt to bypass particle limits and automatic quality reduction."
+    },
+    "lod": {
+      "type": "boolean",
+      "description": "Whether distance-based particle thinning applies."
+    },
+    "curve": {
+      "$ref": "#/$defs/parametric",
+      "description": "Parametric curve, by default sampled over t."
+    },
+    "surface": {
+      "$ref": "#/$defs/parametric",
+      "description": "Parametric surface, by default sampled over u and v."
+    },
+    "sdf": {
+      "$ref": "#/$defs/sdf",
+      "description": "Implicit surface defined by a scalar formula."
+    },
+    "lsystem": {
+      "$ref": "#/$defs/lsystem",
+      "description": "Turtle geometry generated from symbol replacement rules."
+    },
+    "shape": {
+      "$ref": "#/$defs/shape",
+      "description": "Imported image, OBJ, SVG, or text geometry from the shapes directory."
+    },
+    "points": {
+      "$ref": "#/$defs/points",
+      "description": "Independent points computed from formulas."
+    },
+    "ode": {
+      "$ref": "#/$defs/ode",
+      "description": "Numerically integrated state and derivative formulas."
+    },
+    "iteration": {
+      "$ref": "#/$defs/iteration",
+      "description": "Iterated formula branches for fractals and similar generators."
+    },
+    "field": {
+      "$ref": "#/$defs/field",
+      "description": "Points distributed according to a scalar field."
+    },
+    "functions": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/formula"
+      },
+      "description": "Reusable math functions, mapping signatures such as wave(t) to formulas."
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/layer"
+      },
+      "minItems": 1,
+      "description": "Timed layers, each using a named primitive or one inline geometry block."
+    },
+    "emitters": {
+      "$ref": "#/$defs/emitters",
+      "description": "Child effects spawned while this layered effect runs."
+    },
+    "then": {
+      "$ref": "#/$defs/emitters",
+      "description": "Child effects spawned after this layered effect ends."
+    }
+  },
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "required": [
+        "layers"
+      ]
+    },
+    {
+      "required": [
+        "effect"
+      ]
+    },
+    {
+      "required": [
+        "curve"
+      ]
+    },
+    {
+      "required": [
+        "surface"
+      ]
+    },
+    {
+      "required": [
+        "sdf"
+      ]
+    },
+    {
+      "required": [
+        "lsystem"
+      ]
+    },
+    {
+      "required": [
+        "shape"
+      ]
+    },
+    {
+      "required": [
+        "points"
+      ]
+    },
+    {
+      "required": [
+        "ode"
+      ]
+    },
+    {
+      "required": [
+        "iteration"
+      ]
+    },
+    {
+      "required": [
+        "field"
+      ]
+    }
+  ],
+  "$defs": {
+    "number": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "pattern": "^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?$"
+        }
+      ]
+    },
+    "formula": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        }
+      ]
+    },
+    "vector": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/number"
+        },
+        "y": {
+          "$ref": "#/$defs/number"
+        },
+        "z": {
+          "$ref": "#/$defs/number"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "z"
+      ]
+    },
+    "offset": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "x": {
+              "$ref": "#/$defs/number"
+            },
+            "y": {
+              "$ref": "#/$defs/number"
+            },
+            "z": {
+              "$ref": "#/$defs/number"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "color": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^#?[0-9a-fA-F]{6}$"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "r": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "g": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            "b": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "r",
+            "g",
+            "b"
+          ]
+        }
+      ]
+    },
+    "follow": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "offset": {
+              "$ref": "#/$defs/offset"
+            },
+            "rotation": {
+              "type": "string",
+              "enum": [
+                "none",
+                "body",
+                "head",
+                "look",
+                "velocity",
+                "NONE",
+                "BODY",
+                "HEAD",
+                "LOOK",
+                "VELOCITY"
+              ]
+            },
+            "stopWithEntity": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "display": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "item",
+            "block",
+            "text",
+            "pixel",
+            "ITEM",
+            "BLOCK",
+            "TEXT",
+            "PIXEL"
+          ]
+        },
+        "material": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 0
+            }
+          ]
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/number"
+            },
+            {
+              "$ref": "#/$defs/vector"
+            }
+          ]
+        },
+        "rotation": {
+          "$ref": "#/$defs/vector"
+        },
+        "spin": {
+          "$ref": "#/$defs/vector"
+        },
+        "phase": {
+          "$ref": "#/$defs/number"
+        },
+        "billboard": {
+          "type": "string",
+          "enum": [
+            "fixed",
+            "vertical",
+            "horizontal",
+            "center",
+            "FIXED",
+            "VERTICAL",
+            "HORIZONTAL",
+            "CENTER"
+          ]
+        },
+        "brightness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/number"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "block": {
+                  "$ref": "#/$defs/number"
+                },
+                "sky": {
+                  "$ref": "#/$defs/number"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "glow": {
+          "$ref": "#/$defs/color"
+        },
+        "interpolation": {
+          "$ref": "#/$defs/number"
+        },
+        "viewRange": {
+          "$ref": "#/$defs/number"
+        },
+        "shadow": {
+          "type": "object",
+          "properties": {
+            "radius": {
+              "$ref": "#/$defs/number"
+            },
+            "strength": {
+              "$ref": "#/$defs/number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "background": {
+          "type": "string",
+          "pattern": "^#?(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
+        },
+        "textShadow": {
+          "type": "boolean"
+        },
+        "seeThrough": {
+          "type": "boolean"
+        },
+        "particles": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "keyframe": {
+      "type": "object",
+      "properties": {
+        "tick": {
+          "$ref": "#/$defs/number"
+        },
+        "value": {
+          "$ref": "#/$defs/number"
+        },
+        "easing": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tick",
+        "value"
+      ]
+    },
+    "track": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string",
+          "minLength": 1
+        },
+        "loop": {
+          "type": "boolean"
+        },
+        "easing": {
+          "type": "string",
+          "minLength": 1
+        },
+        "keyframes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/keyframe"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "keyframes"
+      ]
+    },
+    "animation": {
+      "type": "object",
+      "properties": {
+        "loop": {
+          "type": "boolean"
+        },
+        "easing": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tracks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/track"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tracks"
+      ]
+    },
+    "modifier": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "turbulence",
+            "rotation",
+            "vortex",
+            "motion"
+          ]
+        },
+        "strength": {
+          "$ref": "#/$defs/number"
+        },
+        "frequency": {
+          "$ref": "#/$defs/number"
+        },
+        "octaves": {
+          "$ref": "#/$defs/number"
+        },
+        "angularVelocity": {
+          "$ref": "#/$defs/number"
+        },
+        "angularSpeed": {
+          "$ref": "#/$defs/number"
+        },
+        "initialAngle": {
+          "$ref": "#/$defs/number"
+        },
+        "coreRadius": {
+          "$ref": "#/$defs/number"
+        },
+        "axis": {
+          "$ref": "#/$defs/vector"
+        },
+        "pivotOffset": {
+          "$ref": "#/$defs/vector"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "hold",
+            "loop",
+            "ping_pong",
+            "ping-pong"
+          ]
+        },
+        "easing": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "$ref": "#/$defs/number"
+              },
+              "y": {
+                "$ref": "#/$defs/number"
+              },
+              "z": {
+                "$ref": "#/$defs/number"
+              },
+              "ticks": {
+                "$ref": "#/$defs/number"
+              },
+              "easing": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "ticks"
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "motion"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "path"
+            ]
+          }
+        }
+      ]
+    },
+    "emitter": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "object",
+          "properties": {
+            "effect": {
+              "type": "string",
+              "minLength": 1
+            },
+            "start": {
+              "$ref": "#/$defs/number"
+            },
+            "delay": {
+              "$ref": "#/$defs/number"
+            },
+            "every": {
+              "$ref": "#/$defs/number"
+            },
+            "count": {
+              "$ref": "#/$defs/number"
+            },
+            "scale": {
+              "$ref": "#/$defs/number"
+            },
+            "duration": {
+              "$ref": "#/$defs/number"
+            },
+            "offset": {
+              "$ref": "#/$defs/offset"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "effect"
+          ]
+        }
+      ]
+    },
+    "emitters": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/emitter"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/emitter"
+          },
+          "minItems": 1
+        }
+      ]
+    },
+    "parametric": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/formula"
+        },
+        "y": {
+          "$ref": "#/$defs/formula"
+        },
+        "z": {
+          "$ref": "#/$defs/formula"
+        },
+        "value": {
+          "$ref": "#/$defs/formula"
+        },
+        "age": {
+          "$ref": "#/$defs/formula"
+        },
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "samples": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/number"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/number"
+              },
+              "minItems": 1
+            }
+          ]
+        },
+        "samplesX": {
+          "$ref": "#/$defs/number"
+        },
+        "range": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "min": {
+                "$ref": "#/$defs/number"
+              },
+              "max": {
+                "$ref": "#/$defs/number"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "min",
+              "max"
+            ]
+          },
+          "minItems": 0
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?$"
+              }
+            ]
+          }
+        },
+        "angularSpeed": {
+          "$ref": "#/$defs/number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sdf": {
+      "type": "object",
+      "properties": {
+        "f": {
+          "$ref": "#/$defs/formula"
+        },
+        "value": {
+          "$ref": "#/$defs/formula"
+        },
+        "bounds": {
+          "$ref": "#/$defs/number"
+        },
+        "points": {
+          "$ref": "#/$defs/number"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?$"
+              }
+            ]
+          }
+        },
+        "angularSpeed": {
+          "$ref": "#/$defs/number"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "f"
+      ]
+    },
+    "lsystem": {
+      "type": "object",
+      "properties": {
+        "axiom": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rules": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1,
+            "maxLength": 1
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "to": {
+                          "type": "string"
+                        },
+                        "weight": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        }
+                      },
+                      "additionalProperties": false,
+                      "required": [
+                        "to"
+                      ]
+                    }
+                  ]
+                },
+                "minItems": 1
+              }
+            ]
+          }
+        },
+        "iterations": {
+          "$ref": "#/$defs/number"
+        },
+        "angle": {
+          "$ref": "#/$defs/number"
+        },
+        "size": {
+          "$ref": "#/$defs/number"
+        },
+        "spacing": {
+          "$ref": "#/$defs/number"
+        },
+        "points": {
+          "$ref": "#/$defs/number"
+        },
+        "growth": {
+          "$ref": "#/$defs/number"
+        },
+        "seed": {
+          "$ref": "#/$defs/number"
+        },
+        "angularSpeed": {
+          "$ref": "#/$defs/number"
+        },
+        "anchor": {
+          "type": "string",
+          "enum": [
+            "base",
+            "center"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "axiom"
+      ]
+    },
+    "shape": {
+      "type": "object",
+      "properties": {
+        "image": {
+          "type": "string",
+          "minLength": 1
+        },
+        "obj": {
+          "type": "string",
+          "minLength": 1
+        },
+        "svg": {
+          "type": "string",
+          "minLength": 1
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "font": {
+          "type": "string",
+          "minLength": 1
+        },
+        "style": {
+          "type": "string",
+          "minLength": 1
+        },
+        "size": {
+          "$ref": "#/$defs/number"
+        },
+        "points": {
+          "$ref": "#/$defs/number"
+        },
+        "growth": {
+          "$ref": "#/$defs/number"
+        },
+        "angularSpeed": {
+          "$ref": "#/$defs/number"
+        },
+        "alpha": {
+          "$ref": "#/$defs/number"
+        },
+        "tolerance": {
+          "$ref": "#/$defs/number"
+        },
+        "samples": {
+          "$ref": "#/$defs/number"
+        },
+        "epicycles": {
+          "$ref": "#/$defs/number"
+        },
+        "period": {
+          "$ref": "#/$defs/number"
+        },
+        "trail": {
+          "$ref": "#/$defs/number"
+        },
+        "spacing": {
+          "$ref": "#/$defs/number"
+        },
+        "anchor": {
+          "type": "string",
+          "enum": [
+            "base",
+            "center"
+          ]
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "outline",
+            "fill",
+            "fourier",
+            "vertices",
+            "edges",
+            "surface"
+          ]
+        },
+        "fillRule": {
+          "type": "string",
+          "enum": [
+            "evenodd",
+            "nonzero"
+          ]
+        },
+        "colors": {
+          "type": "string",
+          "enum": [
+            "image",
+            "gradient"
+          ]
+        },
+        "background": {
+          "$ref": "#/$defs/color"
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "image"
+          ]
+        },
+        {
+          "required": [
+            "obj"
+          ]
+        },
+        {
+          "required": [
+            "svg"
+          ]
+        },
+        {
+          "required": [
+            "text"
+          ]
+        }
+      ]
+    },
+    "points": {
+      "type": "object",
+      "properties": {
+        "samples": {
+          "$ref": "#/$defs/formula"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?$"
+              }
+            ]
+          }
+        },
+        "output": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ]
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "output"
+      ]
+    },
+    "ode": {
+      "type": "object",
+      "properties": {
+        "samples": {
+          "$ref": "#/$defs/formula"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?$"
+              }
+            ]
+          }
+        },
+        "output": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ]
+          }
+        },
+        "initial": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ]
+          }
+        },
+        "derivatives": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ]
+          }
+        },
+        "method": {
+          "type": "string",
+          "enum": [
+            "euler",
+            "rk4",
+            "EULER",
+            "RK4"
+          ]
+        },
+        "step": {
+          "$ref": "#/$defs/formula"
+        },
+        "includeInitial": {
+          "type": "boolean"
+        },
+        "reveal": {
+          "$ref": "#/$defs/formula"
+        },
+        "collision": {
+          "type": "object",
+          "properties": {
+            "response": {
+              "type": "string",
+              "enum": [
+                "none",
+                "terminate",
+                "stop",
+                "bounce",
+                "NONE",
+                "TERMINATE",
+                "STOP",
+                "BOUNCE"
+              ]
+            },
+            "restitution": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "substeps": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 64
+            },
+            "maxBounces": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 64
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "initial",
+        "derivatives"
+      ]
+    },
+    "iteration": {
+      "type": "object",
+      "properties": {
+        "samples": {
+          "$ref": "#/$defs/formula"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?$"
+              }
+            ]
+          }
+        },
+        "output": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ]
+          }
+        },
+        "initial": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ]
+          }
+        },
+        "branches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string",
+                  "minLength": 1
+                }
+              ]
+            }
+          },
+          "minItems": 1
+        },
+        "selection": {
+          "type": "string",
+          "enum": [
+            "hash",
+            "bits",
+            "stratified",
+            "HASH",
+            "BITS",
+            "STRATIFIED"
+          ]
+        },
+        "reverse": {
+          "type": "boolean"
+        },
+        "iterations": {
+          "$ref": "#/$defs/formula"
+        },
+        "copies": {
+          "$ref": "#/$defs/formula"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "initial",
+        "branches"
+      ]
+    },
+    "field": {
+      "type": "object",
+      "properties": {
+        "samples": {
+          "$ref": "#/$defs/formula"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?$"
+              }
+            ]
+          }
+        },
+        "output": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ]
+          }
+        },
+        "f": {
+          "$ref": "#/$defs/formula"
+        },
+        "domain": {
+          "type": "string",
+          "enum": [
+            "square",
+            "disk",
+            "SQUARE",
+            "DISK"
+          ]
+        },
+        "peak": {
+          "$ref": "#/$defs/formula"
+        },
+        "settle": {
+          "$ref": "#/$defs/formula"
+        },
+        "period": {
+          "$ref": "#/$defs/formula"
+        },
+        "jitter": {
+          "$ref": "#/$defs/formula"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "f"
+      ]
+    },
+    "layer": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Registry name used by /ve play. Defaults to the file name without .yml."
+        },
+        "effect": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of a primitive supplied by a YAML atom or another plugin."
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "duration": {
+          "$ref": "#/$defs/formula",
+          "description": "Default duration in ticks, or a formula resolved when played. 20 ticks equal one second."
+        },
+        "scale": {
+          "$ref": "#/$defs/formula",
+          "description": "Size multiplier, or a formula resolved when played."
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/formula"
+          },
+          "description": "Named numeric parameters or formulas resolved when played."
+        },
+        "particle": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Bukkit particle name, checked against the installed server by /ve validate."
+        },
+        "material": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start": {
+          "$ref": "#/$defs/number",
+          "description": "Start time in ticks."
+        },
+        "delay": {
+          "$ref": "#/$defs/number",
+          "description": "Additional delay in ticks after the referenced layer."
+        },
+        "rotationYaw": {
+          "$ref": "#/$defs/number"
+        },
+        "rotationPitch": {
+          "$ref": "#/$defs/number"
+        },
+        "rotationRoll": {
+          "$ref": "#/$defs/number"
+        },
+        "tiltAngle": {
+          "$ref": "#/$defs/number"
+        },
+        "dustSize": {
+          "$ref": "#/$defs/number"
+        },
+        "count": {
+          "$ref": "#/$defs/number"
+        },
+        "speed": {
+          "$ref": "#/$defs/number"
+        },
+        "color": {
+          "$ref": "#/$defs/color"
+        },
+        "toColor": {
+          "$ref": "#/$defs/color"
+        },
+        "transitionColor": {
+          "$ref": "#/$defs/color"
+        },
+        "after": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Layer ID to start after. Used inside layers."
+        },
+        "tiltAxis": {
+          "$ref": "#/$defs/vector"
+        },
+        "offset": {
+          "$ref": "#/$defs/offset"
+        },
+        "gradient": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/color"
+          },
+          "minItems": 0
+        },
+        "gradientInterpolation": {
+          "type": "string",
+          "enum": [
+            "rgb",
+            "hsv",
+            "RGB",
+            "HSV"
+          ]
+        },
+        "colorOverLife": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/color"
+          },
+          "minItems": 0
+        },
+        "sizeOverLife": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          },
+          "minItems": 0
+        },
+        "display": {
+          "$ref": "#/$defs/display"
+        },
+        "follow": {
+          "$ref": "#/$defs/follow",
+          "description": "Default attachment and orientation when played by an entity."
+        },
+        "modifiers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/modifier"
+          },
+          "minItems": 0
+        },
+        "animation": {
+          "$ref": "#/$defs/animation",
+          "description": "Numeric keyframe tracks for a layer."
+        },
+        "budget": {
+          "type": "string",
+          "enum": [
+            "normal",
+            "exempt"
+          ],
+          "description": "Use exempt to bypass particle limits and automatic quality reduction."
+        },
+        "lod": {
+          "type": "boolean",
+          "description": "Whether distance-based particle thinning applies."
+        },
+        "curve": {
+          "$ref": "#/$defs/parametric",
+          "description": "Parametric curve, by default sampled over t."
+        },
+        "surface": {
+          "$ref": "#/$defs/parametric",
+          "description": "Parametric surface, by default sampled over u and v."
+        },
+        "sdf": {
+          "$ref": "#/$defs/sdf",
+          "description": "Implicit surface defined by a scalar formula."
+        },
+        "lsystem": {
+          "$ref": "#/$defs/lsystem",
+          "description": "Turtle geometry generated from symbol replacement rules."
+        },
+        "shape": {
+          "$ref": "#/$defs/shape",
+          "description": "Imported image, OBJ, SVG, or text geometry from the shapes directory."
+        },
+        "points": {
+          "$ref": "#/$defs/points",
+          "description": "Independent points computed from formulas."
+        },
+        "ode": {
+          "$ref": "#/$defs/ode",
+          "description": "Numerically integrated state and derivative formulas."
+        },
+        "iteration": {
+          "$ref": "#/$defs/iteration",
+          "description": "Iterated formula branches for fractals and similar generators."
+        },
+        "field": {
+          "$ref": "#/$defs/field",
+          "description": "Points distributed according to a scalar field."
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "effect"
+          ]
+        },
+        {
+          "required": [
+            "curve"
+          ]
+        },
+        {
+          "required": [
+            "surface"
+          ]
+        },
+        {
+          "required": [
+            "sdf"
+          ]
+        },
+        {
+          "required": [
+            "lsystem"
+          ]
+        },
+        {
+          "required": [
+            "shape"
+          ]
+        },
+        {
+          "required": [
+            "points"
+          ]
+        },
+        {
+          "required": [
+            "ode"
+          ]
+        },
+        {
+          "required": [
+            "iteration"
+          ]
+        },
+        {
+          "required": [
+            "field"
+          ]
+        }
+      ]
+    }
+  }
+}

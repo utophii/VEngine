@@ -345,6 +345,34 @@ the layer tilts in its own frame first, then turns around the world's vertical a
 three-leg flight path through a YAML anchor, while a rosette gate ping-pongs at the spawn point.
 Each layer includes its own geometry, so the file works on its own. For display entities, read `display.yml` next.
 
+## Editor validation
+
+VEngine includes a [JSON Schema for effect files](schemas/effect.schema.json). Editors with
+YAML schema support can suggest field names and highlight unknown keys, incorrect types and
+incompatible geometry blocks while you write.
+
+On startup the plugin writes its current schema to
+`plugins/VEngine/schemas/effect.schema.json`. Add this first line to an effect in the adjacent
+`effects/` directory, bundled examples already include it:
+
+```yaml
+# yaml-language-server: $schema=../schemas/effect.schema.json
+```
+
+For files edited outside the plugin directory, download the schema and adjust the relative path,
+or use the published schema:
+
+```yaml
+# yaml-language-server: $schema=https://utophii.github.io/VEngine/schemas/effect.schema.json
+```
+
+The bundled schema matches the installed plugin version. The published schema follows the docs
+and may describe a newer version. The schema file in the plugin directory is replaced on startup.
+
+Run `/ve validate` before reloading, or `/ve validate <effect>` to see diagnostics for one effect.
+The command also checks formulas, shape files and effect references that an editor cannot check.
+Use `/ve info <effect>` to inspect the currently loaded definition.
+
 ## Troubleshooting
 
 | Symptom | Meaning |

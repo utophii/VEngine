@@ -61,8 +61,35 @@ import java.io.File
 import java.util.logging.Logger
 
 // loads effect descriptions from YAML without recompilation
-class YamlEffectLoader internal constructor(private val dataFolder: File, private val logger: Logger) {
+class YamlEffectLoader internal constructor(
+    private val dataFolder: File,
+    private val logger: Logger,
+    private val primitiveResolver: (String) -> ParticleEffect? = FXEngine::primitiveEffect,
+) {
     constructor(plugin: JavaPlugin) : this(plugin.dataFolder, plugin.logger)
+
+    fun validate(): List<EffectValidation> = EffectValidator(dataFolder, FXEngine.externalPrimitives()).validate()
+
+    fun fileNames(): List<String> = effectFiles().map { it.nameWithoutExtension }
+
+    private fun effectFiles(): List<File> = effectsDirectory()
+        .listFiles { file -> file.isFile && file.extension.equals(YAML_EXTENSION, ignoreCase = true) }
+        ?.sortedBy { it.name }.orEmpty()
+
+    // Uses the same parsers as loading, with an isolated primitive resolver during validation.
+    internal fun parseForValidation(file: File, raw: Map<String, Any?>): Pair<ParticleEffect, ParticleEffect?>? {
+        val functions = parseFunctions(raw[FUNCTIONS_KEY])
+        val id = effectId(raw, file)
+        if (isAtom(raw)) {
+            val atom = parseAtom(id, raw, file.name, functions) ?: return null
+            if (raw.containsKey(EMITTERS_KEY) || raw.containsKey(THEN_KEY)) {
+                logger.warning("Atom emitters/then are ignored. Use a layered effect to spawn other effects.")
+            }
+            return standaloneAtom(atom, raw, file.name, functions) to atom
+        }
+        val duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS) ?: DEFAULT_DURATION_TICKS
+        return loadScripted(id, duration, raw, file.name, functions)?.let { it to null }
+    }
 
     private val yaml = Yaml(LoaderOptions().apply { setAllowDuplicateKeys(false) })
 
@@ -664,7 +691,7 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
     }
 
     // formula atoms
-    private fun isAtom(raw: Map<String, Any?>): Boolean {
+    internal fun isAtom(raw: Map<String, Any?>): Boolean {
         val hasBlock = raw.containsKey(CURVE_KEY) || raw.containsKey(SURFACE_KEY) || raw.containsKey(SDF_KEY) ||
             raw.containsKey(LSYSTEM_KEY) || raw.containsKey(SHAPE_KEY)
         val type = raw[TYPE_KEY]?.toString()?.lowercase()
@@ -743,7 +770,7 @@ class YamlEffectLoader internal constructor(private val dataFolder: File, privat
         }
         val inline = if (embedded) parseAtom("$fileName:${raw[ID_KEY] ?: startTick}", atomSource, fileName, functions) ?: return null else null
         val effectName = inline?.name ?: raw[EFFECT_KEY]?.toString()?.lowercase()?.takeIf(String::isNotBlank) ?: return null
-        if (inline == null && FXEngine.primitiveEffect(effectName) == null) {
+        if (inline == null && primitiveResolver(effectName) == null) {
             logger.warning("Skipping layer for unknown primitive effect '$effectName'.")
             return null
         }
