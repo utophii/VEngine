@@ -1,0 +1,32 @@
+id: golden_layered
+duration: 12
+functions:
+  shifted(i, r): i + r
+layers:
+  - duration: 5
+    scale: 0.5
+    parameters: {radius: 2}
+    points:
+      samples: 2
+      parameters: {radius: 1}
+      output: {x: 'shifted(index, radius)', y: '0', z: 'time'}
+    animation:
+      tracks:
+        - target: scale
+          keyframes: [{tick: 0, value: 0.5}, {tick: 4, value: 1.5}]
+  - start: 2
+    duration: 6
+    rotationRoll: 0.3
+    curve:
+      variables: [t]
+      samples: 4
+      range: [{min: 0, max: 1}]
+      angularSpeed: 0
+      parameters: {radius: 1}
+      x: radius * t
+      y: time
+      z: '0'
+    modifiers:
+      - type: motion
+        mode: hold
+        path: [{x: 2, y: 1, z: -1, ticks: 4}]

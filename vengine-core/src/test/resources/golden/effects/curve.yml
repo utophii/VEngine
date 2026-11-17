@@ -1,0 +1,14 @@
+id: golden_curve
+functions:
+  wave(v): sin(v * tau)
+  height(v, b): wave(v) + b
+curve:
+  variables: [t]
+  samples: 4
+  range: [{min: 0, max: 1}]
+  angularSpeed: 0.05
+  parameters: {radius: 1, bias: 0.25, life: 8}
+  x: radius * cos(t * tau)
+  y: height(t, bias)
+  z: radius * wave(t)
+  age: (time - t * 4) / life

@@ -1,0 +1,15 @@
+id: golden_field
+field:
+  domain: disk
+  samples: points
+  f: u - bias - time * 0.01
+  peak: 2
+  settle: 8
+  period: 12
+  jitter: 0.02
+  parameters: {points: 4, radius: 1, bias: 0.25}
+  output:
+    x: u * radius
+    y: '0'
+    z: v * radius
+    value: strength

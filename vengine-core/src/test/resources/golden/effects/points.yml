@@ -1,0 +1,11 @@
+id: golden_points
+functions:
+  shifted(i, r): i + r
+points:
+  samples: points
+  parameters: {points: 4, radius: 1, bias: 0.25}
+  output:
+    x: shifted(index, radius)
+    y: bias
+    z: index / count
+    spin: time * 0.1

@@ -1,0 +1,16 @@
+id: golden_iteration
+iteration:
+  samples: points
+  iterations: 5
+  selection: bits
+  parameters: {points: 4, radius: 1, bias: 0.25}
+  initial: {x: radius, y: bias}
+  branches:
+    - {x: '(y + radius) / 2', y: '(x + bias) / 2'}
+    - {x: '(y - radius) / 2', y: '(x - bias) / 2'}
+  output:
+    x: x
+    y: y
+    z: '0'
+    value: address
+    yaw: time * 0.1

@@ -50,6 +50,16 @@ tasks.processResources {
     }
 }
 
+// Explicit opt-in, ordinary test runs only read the committed snapshots
+tasks.register<JavaExec>("updateEffectGoldens") {
+    group = "verification"
+    description = "Regenerates YAML effect snapshots for review"
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.utophii.effects.YamlEffectFixtures")
+    workingDir(projectDir)
+}
+
 // ./gradlew :vengine-core:hotpath - a small single-JVM harness, safe to run on a busy or tiny machine
 tasks.register<JavaExec>("hotpath") {
     group = "verification"

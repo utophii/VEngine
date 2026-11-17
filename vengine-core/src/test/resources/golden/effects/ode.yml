@@ -1,0 +1,16 @@
+id: golden_ode
+ode:
+  method: rk4
+  step: 0.25
+  samples: points
+  includeInitial: true
+  reveal: (time + 1) / duration
+  parameters: {points: 8, radius: 1, bias: 0.25}
+  initial: {x: radius, velocity: bias}
+  derivatives: {x: velocity, velocity: '-x'}
+  output:
+    x: x
+    y: velocity
+    z: integrationTime
+    value: index / max(1, count - 1)
+    age: time / duration

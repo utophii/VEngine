@@ -1,0 +1,30 @@
+# Captured YAML geometry, each row is [x, y, z, value, age].
+initial:
+  hasValues: false
+  points:
+    - [3.0, -1.0, 3.0, null, null]
+    - [3.5, -1.0, 3.0, null, null]
+animated:
+  hasValues: false
+  points:
+    - [4.0, -1.0, 5.0, null, null]
+    - [5.0, -1.0, 5.0, null, null]
+    - [2.0, -1.0, 3.0, null, null]
+    - [2.2388341222814017, -0.9261199483346652, 3.0, null, null]
+    - [2.477668244562803, -0.8522398966693302, 3.0, null, null]
+    - [2.7165023668442045, -0.7783598450039954, 3.0, null, null]
+overridden:
+  hasValues: false
+  points:
+    - [1.723791727765629, 2.9138083366429575, 1.2724894799933735, null, null]
+    - [2.024809006948706, 3.1173559944279035, 1.3021197953464727, null, null]
+    - [2.325826286131783, 3.3209036522128503, 1.3317501106995724, null, null]
+    - [2.6268435653148603, 3.524451309997797, 1.3613804260526716, null, null]
+    - [2.9278608444979373, 3.727998967782743, 1.3910107414057709, null, null]
+    - [3.2288781236810147, 3.93154662556769, 1.4206410567588705, null, null]
+layers_finished:
+  hasValues: false
+  points: []
+period_wrapped:
+  hasValues: false
+  points: []
