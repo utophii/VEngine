@@ -26,11 +26,14 @@ VEngine is a multi-module build. Two artifacts matter to plugin developers:
 
 | Artifact | What's inside | When you need it |
 |---|---|---|
-| `com.utophii:vengine-api` | Stable contracts only: `ParticleEffect`, `EffectOptions`, `EffectModifier`, `EffectHandle`, the `EffectProvider` SPI. **Zero engine internals.** | Implementing effects for the SPI, or passing VEngine types around your API |
+| `io.github.utophii:vengine-api` | Stable contracts only: `ParticleEffect`, `EffectOptions`, `EffectModifier`, `EffectHandle`, the `EffectProvider` SPI. **Zero engine internals.** | Implementing effects for the SPI, or passing VEngine types around your API |
 | `com.utophii:vengine-core` | The engine + DSL (`playEffect`, `playParametric`) on top of `vengine-api` | Calling the DSL or `FXEngine` directly |
 
 Server owners install a single shadow jar (`VEngine-<version>.jar`) that bundles everything -
 the module split only concerns compile-time consumers.
+
+See [For developers](for-developers.md#artifacts) for Gradle dependencies and local installation.
+Only `vengine-api` is configured for Maven Central publication, `vengine-core` requires a local jar.
 
 Then import the DSL:
 

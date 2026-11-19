@@ -15,9 +15,33 @@ or register entirely new effects through the SPI.
 | `vengine-api-<version>.jar` | implementing `EffectProvider` / passing VEngine types | no |
 | `vengine-core-<version>.jar` | calling the DSL or `FXEngine` | no |
 
-Use `compileOnly` in Gradle. Until artifacts are published to a repository, depend on the jar
-files directly (`compileOnly(files("libs/vengine-api-<version>.jar"))`), or install them into
-your local Maven repository with `./gradlew publishToMavenLocal`.
+Use `compileOnly` in Gradle. After the first Maven Central release, connect the API with:
+
+```kotlin
+repositories {
+    mavenCentral()
+    maven("https://repo.papermc.io/repository/maven-public/")
+}
+
+dependencies {
+    compileOnly("io.github.utophii:vengine-api:0.1.2")
+    compileOnly("io.papermc.paper:paper-api:1.21.6-R0.1-SNAPSHOT")
+}
+```
+
+Paper API is supplied by the server and must be declared separately for compilation.
+Use Maven scope `provided` for both dependencies in a Maven project.
+The VEngine plugin supplies the API at runtime, so do not shade it into your plugin.
+Declare `depend: [VEngine]` in your Bukkit `plugin.yml` when your plugin requires VEngine.
+
+Before the first Central release, or when working on local changes, run
+`./gradlew :vengine-api:publishToMavenLocal` in this repository and add `mavenLocal()` to
+your consuming project's repositories. This publishes only `vengine-api`.
+The `vengine-core` module is still consumed as a jar with
+`compileOnly(files("libs/vengine-core-<version>.jar"))`, alongside the API dependency.
+Calling the DSL or `FXEngine.registerProvider` requires this core jar as well.
+
+Maintainers can follow [Publishing the API](publishing.md) to release it to Maven Central.
 
 ## Playing effects (DSL)
 
