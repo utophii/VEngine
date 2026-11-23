@@ -3,6 +3,7 @@ package com.utophii.effects
 import com.utophii.api.EffectOptions
 import com.utophii.api.FollowOptions
 import com.utophii.engine.FollowAnchor
+import com.utophii.modifiers.FlockingModifier
 import com.utophii.modifiers.MotionModifier
 import com.utophii.math.EasingType
 import org.bukkit.Bukkit
@@ -76,6 +77,12 @@ class OdeCollisionTest {
         output = FormulaEffect.XYZ + mapOf("value" to "vx", "age" to "integrationTime / 10"),
         collision = OdeCollision(response, restitution, substeps, maxBounces),
     )
+
+    @Test fun `flocking cannot displace a collision trajectory past traced blocks`() {
+        val options = EffectOptions(modifiers = listOf(FlockingModifier()))
+        assertThrows(IllegalArgumentException::class.java) { effect().calculate(center, options, 1.0) }
+        assertEquals(0, traces)
+    }
 
     @Test fun `disabled collisions preserve the ordinary async trajectory without accessing blocks`() {
         primaryThread = false

@@ -29,6 +29,8 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
     override fun play(center: Location, opts: EffectOptions): EffectHandle {
         val extra = playParameters(opts.parameters, opts.subject ?: opts.follow?.entity as? Player)
         val played = if (extra.isEmpty()) opts else opts.toBuilder().parameters(opts.parameters + extra).build()
+        val flock = FlockingChain.from(played, this)
+        val geometry = flock?.geometryOptions ?: played
         val stableCenter = center.clone()
         val renderer = FrameRenderer(stableCenter)
         val anchor = played.follow?.let { follow -> FollowAnchor(follow.withDefaults(followDefaults), stableCenter) }
@@ -41,7 +43,10 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
             calculate = { time ->
                 val buffer = ParticleBufferPool.obtain(stableCenter, lastSize)
                 try {
-                    if (calculateOnRender) buffer.acquire(0) else calculateInto(buffer, stableCenter, played, time)
+                    if (calculateOnRender) buffer.acquire(0) else {
+                        calculateInto(buffer, stableCenter, geometry, time)
+                        flock?.apply(buffer.list(), stableCenter, time)
+                    }
                     lastSize = buffer.list().size
                     buffer
                 } catch (t: Throwable) {
@@ -86,6 +91,16 @@ abstract class AbstractParticleEffect(final override val name: String) : Particl
     // subclasses override this to avoid allocating a fresh location per particle per frame
     // public so composite/scripted effects can render their primitive layers through the buffer
     open fun calculateInto(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
+        val flock = FlockingChain.from(opts, this)
+        if (flock == null) {
+            calculateGeometry(buffer, center, opts, time)
+        } else flock.preview(time) { tick ->
+            calculateGeometry(buffer, center, flock.geometryOptions, tick)
+            flock.apply(buffer.list(), center, tick)
+        }
+    }
+
+    protected open fun calculateGeometry(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
         val positions = calculate(center, opts, time)
         buffer.acquire(positions.size)
         positions.forEachIndexed { index, location ->

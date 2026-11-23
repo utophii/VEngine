@@ -64,7 +64,7 @@ class LSystemEffect(
         return mapOf(SEED_PARAM to ThreadLocalRandom.current().nextInt(Int.MAX_VALUE).toDouble())
     }
 
-    override fun calculateInto(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
+    override fun calculateGeometry(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
         val angle = opts.parameters[ANGLE_PARAM] ?: angleDegrees
         // the seed only matters when some rule is stochastic
         val playSeed = if (stochastic) opts.parameters[SEED_PARAM]?.toLong() ?: seed ?: DEFAULT_SEED else DEFAULT_SEED

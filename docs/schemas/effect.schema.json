@@ -606,9 +606,16 @@
             "turbulence",
             "rotation",
             "vortex",
+            "flocking",
             "motion"
           ]
         },
+        "radius": {"type": "number", "exclusiveMinimum": 0},
+        "separation": {"type": "number", "minimum": 0},
+        "alignment": {"type": "number", "minimum": 0},
+        "cohesion": {"type": "number", "minimum": 0},
+        "maxSpeed": {"type": "number", "exclusiveMinimum": 0},
+        "seed": {"type": "integer", "minimum": -2147483648, "maximum": 2147483647},
         "strength": {
           "$ref": "#/$defs/number"
         },

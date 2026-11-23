@@ -37,7 +37,7 @@ class ImplicitEffect(
     // projected local points of static surfaces, shared by concurrent frames
     private val cache = ConcurrentHashMap<CacheKey, DoubleArray>()
 
-    override fun calculateInto(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
+    override fun calculateGeometry(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
         val points = (opts.parameters[POINTS_PARAM]?.toInt() ?: defaultPoints).coerceIn(MIN_POINTS, MAX_POINTS)
         val extent = (opts.parameters[BOUNDS_PARAM] ?: bounds).coerceAtLeast(MIN_BOUNDS)
         val phase = time * (opts.parameters[ANGULAR_SPEED_PARAM] ?: angularSpeed)

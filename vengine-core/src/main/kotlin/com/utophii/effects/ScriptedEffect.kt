@@ -68,12 +68,14 @@ class ScriptedEffect(
             var lastSize = 0
 
             val baseOptions = layer.mergedBase(opts)
+            val flock = FlockingChain.from(baseOptions, primitive)
+            val geometry = flock?.geometryOptions ?: baseOptions
             val handle = FXEngine.scheduler().scheduleFrames(
                 effectName = "${name}_${layer.effect}",
                 initialDelayTicks = startTick,
                 durationTicks = clampedDuration,
                 calculate = { time ->
-                    val resolvedOptions = layer.resolveBaseOptions(baseOptions, time)
+                    val resolvedOptions = layer.resolveBaseOptions(geometry, time)
                     val buffer = ParticleBufferPool.obtain(stableCenter, lastSize)
                     try {
                         // primitives write directly into the pooled buffer; fall back to a copy for non-primitive effects
@@ -92,6 +94,7 @@ class ScriptedEffect(
                                 target.z = location.z
                             }
                         }
+                        if (cast?.calculateOnRender != true) flock?.apply(buffer.list(), stableCenter, time)
                         lastSize = buffer.list().size
                         LayerFrame(resolvedOptions, buffer)
                     } catch (t: Throwable) {
@@ -141,8 +144,19 @@ class ScriptedEffect(
             .flatMap { layer ->
                 val primitive = (layer.inlineEffect ?: FXEngine.primitiveEffect(layer.effect)) ?: return@flatMap emptySequence<Location>()
                 val localTime = time - layer.startTick
-                val resolvedOptions = layer.resolveOptions(opts, localTime)
-                primitive.calculate(center, resolvedOptions, localTime).asSequence()
+                val base = layer.mergedBase(opts)
+                val flock = FlockingChain.from(base, primitive)
+                if (flock == null) {
+                    primitive.calculate(center, layer.resolveBaseOptions(base, localTime), localTime).asSequence()
+                } else {
+                    var points = emptyList<Location>()
+                    flock.preview(localTime) { tick ->
+                        val options = layer.resolveBaseOptions(flock.geometryOptions, tick)
+                        points = primitive.calculate(center, options, tick).map(Location::clone)
+                        flock.apply(points, center, tick)
+                    }
+                    points.asSequence()
+                }
             }
             .toList()
     }

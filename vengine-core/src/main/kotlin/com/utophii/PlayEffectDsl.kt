@@ -7,6 +7,7 @@ import com.utophii.math.EasingType
 import com.utophii.math.ExpressionFunctions
 import com.utophii.math.MathUtils
 import com.utophii.modifiers.ColorModifier
+import com.utophii.modifiers.FlockingModifier
 import com.utophii.modifiers.MotionModifier
 import com.utophii.modifiers.RotationModifier
 import com.utophii.modifiers.TurbulenceModifier
@@ -272,6 +273,17 @@ class ModifierConfig {
         mode: MotionModifier.Mode = MotionModifier.Mode.HOLD,
     ) {
         modifiers += MotionModifier.to(Vector(x, y, z), ticks, easing, mode)
+    }
+
+    fun flocking(
+        radius: Double = FlockingModifier.DEFAULT_RADIUS,
+        separation: Double = FlockingModifier.DEFAULT_SEPARATION,
+        alignment: Double = FlockingModifier.DEFAULT_ALIGNMENT,
+        cohesion: Double = FlockingModifier.DEFAULT_COHESION,
+        maxSpeed: Double = FlockingModifier.DEFAULT_MAX_SPEED,
+        seed: Int = FlockingModifier.DEFAULT_SEED,
+    ) {
+        modifiers += FlockingModifier(radius, separation, alignment, cohesion, maxSpeed, seed)
     }
 
     // appends a custom modifier implementation

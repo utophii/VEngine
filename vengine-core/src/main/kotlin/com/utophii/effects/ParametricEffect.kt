@@ -37,7 +37,7 @@ class ParametricEffect(
     private val ageAxis = VALUE_AXIS + if (valueFormula == null) 0 else 1
 
     // writes the sampled parametric positions into the pooled buffer
-    override fun calculateInto(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
+    override fun calculateGeometry(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
         // angularSpeed may be overridden at runtime (e.g. by a layered config parameter) for backward compatibility
         val speed = opts.parameters[ANGULAR_SPEED_PARAM] ?: angularSpeed
         val phase = time * speed

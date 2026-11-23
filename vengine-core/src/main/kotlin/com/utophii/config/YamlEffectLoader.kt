@@ -34,6 +34,7 @@ import com.utophii.math.EasingType
 import com.utophii.math.ExpressionEvaluator
 import com.utophii.math.ExpressionFunctions
 import com.utophii.math.MathUtils
+import com.utophii.modifiers.FlockingModifier
 import com.utophii.modifiers.MotionModifier
 import com.utophii.modifiers.RotationModifier
 import com.utophii.modifiers.TurbulenceModifier
@@ -986,10 +987,30 @@ class YamlEffectLoader internal constructor(
                     coreRadius = node[CORE_RADIUS_KEY].number() ?: DEFAULT_VORTEX_CORE_RADIUS,
                     vortexStrength = node[STRENGTH_KEY].number() ?: DEFAULT_VORTEX_STRENGTH,
                 )
+                "flocking" -> parseFlockingModifier(node)
                 MOTION_MODIFIER -> parseMotionModifier(node)
                 else -> null
             }
         }
+    }
+
+    private fun parseFlockingModifier(node: Map<*, *>): FlockingModifier? = try {
+        fun setting(key: String, fallback: Double) = if (key in node) {
+            requireNotNull(node[key].number()) { "$key must be numeric" }
+        } else fallback
+        val seed = setting("seed", FlockingModifier.DEFAULT_SEED.toDouble())
+        require(seed == seed.toInt().toDouble()) { "seed must be a 32-bit integer" }
+        FlockingModifier(
+            radius = setting("radius", FlockingModifier.DEFAULT_RADIUS),
+            separation = setting("separation", FlockingModifier.DEFAULT_SEPARATION),
+            alignment = setting("alignment", FlockingModifier.DEFAULT_ALIGNMENT),
+            cohesion = setting("cohesion", FlockingModifier.DEFAULT_COHESION),
+            maxSpeed = setting("maxSpeed", FlockingModifier.DEFAULT_MAX_SPEED),
+            seed = seed.toInt(),
+        )
+    } catch (error: IllegalArgumentException) {
+        logger.warning("Skipping invalid flocking modifier: " + error.message)
+        null
     }
 
     // parses a motion modifier: the whole effect glides along spawn-relative waypoints over time

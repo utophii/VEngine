@@ -35,7 +35,7 @@ class FourierEffect(
     override fun playParameters(configured: Map<String, Double>, subject: Player?): Map<String, Double> =
         series.playParameters(configured, subject)
 
-    override fun calculateInto(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
+    override fun calculateGeometry(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
         val fourier = series.resolve(opts)
         val terms = param(opts, PARAM_EPICYCLES, defaultEpicycles.toDouble()).toInt().coerceIn(1, fourier.maxTerms)
         val period = param(opts, PARAM_PERIOD, periodTicks).coerceAtLeast(1.0)

@@ -54,8 +54,8 @@ class OdeEffect(
         }
     }
 
-    override fun calculateInto(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
-        if (!calculateOnRender) super.calculateInto(buffer, center, opts, time)
+    override fun calculateGeometry(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
+        if (!calculateOnRender) super.calculateGeometry(buffer, center, opts, time)
         else calculateForRender(buffer, center, opts, time, null)
     }
 

@@ -28,7 +28,7 @@ class ShapeEffect(
     override fun playParameters(configured: Map<String, Double>, subject: Player?): Map<String, Double> =
         shape.playParameters(configured, subject)
 
-    override fun calculateInto(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
+    override fun calculateGeometry(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
         val cloud = shape.resolve(opts)
         // progress = t / growth, or set directly
         val growth = opts.parameters[GROWTH_PARAM] ?: growthTicks

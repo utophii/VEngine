@@ -241,6 +241,38 @@ Waypoint offsets are relative to the effect's spawn point: at tick 0 the layer i
 it was played. To give several layers the same path, write it once and reuse it with a YAML
 anchor (`&name` / `*name`) - see `animated.yml` for a working example.
 
+#### Flocking
+
+Use `flocking` to turn the points of a layer into a 3D boid flock. This example starts
+32 particles on a ring. Nearby boids steer apart, match velocities and move toward
+their neighbours' centre. The three weights can be adjusted independently.
+
+```yaml
+id: firefly_flock
+duration: 120
+layers:
+  - points:
+      samples: 32
+      output: {x: '2*cos(index*2*pi/count)', y: '0', z: '2*sin(index*2*pi/count)'}
+    modifiers:
+      - type: flocking
+        radius: 1.5       # neighbourhood radius in blocks
+        separation: 0.04
+        alignment: 0.12
+        cohesion: 0.015
+        maxSpeed: 0.15    # maximum flock displacement in blocks per tick
+        seed: 0           # sets the initial headings
+```
+
+Each layer and play has its own flock. A boid follows the point at the same index
+as the source geometry animates, adding its simulated displacement each tick.
+Each boid samples up to 32 candidates per nearby grid cell. If the server skips frames,
+playback advances at most four simulation ticks per rendered frame.
+Modifiers run in list order. In Kotlin the same settings are available through
+`modifiers { flocking(radius = 1.5, seed = 0) }`.
+A standalone `calculate` call reconstructs the flock from tick zero, so preview
+cost grows with the requested time.
+
 ### Keyframe animation
 
 Number tracks animate layer values over time:

@@ -116,6 +116,27 @@ class ProceduralLoadingTest {
     }
 
     @Test
+    fun `flocking loads on a layer and later modifiers see its simulated positions`() {
+        fun frame(name: String, tail: String = "") = loader.load(source(name, """
+            layers:
+              - points:
+                  samples: 12
+                  output: {x: index, y: '0', z: '0'}
+                modifiers:
+                  - {type: flocking, radius: 2, seed: 7}
+        """.trimIndent() + tail))!!.calculate(center, EffectOptions(), 4.0)
+        val flock = frame("flock")
+        val shifted = frame("shifted", "\n      - {type: motion, path: [{x: 3, ticks: 1}]}")
+        assertEquals(12, flock.size)
+        assertTrue(flock.any { it.y != 0.0 })
+        flock.indices.forEach { i ->
+            assertEquals(flock[i].x + 3, shifted[i].x, 1e-10)
+            assertEquals(flock[i].z, shifted[i].z, 1e-10)
+        }
+        assertTrue(loader.validate().all { it.issues.isEmpty() })
+    }
+
+    @Test
     fun `physical collision settings load in named atoms and inline layers`() {
         val ode = """
             ode:
