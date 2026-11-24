@@ -185,7 +185,7 @@ class ProceduralLoadingTest {
         File("src/test/resources/recipes").listFiles()!!.forEach { source(it.nameWithoutExtension, it.readText()) }
         File("src/test/resources/shapes").copyRecursively(File(directory, "shapes"), overwrite = true)
         val loaded = loader.loadAll()
-        assertEquals(46, loaded.size, warnings.toString())
+        assertEquals(47, loaded.size, warnings.toString())
         assertTrue(warnings.isEmpty(), warnings.toString())
         loaded.forEach { effect ->
             assertTrue(effect.calculate(center, EffectOptions(), 20.0).isNotEmpty(), effect.name)

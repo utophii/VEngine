@@ -1,6 +1,7 @@
 package com.utophii.config
 
 import com.utophii.api.ColorInterpolation
+import com.utophii.api.DisplayOptions
 import com.utophii.api.EffectOptions
 import com.utophii.api.ParametricConfig
 import com.utophii.effects.ImplicitEffect
@@ -104,6 +105,31 @@ class ExpressionLoadingTest {
         effect.calculateInto(buffer, center, layer.options, 80.0)
         colors.resolve(buffer, layer.options, 80.0)
         assertTrue(buffer.list().indices.none(colors::visibleAt))
+        assertTrue(messages.isEmpty(), messages.toString())
+    }
+
+    @Test
+    fun `sword swing recipe loads its ribbon profiles and supports a scalar width on a layer`() {
+        file("sword_swing", File("src/test/resources/recipes/sword_swing.yml").readText())
+        file("thread", """
+            layers:
+              - effect: sword_swing
+                display: {type: ribbon, width: 0.02, opacity: 0.4, normal: {x: 0, y: 0, z: 1}}
+        """)
+        YamlEffectLoader(directory, logger).loadAll()
+        val layers = ScriptedEffect::class.java.getDeclaredField("layers").apply { isAccessible = true }
+        fun display(name: String): DisplayOptions {
+            val layer = (layers.get(FXEngine.effect(name)) as List<*>).single() as ScriptedLayer
+            return requireNotNull(layer.options.display)
+        }
+        val swing = display("sword_swing")
+        assertEquals(DisplayOptions.Type.RIBBON, swing.type)
+        assertEquals(listOf(0f, 0.12f, 0.45f), swing.width)
+        assertEquals(listOf(0f, 0.25f, 0.9f), swing.opacity)
+        val thread = display("thread")
+        assertEquals(listOf(0.02f), thread.width)
+        assertEquals(listOf(0.4f), thread.opacity)
+        assertEquals(1.0, thread.normal.z)
         assertTrue(messages.isEmpty(), messages.toString())
     }
 

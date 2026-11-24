@@ -414,10 +414,12 @@
             "block",
             "text",
             "pixel",
+            "ribbon",
             "ITEM",
             "BLOCK",
             "TEXT",
-            "PIXEL"
+            "PIXEL",
+            "RIBBON"
           ]
         },
         "material": {
@@ -522,6 +524,43 @@
         },
         "particles": {
           "type": "boolean"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          ]
+        },
+        "opacity": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          ]
+        },
+        "normal": {
+          "$ref": "#/$defs/vector"
         }
       },
       "additionalProperties": false

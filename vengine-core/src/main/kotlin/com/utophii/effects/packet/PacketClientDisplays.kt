@@ -15,6 +15,7 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSp
 import com.utophii.api.DisplayOptions
 import com.utophii.api.EffectOptions
 import com.utophii.effects.DisplayEntityPool
+import com.utophii.effects.DisplayFrame
 import com.utophii.effects.PacketDisplays
 import com.utophii.effects.ClientDisplays
 import com.utophii.engine.EffectScheduler
@@ -84,32 +85,30 @@ class PacketClientDisplays(
         look = display
 
         val previousCount = ids.size
-        val target = positions.size.coerceAtMost(DisplayEntityPool.MAX_DISPLAYS)
+        val frame = DisplayFrame(positions, opts, display, time, anchor?.frameRotation(), colors, sizes)
+        val target = frame.count
         val removed = if (target < previousCount) ids.copyOfRange(target, previousCount) else EMPTY
         resize(target)
 
         val reference = reference(entity) ?: return
-        val frameRotation = anchor?.frameRotation()
         var extentSquared = 0.0
         val transforms = List(target) { index ->
-            val position = positions[index]
+            val position = frame.position(index)
             val dx = position.x - reference.x
             val dy = position.y - reference.y
             val dz = position.z - reference.z
             extentSquared = maxOf(extentSquared, dx * dx + dy * dy + dz * dz)
-            val transform = DisplayEntityPool.modelTransformation(display, opts, index, time, frameRotation, sizes?.get(index) ?: 1f)
+            val transform = frame.transform(index)
             transform.translation.add(dx.toFloat(), dy.toFloat(), dz.toFloat())
             transform
         }
-        val extent = sqrt(extentSquared)
+        val extent = sqrt(extentSquared) + frame.maxSegmentRadius
         val viewRange = viewRange(display, extent)
         val viewRangeGrew = previousCount > 0 && viewRange > sentViewRange
         if (previousCount == 0 || viewRangeGrew) {
             sentViewRange = viewRange
         }
-        val pixel = display.type == DisplayOptions.Type.PIXEL
-        val uniformColor = if (pixel) display.pixelColor(opts) else 0
-        val frameColors = IntArray(target) { index -> colors?.get(index) ?: uniformColor }
+        val frameColors = IntArray(target, frame::color)
         val previousColors = sentColors
 
         val current = if (entity != null) ridingViewers(entity, opts) else nearbyViewers(reference, extent, opts)
@@ -140,7 +139,7 @@ class PacketClientDisplays(
             for (index in 0 until minOf(previousCount, target)) {
                 val data = if (transforms[index] != sent[index]) transformData(transforms[index], interpolation) else null
                 val range = if (viewRangeGrew) EntityData(INDEX_VIEW_RANGE, EntityDataTypes.FLOAT, sentViewRange) else null
-                val colorChanged = pixel && index < previousColors.size && frameColors[index] != previousColors[index]
+                val colorChanged = display.usesPixelBackground && index < previousColors.size && frameColors[index] != previousColors[index]
                 val color = if (colorChanged) EntityData(INDEX_TEXT_BACKGROUND, EntityDataTypes.INT, frameColors[index]) else null
                 if (data != null || range != null || color != null) {
                     send(player, WrapperPlayServerEntityMetadata(ids[index], listOfNotNull(range, color) + data.orEmpty()))
@@ -235,7 +234,7 @@ class PacketClientDisplays(
         val type = when (display.type) {
             DisplayOptions.Type.ITEM -> EntityTypes.ITEM_DISPLAY
             DisplayOptions.Type.BLOCK -> EntityTypes.BLOCK_DISPLAY
-            DisplayOptions.Type.TEXT, DisplayOptions.Type.PIXEL -> EntityTypes.TEXT_DISPLAY
+            DisplayOptions.Type.TEXT, DisplayOptions.Type.PIXEL, DisplayOptions.Type.RIBBON -> EntityTypes.TEXT_DISPLAY
         }
         send(player, WrapperPlayServerSpawnEntity(
             ids[index], Optional.of(uuids[index]), type,
@@ -291,7 +290,7 @@ class PacketClientDisplays(
                 val material = if (display.material.isBlock) display.material else Material.AMETHYST_BLOCK
                 data += EntityData(INDEX_CONTENT, EntityDataTypes.BLOCK_STATE, SpigotConversionUtil.fromBukkitBlockData(material.createBlockData()).globalId)
             }
-            DisplayOptions.Type.PIXEL -> {
+            DisplayOptions.Type.PIXEL, DisplayOptions.Type.RIBBON -> {
                 // no default-background flag
                 data += EntityData(INDEX_CONTENT, EntityDataTypes.ADV_COMPONENT, Component.text(DisplayEntityPool.PIXEL_TEXT))
                 data += EntityData(INDEX_TEXT_BACKGROUND, EntityDataTypes.INT, pixelColor)

@@ -135,7 +135,7 @@ Where a particle falls on the gradient depends on the atom: fractals color by de
 along the boundary, L-systems from root to tips, SDF surfaces by their `value` formula or height,
 and Chladni figures by vibration. Atoms that assign nothing color their particles in drawing order,
 first stop to last. Gradients work with `DUST`, `DUST_COLOR_TRANSITION` and `ENTITY_EFFECT`
-particles and with `pixel` displays. Image shapes use the picture's colors unless they set
+particles, as well as `pixel` and `ribbon` displays. Image shapes use the picture's colors unless they set
 `colors: gradient`.
 
 Set `gradientInterpolation: hsv` to interpolate hue along the shortest arc of the color wheel.
@@ -174,7 +174,7 @@ The bundled `basic.yml` demonstrates staggered birth and fading around a ring.
 
 `colorOverLife` overrides both `gradient` and image/point colors and uses the same
 `gradientInterpolation` setting. It supports `DUST`, `DUST_COLOR_TRANSITION`, `ENTITY_EFFECT`
-and `pixel` displays. For dust transitions, `toColor` remains the client-side target color.
+and both `pixel` and `ribbon` displays. For dust transitions, `toColor` remains the client-side target color.
 
 Size stops must be finite, nonnegative numbers. `1` means the base size and `0` hides the point:
 dust particles stop being emitted and display models shrink to zero. Size changes support both

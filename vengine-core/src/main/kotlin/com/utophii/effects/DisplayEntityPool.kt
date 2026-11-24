@@ -48,20 +48,19 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         val lookChanged = look?.let { !sameLook(it, display) } ?: false
         look = display
 
-        val target = positions.size.coerceAtMost(MAX_DISPLAYS)
+        val frame = DisplayFrame(positions, opts, display, time, frameRotation, colors, sizes)
+        val target = frame.count
         shrinkTo(target)
         ensurePositionCapacity(target)
         if (lookChanged) {
             entities.forEachIndexed { index, entity -> applyLook(entity, display, index) }
         }
-        val pixel = display.type == DisplayOptions.Type.PIXEL
-        val uniformColor = if (pixel) display.pixelColor(opts) else 0
 
         val interpolation = display.interpolationTicks.coerceIn(0, DisplayOptions.MAX_INTERPOLATION_TICKS)
         for (index in 0 until target) {
-            val position = positions[index]
-            val transform = modelTransformation(display, opts, index, time, frameRotation, sizes?.get(index) ?: 1f)
-            val color = colors?.get(index) ?: uniformColor
+            val position = frame.position(index)
+            val transform = frame.transform(index)
+            val color = frame.color(index)
             if (index >= entities.size) {
                 spawn(position, display, transform, index, opts, color) ?: return
                 continue
@@ -74,7 +73,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
                 continue
             }
             moveIfChanged(entity, index, position)
-            if (pixel && (lookChanged || lastColors[index] != color)) {
+            if (display.usesPixelBackground && (lookChanged || lastColors[index] != color)) {
                 (entity as? TextDisplay)?.backgroundColor = Color.fromARGB(color)
                 lastColors[index] = color
             }
@@ -124,7 +123,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         val type = when (display.type) {
             DisplayOptions.Type.ITEM -> ItemDisplay::class.java
             DisplayOptions.Type.BLOCK -> BlockDisplay::class.java
-            DisplayOptions.Type.TEXT, DisplayOptions.Type.PIXEL -> TextDisplay::class.java
+            DisplayOptions.Type.TEXT, DisplayOptions.Type.PIXEL, DisplayOptions.Type.RIBBON -> TextDisplay::class.java
         }
         // everything is configured inside the spawn consumer
         return world.spawn(zeroRotation(position), type) { entity ->
@@ -132,7 +131,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
             entity.teleportDuration = display.interpolationTicks.coerceIn(0, DisplayOptions.MAX_INTERPOLATION_TICKS)
             entity.transformation = transform
             applyLook(entity, display, index)
-            if (entity is TextDisplay && display.type == DisplayOptions.Type.PIXEL) {
+            if (entity is TextDisplay && display.usesPixelBackground) {
                 entity.backgroundColor = Color.fromARGB(color)
             }
             if (opts.receivers.isNotEmpty()) {
@@ -162,7 +161,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         when (entity) {
             is ItemDisplay -> entity.setItemStack(ItemStack(itemMaterial(display.material)))
             is BlockDisplay -> entity.block = blockMaterial(display.material).createBlockData()
-            is TextDisplay -> if (display.type == DisplayOptions.Type.PIXEL) {
+            is TextDisplay -> if (display.usesPixelBackground) {
                 entity.text(Component.text(PIXEL_TEXT))
                 entity.isDefaultBackground = false
             } else {
@@ -267,17 +266,21 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
                 DisplayOptions.Type.BLOCK -> Transformation(rotation.transform(Vector3f(size).mul(-HALF)), rotation, size, Quaternionf())
                 // the background of a single space is 1/8 x 1/4 block; S = (8, 4) * edge makes an edge-sized square
                 // whose center T = R(-0.1, -0.5) * edge moves onto the entity position
-                DisplayOptions.Type.PIXEL -> {
-                    val scale = Vector3f(size.x * PIXEL_SCALE_X, size.y * PIXEL_SCALE_Y, 1f)
-                    val center = Vector3f(size.x * PIXEL_CENTER_X, size.y * PIXEL_CENTER_Y, 0f)
-                    Transformation(rotation.transform(center), rotation, scale, Quaternionf())
-                }
+                DisplayOptions.Type.PIXEL -> pixelTransformation(size.x, size.y, rotation)
+                DisplayOptions.Type.RIBBON -> error("A ribbon transform requires two endpoints")
                 else -> Transformation(Vector3f(), rotation, size, Quaternionf())
             }
         }
 
+        internal fun pixelTransformation(length: Float, width: Float, rotation: Quaternionf): Transformation {
+            val scale = Vector3f(length * PIXEL_SCALE_X, width * PIXEL_SCALE_Y, 1f)
+            val center = Vector3f(length * PIXEL_CENTER_X, width * PIXEL_CENTER_Y, 0f)
+            return Transformation(rotation.transform(center), rotation, scale, Quaternionf())
+        }
+
         // the static appearance
         internal fun sameLook(a: DisplayOptions, b: DisplayOptions): Boolean =
-            a.copy(size = b.size, rotation = b.rotation, spin = b.spin, phase = b.phase, withParticles = b.withParticles) == b
+            a === b || a.type == b.type && a.copy(size = b.size, rotation = b.rotation, spin = b.spin, phase = b.phase,
+                withParticles = b.withParticles, width = b.width, opacity = b.opacity, normal = b.normal) == b
     }
 }

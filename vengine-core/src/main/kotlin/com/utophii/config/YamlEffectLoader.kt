@@ -878,7 +878,7 @@ class YamlEffectLoader internal constructor(
         val node = value as? Map<*, *> ?: return null
         val typeName = node[TYPE_KEY]?.toString()?.trim()?.uppercase() ?: DisplayOptions.Type.ITEM.name
         val type = runCatching { DisplayOptions.Type.valueOf(typeName) }.getOrElse {
-            logger.warning("Unknown display type '$typeName' in VEngine YAML; expected item, block, text or pixel.")
+            logger.warning("Unknown display type '$typeName' in VEngine YAML. Expected item, block, text, pixel or ribbon.")
             return null
         }
         val defaults = if (type == DisplayOptions.Type.PIXEL) {
@@ -889,8 +889,16 @@ class YamlEffectLoader internal constructor(
         }
         val brightness = node[BRIGHTNESS_KEY]
         val shadow = node[SHADOW_KEY] as? Map<*, *>
+        val ribbon = type == DisplayOptions.Type.RIBBON
+        val normal = if (ribbon && "normal" in node) {
+            parseVector(node["normal"])?.takeIf { it.lengthSquared().let { length -> length.isFinite() && length > 0.0 } }
+                ?: defaults.normal.also { logger.warning("Ribbon normal must be a finite nonzero vector. Using the default.") }
+        } else defaults.normal
         return DisplayOptions(
             type = type,
+            width = if (ribbon) ribbonStops(node, "width", Float.MAX_VALUE, defaults.width) else defaults.width,
+            opacity = if (ribbon) ribbonStops(node, "opacity", 1f, defaults.opacity) else defaults.opacity,
+            normal = normal,
             material = parseMaterial(node[MATERIAL_KEY]) ?: if (type == DisplayOptions.Type.BLOCK) Material.AMETHYST_BLOCK else defaults.material,
             text = when (val text = node[TEXT_KEY]) {
                 is List<*> -> text.mapNotNull { it?.toString() }
@@ -918,6 +926,17 @@ class YamlEffectLoader internal constructor(
             seeThrough = node[SEE_THROUGH_KEY] as? Boolean ?: defaults.seeThrough,
             withParticles = node[PARTICLES_KEY] as? Boolean ?: defaults.withParticles,
         )
+    }
+
+    private fun ribbonStops(node: Map<*, *>, key: String, maximum: Float, default: List<Float>): List<Float> {
+        if (key !in node) return default
+        val raw = node[key]
+        val stops = (raw as? List<*> ?: listOf(raw)).map { it.number()?.toFloat() }
+        if (stops.isEmpty() || stops.any { it == null || it !in 0f..maximum }) {
+            logger.warning("Invalid ribbon $key. Using the default.")
+            return default
+        }
+        return stops.filterNotNull()
     }
 
     // uniform `0.5` or per-axis `{x, y, z}`

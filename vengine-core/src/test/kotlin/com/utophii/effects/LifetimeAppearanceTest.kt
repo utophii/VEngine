@@ -173,7 +173,7 @@ class LifetimeAppearanceTest {
 
     @Test
     fun `display size multiplier shrinks models around their center`() {
-        for (type in DisplayOptions.Type.entries) {
+        for (type in DisplayOptions.Type.entries.filter { it != DisplayOptions.Type.RIBBON }) {
             val display = DisplayOptions(type = type, size = Vector(2.0, 4.0, 6.0))
             val full = DisplayEntityPool.modelTransformation(display, EffectOptions(), 0, 0.0)
             val half = DisplayEntityPool.modelTransformation(display, EffectOptions(), 0, 0.0, sizeMultiplier = 0.5f)

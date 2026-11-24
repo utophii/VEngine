@@ -1,0 +1,17 @@
+id: sword_swing
+duration: 12
+curve:
+  samples: 32
+  range: [{min: -1.1, max: 1.1}]
+  angularSpeed: 0.18
+  x: '1.7 * cos(t)'
+  y: '1.2'
+  z: '1.7 * sin(t)'
+gradient: ["#536BC7", "#CEEDFF", "#FFFFFF"]
+display:
+  type: ribbon
+  width: [0, 0.12, 0.45]
+  opacity: [0, 0.25, 0.9]
+  normal: {x: 0, y: 1, z: 0}
+  brightness: 15
+  interpolation: 1
