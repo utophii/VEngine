@@ -8,7 +8,7 @@
     "id": {
       "type": "string",
       "minLength": 1,
-      "description": "Registry name used by /ve play. Defaults to the file name without .yml."
+      "description": "Effect name within its folder. Defaults to the file name without .yml. Pack folders supply the namespace and path used by /ve play."
     },
     "effect": {
       "type": "string",
@@ -1460,7 +1460,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "Registry name used by /ve play. Defaults to the file name without .yml."
+          "description": "Layer ID used by after references in the same effect."
         },
         "effect": {
           "type": "string",

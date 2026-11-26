@@ -71,25 +71,21 @@ class YamlEffectLoader internal constructor(
 
     fun validate(): List<EffectValidation> = EffectValidator(dataFolder, FXEngine.externalPrimitives()).validate()
 
-    fun fileNames(): List<String> = effectFiles().map { it.nameWithoutExtension }
-
-    private fun effectFiles(): List<File> = effectsDirectory()
-        .listFiles { file -> file.isFile && file.extension.equals(YAML_EXTENSION, ignoreCase = true) }
-        ?.sortedBy { it.name }.orEmpty()
+    fun fileNames(): List<String> = EffectFile.discover(effectsDirectory()).map { it.relativePath.substringBeforeLast('.') }
 
     // Uses the same parsers as loading, with an isolated primitive resolver during validation.
-    internal fun parseForValidation(file: File, raw: Map<String, Any?>): Pair<ParticleEffect, ParticleEffect?>? {
+    internal fun parseForValidation(file: EffectFile, raw: Map<String, Any?>): Pair<ParticleEffect, ParticleEffect?>? {
         val functions = parseFunctions(raw[FUNCTIONS_KEY])
-        val id = effectId(raw, file)
+        val id = file.id(raw[ID_KEY])
         if (isAtom(raw)) {
-            val atom = parseAtom(id, raw, file.name, functions) ?: return null
+            val atom = parseAtom(id, raw, file.relativePath, functions) ?: return null
             if (raw.containsKey(EMITTERS_KEY) || raw.containsKey(THEN_KEY)) {
                 logger.warning("Atom emitters/then are ignored. Use a layered effect to spawn other effects.")
             }
-            return standaloneAtom(atom, raw, file.name, functions) to atom
+            return standaloneAtom(atom, raw, file.relativePath, functions) to atom
         }
         val duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS) ?: DEFAULT_DURATION_TICKS
-        return loadScripted(id, duration, raw, file.name, functions)?.let { it to null }
+        return loadScripted(id, duration, raw, file, functions)?.let { it to null }
     }
 
     private val yaml = Yaml(LoaderOptions().apply { setAllowDuplicateKeys(false) })
@@ -112,27 +108,23 @@ class YamlEffectLoader internal constructor(
         FXEngine.clearParametricPrimitives()
         Placeholders.resetWarnings()
 
-        val parsedFiles = effectsDirectory()
-            .listFiles { file -> file.isFile && file.extension.equals(YAML_EXTENSION, ignoreCase = true) }
-            ?.sortedBy { file -> file.name }
-            ?.mapNotNull(::readSource)
-            ?: emptyList()
+        val parsedFiles = EffectFile.discover(effectsDirectory()).mapNotNull(::readSource)
 
         val loaded = mutableListOf<ParticleEffect>()
 
         // pass 1: register every formula atom so scripted layers can reference them regardless of file names
         parsedFiles.forEach { (file, raw, functions) ->
             if (isAtom(raw)) {
-                val effect = parseAtom(effectId(raw, file), raw, file.name, functions) ?: return@forEach
+                val effect = parseAtom(file.id(raw[ID_KEY]), raw, file.relativePath, functions) ?: return@forEach
                 if (raw.containsKey(EMITTERS_KEY) || raw.containsKey(THEN_KEY)) {
                     logger.warning(
-                        "'${file.name}' is a formula effect; its emitters/then are ignored. " +
+                        "'${file.relativePath}' is a formula effect. Its emitters/then are ignored. " +
                             "Use it as a layer of a layered effect to spawn other effects.",
                     )
                 }
                 FXEngine.registerConfigured(effect)
                 // played on its own, the atom renders with the particle/color/gradient written next to its block
-                FXEngine.registerScripted(standaloneAtom(effect, raw, file.name, functions))
+                FXEngine.registerScripted(standaloneAtom(effect, raw, file.relativePath, functions))
                 loaded += effect
             }
         }
@@ -143,7 +135,7 @@ class YamlEffectLoader internal constructor(
                 // a duration formula is only known at play time, so layer timing falls back to the default
                 val duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS)
                     ?: DEFAULT_DURATION_TICKS
-                val effect = loadScripted(effectId(raw, file), duration, raw, file.name, functions) ?: return@forEach
+                val effect = loadScripted(file.id(raw[ID_KEY]), duration, raw, file, functions) ?: return@forEach
                 FXEngine.registerScripted(effect)
                 loaded += effect
             }
@@ -172,36 +164,33 @@ class YamlEffectLoader internal constructor(
     // note: scripted files only resolve layers whose primitives are already registered; bulk loading
     // should use [loadAll], which handles the ordering internally
     fun load(file: File): ParticleEffect? {
-        val (_, raw, functions) = readSource(file) ?: return null
+        val (source, raw, functions) = readSource(EffectFile.from(effectsDirectory(), file)) ?: return null
         val duration = raw[DURATION_KEY].number()?.toLong()?.coerceAtLeast(MIN_DURATION_TICKS) ?: DEFAULT_DURATION_TICKS
         return if (isAtom(raw)) {
-            parseAtom(effectId(raw, file), raw, file.name, functions)
+            parseAtom(source.id(raw[ID_KEY]), raw, source.relativePath, functions)
         } else {
-            loadScripted(effectId(raw, file), duration, raw, file.name, functions)
+            loadScripted(source.id(raw[ID_KEY]), duration, raw, source, functions)
         }
     }
 
-    private fun readRaw(file: File): Map<String, Any?>? = try {
-        file.inputStream().use { stream -> yaml.load<Map<String, Any?>>(stream) }
+    private fun readRaw(file: EffectFile): Map<String, Any?>? = try {
+        file.diskFile.inputStream().use { stream -> yaml.load<Map<String, Any?>>(stream) }
     } catch (exception: YAMLException) {
-        logger.warning("Skipping effect '${file.name}': invalid YAML: ${exception.message}")
+        logger.warning("Skipping effect '${file.relativePath}': invalid YAML: ${exception.message}")
         null
     }
 
-    private data class EffectSource(val file: File, val raw: Map<String, Any?>, val functions: ExpressionFunctions)
+    private data class EffectSource(val file: EffectFile, val raw: Map<String, Any?>, val functions: ExpressionFunctions)
 
-    private fun readSource(file: File): EffectSource? {
+    private fun readSource(file: EffectFile): EffectSource? {
         val raw = readRaw(file) ?: return null
         return try {
             EffectSource(file, raw, parseFunctions(raw[FUNCTIONS_KEY]))
         } catch (exception: IllegalArgumentException) {
-            logger.warning("Skipping effect '${file.name}': ${exception.message}")
+            logger.warning("Skipping effect '${file.relativePath}': ${exception.message}")
             null
         }
     }
-
-    private fun effectId(raw: Map<String, Any?>, file: File): String =
-        raw[ID_KEY]?.toString()?.takeIf(String::isNotBlank) ?: file.nameWithoutExtension
 
     // wraps an atom into a one-layer effect carrying the file's top-level options, layers of other
     // effects still reference the bare primitive and bring their own options
@@ -599,16 +588,16 @@ class YamlEffectLoader internal constructor(
     }
 
     // builds a layered scripted effect from `layers` or a legacy single layer
-    private fun loadScripted(id: String, duration: Long, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions): ScriptedEffect? {
-        val layers = parseLayers(raw, duration, fileName, functions)
+    private fun loadScripted(id: String, duration: Long, raw: Map<String, Any?>, file: EffectFile, functions: ExpressionFunctions): ScriptedEffect? {
+        val layers = parseLayers(raw, duration, file, functions)
         if (layers.isEmpty()) {
-            logger.warning("Skipping effect '${fileName}': no valid layers were found.")
+            logger.warning("Skipping effect '${file.relativePath}': no valid layers were found.")
             return null
         }
-        val emitters = parseEmitters(raw[EMITTERS_KEY], fromEnd = false, fileName) +
-            parseEmitters(raw[THEN_KEY], fromEnd = true, fileName)
-        val durationFormula = parseFormula(raw[DURATION_KEY], DURATION_KEY, fileName, functions)
-        return ScriptedEffect(id, duration, withFileBudget(layers, raw), parseFollow(raw[FOLLOW_KEY], fileName), emitters, durationFormula)
+        val emitters = parseEmitters(raw[EMITTERS_KEY], fromEnd = false, file) +
+            parseEmitters(raw[THEN_KEY], fromEnd = true, file)
+        val durationFormula = parseFormula(raw[DURATION_KEY], DURATION_KEY, file.relativePath, functions)
+        return ScriptedEffect(id, duration, withFileBudget(layers, raw), parseFollow(raw[FOLLOW_KEY], file.relativePath), emitters, durationFormula)
     }
 
     // top-level budget: and lod: apply to every layer of the file
@@ -640,7 +629,7 @@ class YamlEffectLoader internal constructor(
     }
 
     // parses emitters: or then:
-    private fun parseEmitters(value: Any?, fromEnd: Boolean, fileName: String): List<EffectEmitter> {
+    private fun parseEmitters(value: Any?, fromEnd: Boolean, file: EffectFile): List<EffectEmitter> {
         val entries = when (value) {
             null -> return emptyList()
             is List<*> -> value
@@ -649,13 +638,13 @@ class YamlEffectLoader internal constructor(
         return entries.mapNotNull { entry ->
             val node = entry as? Map<*, *> ?: mapOf(EFFECT_KEY to entry)
             val effect = node[EFFECT_KEY]?.toString()?.trim()?.lowercase()?.takeIf(String::isNotBlank) ?: run {
-                logger.warning("Skipping an ${if (fromEnd) THEN_KEY else EMITTERS_KEY} entry without 'effect' in '$fileName'.")
+                logger.warning("Skipping an ${if (fromEnd) THEN_KEY else EMITTERS_KEY} entry without 'effect' in '${file.relativePath}'.")
                 return@mapNotNull null
             }
             val every = node[EVERY_KEY].number()?.toLong()?.takeIf { it > 0L }
             val count = node[COUNT_KEY].number()?.toInt()?.coerceAtLeast(1)
             EffectEmitter(
-                effect = effect,
+                effect = file.reference(effect),
                 startTick = (node[if (fromEnd) DELAY_KEY else START_KEY].number()?.toLong() ?: DEFAULT_START_TICKS)
                     .coerceAtLeast(MIN_START_TICKS),
                 // `count` alone repeats every tick
@@ -740,17 +729,17 @@ class YamlEffectLoader internal constructor(
         else (ranges + List(variableCount - ranges.size) { DEFAULT_RANGE }).take(variableCount)
     }
 
-    private fun parseLayers(raw: Map<String, Any?>, effectDuration: Long, fileName: String, functions: ExpressionFunctions): List<ScriptedLayer> {
+    private fun parseLayers(raw: Map<String, Any?>, effectDuration: Long, file: EffectFile, functions: ExpressionFunctions): List<ScriptedLayer> {
         val configuredLayers = raw[LAYERS_KEY]
         if (configuredLayers is List<*>) {
             val nodes = configuredLayers.filterIsInstance<Map<*, *>>()
             val timeline = LayerTimeline.resolve(nodes.map(::parseTiming), effectDuration)
-            timeline.problems.forEach { problem -> logger.warning("In '$fileName': $problem.") }
-            return nodes.zip(timeline.starts).mapNotNull { (node, start) -> start?.let { parseLayer(node, it, fileName, functions) } }
+            timeline.problems.forEach { problem -> logger.warning("In '${file.relativePath}': $problem.") }
+            return nodes.zip(timeline.starts).mapNotNull { (node, start) -> start?.let { parseLayer(node, it, file, functions) } }
         }
 
         // backward-compatible single-layer format
-        val legacyLayer = parseLayer(raw, parseTiming(raw).start, fileName, functions)
+        val legacyLayer = parseLayer(raw, parseTiming(raw).start, file, functions)
         return legacyLayer?.let(::listOf) ?: emptyList()
     }
 
@@ -762,15 +751,15 @@ class YamlEffectLoader internal constructor(
         delay = raw[DELAY_KEY].number()?.toLong()?.coerceAtLeast(MIN_START_TICKS) ?: DEFAULT_START_TICKS,
     )
 
-    private fun parseLayer(raw: Map<*, *>, startTick: Long, fileName: String, functions: ExpressionFunctions): ScriptedLayer? {
+    private fun parseLayer(raw: Map<*, *>, startTick: Long, file: EffectFile, functions: ExpressionFunctions): ScriptedLayer? {
         val atomSource = raw.entries.associate { it.key.toString() to it.value }
         val embedded = isAtom(atomSource)
         if (embedded && raw.containsKey(EFFECT_KEY)) {
-            logger.warning("In '$fileName': a layer must use either 'effect' or inline geometry.")
+            logger.warning("In '${file.relativePath}': a layer must use either 'effect' or inline geometry.")
             return null
         }
-        val inline = if (embedded) parseAtom("$fileName:${raw[ID_KEY] ?: startTick}", atomSource, fileName, functions) ?: return null else null
-        val effectName = inline?.name ?: raw[EFFECT_KEY]?.toString()?.lowercase()?.takeIf(String::isNotBlank) ?: return null
+        val inline = if (embedded) parseAtom("${file.relativePath}:${raw[ID_KEY] ?: startTick}", atomSource, file.relativePath, functions) ?: return null else null
+        val effectName = inline?.name ?: raw[EFFECT_KEY]?.toString()?.lowercase()?.takeIf(String::isNotBlank)?.let(file::reference) ?: return null
         if (inline == null && primitiveResolver(effectName) == null) {
             logger.warning("Skipping layer for unknown primitive effect '$effectName'.")
             return null
@@ -786,8 +775,8 @@ class YamlEffectLoader internal constructor(
             durationTicks = durationTicks,
             options = options,
             animation = animation,
-            scaleFormula = parseFormula(raw[SCALE_KEY], SCALE_KEY, fileName, functions),
-            parameterFormulas = parseParameterFormulas(raw, fileName, functions),
+            scaleFormula = parseFormula(raw[SCALE_KEY], SCALE_KEY, file.relativePath, functions),
+            parameterFormulas = parseParameterFormulas(raw, file.relativePath, functions),
             inlineEffect = inline,
         )
     }
@@ -1166,7 +1155,6 @@ class YamlEffectLoader internal constructor(
 
         private const val FUNCTIONS_KEY = "functions"
         private const val EFFECTS_DIRECTORY = "effects"
-        private const val YAML_EXTENSION = "yml"
         private const val HEX_RADIX = 16
         private const val MIN_COLOR_CHANNEL = 0
         private const val MAX_COLOR_CHANNEL = 255

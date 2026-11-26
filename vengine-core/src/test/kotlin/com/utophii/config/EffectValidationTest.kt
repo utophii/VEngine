@@ -1,7 +1,10 @@
 package com.utophii.config
 
+import com.utophii.api.EffectOptions
 import com.utophii.effects.PointEffect
+import com.utophii.effects.ScriptedEffect
 import com.utophii.engine.FXEngine
+import org.bukkit.Location
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -47,6 +50,38 @@ class EffectValidationTest {
         assertSame(existing, FXEngine.effect("existing"))
         assertSame(primitive, FXEngine.primitiveEffect("existing"))
         assertNull(FXEngine.effect("newatom"))
+    }
+
+    @Test fun `packs isolate IDs and resolve local global and cross-pack references`() {
+        source("3d_heart", "curve: {x: '1'}")
+        val heart = source("test/3d_heart", "curve: {x: '2'}")
+        source("winter/3d_heart", "curve: {x: '3'}")
+        val show = source("test/ui/show", """
+            id: pulse
+            layers: [{effect: 3d_heart}]
+            emitters: 'winter:3d_heart'
+            then: ':3d_heart'
+        """)
+        source("test/intro", "effect: 3d_heart\nthen: ui/pulse")
+
+        val reports = loader.validate()
+        assertTrue(reports.all { it.issues.isEmpty() }, reports.toString())
+        assertEquals("test:ui/pulse", reports.single { it.file == "test/ui/show.yml" }.id)
+        assertContains(loader.fileNames(), "test/ui/show")
+        assertEquals("test:3d_heart", loader.load(heart)?.name)
+
+        loader.loadAll()
+        assertEquals(reports.map { it.id }.toSet(), FXEngine.effectNames().toSet())
+        val pulse = assertIs<ScriptedEffect>(FXEngine.effect("test:ui/pulse"))
+        val points = pulse.calculate(Location(null, 0.0, 0.0, 0.0), EffectOptions(), 0.0)
+        assertEquals(setOf(2.0), points.map { it.x }.toSet())
+        assertEquals(listOf("winter:3d_heart", "3d_heart"), pulse.emittedEffects)
+        assertEquals(listOf("test:ui/pulse"), assertIs<ScriptedEffect>(FXEngine.effect("test:intro")).emittedEffects)
+
+        assertTrue(show.delete())
+        loader.loadAll()
+        assertNull(FXEngine.effect("test:ui/pulse"))
+        assertNotNull(FXEngine.effect("winter:3d_heart"))
     }
 
     @Test fun `deleted YAML atoms are not resolved from the live registry`() {

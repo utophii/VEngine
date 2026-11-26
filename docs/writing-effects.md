@@ -4,9 +4,22 @@ section: Server owners
 lede: "Formula atoms, layered shows, modifiers and keyframe animation, all in YAML."
 ---
 
-Every effect is a `.yml` file in `plugins/VEngine/effects/`. The effect name is the file name
-(or the `id:` field inside). Edit a file, run `/ve reload`, play it with `/ve play <name>`.
-Broken files never crash the plugin - they are skipped with a warning in the console.
+Store each effect as a `.yml` file under `plugins/VEngine/effects/`. For a shareable pack,
+give it its own folder. The folder name becomes its namespace. Run `/ve reload` after installing or editing a pack.
+Check broken files with `/ve validate` or read the warning in the server console.
+
+| File under `effects/` | Command |
+|---|---|
+| `3d_heart.yml` | `/ve play 3d_heart` |
+| `test/3d_heart.yml` | `/ve play test:3d_heart` |
+| `winter/3d_heart.yml` | `/ve play winter:3d_heart` |
+| `test/ui/3d_heart.yml` | `/ve play test:ui/3d_heart` |
+
+An optional `id:` replaces the filename in the effect name. For example, `id: pulse` in
+`test/ui/3d_heart.yml` gives `test:ui/pulse`. Inside a pack, references in layers, emitters
+and `then:` start at the pack folder. In the `test` pack, `effect: ui/pulse` selects
+`test:ui/pulse`. To use another pack, write its full ID, such as `effect: winter:3d_heart`.
+Use `effect: ':basic'` to reference the global effect `basic` from a pack.
 
 There are two kinds of effect files:
 

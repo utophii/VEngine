@@ -34,23 +34,21 @@ internal object EffectSchema {
 }
 
 internal class EffectValidator(private val dataFolder: File, private val external: Map<String, ParticleEffect>) {
-    private class Source(val file: File) {
-        var id = file.nameWithoutExtension
+    private class Source(val file: EffectFile) {
+        var id = file.id(null)
         var raw: Map<String, Any?>? = null
         var effect: ParticleEffect? = null
         val issues = mutableListOf<ValidationIssue>()
     }
 
     fun validate(): List<EffectValidation> {
-        val sources = File(dataFolder, "effects").listFiles { file ->
-            file.isFile && file.extension.equals("yml", ignoreCase = true)
-        }?.sortedBy { it.name }?.map(::Source).orEmpty()
+        val sources = EffectFile.discover(File(dataFolder, "effects")).map(::Source)
         val yaml = Yaml(SafeConstructor(LoaderOptions().apply { isAllowDuplicateKeys = false }))
         sources.forEach { source ->
             try {
-                val raw = source.file.inputStream().use { yaml.load<Any?>(it) }
+                val raw = source.file.diskFile.inputStream().use { yaml.load<Any?>(it) }
                 if (raw is Map<*, *> && raw.keys.all { it is String }) {
-                    source.id = raw["id"]?.toString()?.takeIf(String::isNotBlank) ?: source.id
+                    source.id = source.file.id(raw["id"])
                     @Suppress("UNCHECKED_CAST")
                     source.raw = raw as Map<String, Any?>
                 }
@@ -60,7 +58,7 @@ internal class EffectValidator(private val dataFolder: File, private val externa
             }
         }
         sources.groupBy { it.id.lowercase() }.values.filter { it.size > 1 }.forEach { duplicates ->
-            val names = duplicates.joinToString { it.file.name }
+            val names = duplicates.joinToString { it.file.relativePath }
             duplicates.forEach { it.issues += ValidationIssue("Duplicate effect ID '${it.id}': $names") }
         }
 
@@ -110,6 +108,6 @@ internal class EffectValidator(private val dataFolder: File, private val externa
                 source.issues += ValidationIssue("Emitters/then form a cycle that spawns this effect again.")
             }
         }
-        return sources.map { EffectValidation(it.file.name, it.id, it.issues.toList()) }
+        return sources.map { EffectValidation(it.file.relativePath, it.id, it.issues.toList()) }
     }
 }

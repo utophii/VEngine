@@ -50,7 +50,8 @@ schema errors also identify the field path. YAML syntax errors include the parse
 Warnings identify settings the loader ignores or replaces with defaults, errors identify invalid
 files or references. More than 20 diagnostics are written in full to the server log.
 
-`/ve validate <effect>` accepts an effect ID, a file name without `.yml`, or a full file name.
+`/ve validate <effect>` accepts an effect ID such as `test:3d_heart` or a path relative
+to `effects/` such as `test/3d_heart.yml`. The `.yml` extension is optional.
 It reads the whole effect directory to resolve dependencies, then shows the matching files.
 Validation uses the files currently on disk and primitives supplied by other plugins. It does
 not reload configuration, change registered effects, stop instances, or play effects.
@@ -92,8 +93,9 @@ PlaceholderAPI tokens that read this value, and the rest of the engine state, ar
 
 ## Effect files
 
-- Every file in `plugins/VEngine/effects/*.yml` is one effect, and the file name (or its `id:` field)
-  is the name used with `/ve play`.
+- Each `.yml` file under `plugins/VEngine/effects/` defines one effect. A file in the root
+  uses its filename or `id:`. A pack folder adds a namespace, so `test/3d_heart.yml`
+  can be played with `/ve play test:3d_heart`.
 - Bundled examples are copied only when missing - your edits are never overwritten, and new
   bundled files appear after updates.
 - `/ve reload` reloads all effect files. Broken files are skipped with a clear warning in the
