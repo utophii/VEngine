@@ -69,6 +69,7 @@ class PacketClientDisplays(
         anchor: FollowAnchor?,
         colors: IntArray?,
         sizes: FloatArray?,
+        orientations: FloatArray?,
     ) {
         val entity = anchor?.entity
         if (entity != null && !entity.isValid) {
@@ -85,7 +86,7 @@ class PacketClientDisplays(
         look = display
 
         val previousCount = ids.size
-        val frame = DisplayFrame(positions, opts, display, time, anchor?.frameRotation(), colors, sizes)
+        val frame = DisplayFrame(positions, opts, display, time, anchor?.frameRotation(), colors, sizes, orientations)
         val target = frame.count
         val removed = if (target < previousCount) ids.copyOfRange(target, previousCount) else EMPTY
         resize(target)

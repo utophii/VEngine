@@ -60,6 +60,35 @@ points:
 The Fibonacci sphere recipe also uses the index, with height `1 - 2*index/(count-1)` and
 angle `PI*(3-sqrt(5))*index`. No sphere-specific class is needed.
 
+### Orienting display models at points
+
+`output` also accepts `normalX`/`normalY`/`normalZ` or `rotX`/`rotY`/`rotZ`. With
+`billboard: fixed` they turn each display model on its own, following the rules of
+[parametric orientation](parametric-effects.md#orienting-display-models). The formulas see `index`,
+`count`, `duration`, `time`, parameters and local functions.
+
+```yaml
+id: rotating_marks
+duration: 200
+points:
+  samples: 5
+  output:
+    x: 'index - 2'
+    y: 0
+    z: 0
+    rotZ: 'index * pi / 4 + time * 0.05'
+display:
+  type: text
+  text: 'F'
+  billboard: fixed
+```
+
+The five letters start at 0°, 45°, 90°, 135° and 180° and turn one radian every 20 ticks without
+moving. The `yaw` and `spin` outputs turn the oriented models together with the coordinates they
+move. A point skipped for a non-finite coordinate takes its orientation with it. Automatic
+`alignToNormal` needs a surface and is not available here. The other generators do not accept
+orientation outputs.
+
 ## Differential equations
 
 `ode` integrates named state variables. `initial` and `derivatives` must have identical keys,

@@ -3,6 +3,7 @@ package com.utophii.effects
 import com.utophii.math.FrameTransform
 import org.bukkit.Location
 import org.bukkit.World
+import org.joml.Quaternionf
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -25,6 +26,10 @@ class ParticleBuffer(private var base: Location) {
     // normalized age is independent of the scalar used by spatial gradients
     private var ages = DoubleArray(INITIAL_CAPACITY)
     private var aged = false
+
+    // optional display model rotation, x y z w per particle, allocated on first use. NaN x means none
+    private var orientations: FloatArray? = null
+    private var oriented = false
     private var boundWorld: World? = null
 
     // rotation matrix of the frame being written, rebuilt only when the effect's orientation changes
@@ -43,6 +48,7 @@ class ParticleBuffer(private var base: Location) {
         valued = false
         colored = false
         aged = false
+        oriented = false
         bindWorld()
     }
 
@@ -58,6 +64,7 @@ class ParticleBuffer(private var base: Location) {
         if (valued) values[index] = NO_VALUE
         if (colored) colors[index] = NO_COLOR
         if (aged) ages[index] = NO_VALUE
+        if (oriented) orientations!![index * QUATERNION] = Float.NaN
     }
 
     // assigns the gradient value of the particle at index
@@ -103,6 +110,26 @@ class ParticleBuffer(private var base: Location) {
     // NaN means the renderer should use the layer's age.
     fun ageAt(index: Int): Double = if (aged) ages[index] else NO_VALUE
 
+    // assigns the rotation of the display model at index, in world axes before the follow rotation
+    fun orientation(index: Int, rotation: Quaternionf) {
+        val data = orientationStorage(count)
+        if (!oriented) {
+            oriented = true
+            data.fill(Float.NaN, 0, count * QUATERNION)
+        }
+        val base = index * QUATERNION
+        data[base] = rotation.x
+        data[base + 1] = rotation.y
+        data[base + 2] = rotation.z
+        data[base + 3] = rotation.w
+    }
+
+    // true once the effect assigned at least one model rotation this frame
+    fun hasOrientations(): Boolean = oriented
+
+    // x y z w per particle for the renderer, valid until the buffer is acquired or released again
+    fun orientations(): FloatArray? = if (oriented) orientations else null
+
     // returns the reusable Location at the given logical index
     fun location(index: Int): Location = locations[index]
 
@@ -118,6 +145,7 @@ class ParticleBuffer(private var base: Location) {
         valued = false
         colored = false
         aged = false
+        oriented = false
     }
 
     private fun ensureCapacity(size: Int) {
@@ -133,6 +161,17 @@ class ParticleBuffer(private var base: Location) {
         if (colors.size < size) {
             colors = colors.copyOf(maxOf(size, colors.size * 2))
         }
+        orientations?.let { data -> if (data.size < size * QUATERNION) orientationStorage(size) }
+    }
+
+    private fun orientationStorage(size: Int): FloatArray {
+        val current = orientations
+        if (current != null && current.size >= size * QUATERNION) {
+            return current
+        }
+        val grown = current?.copyOf(maxOf(size * QUATERNION, current.size * 2)) ?: FloatArray(maxOf(size, INITIAL_CAPACITY) * QUATERNION)
+        orientations = grown
+        return grown
     }
 
     // rebinds the world of every retained Location when the buffer is reused across worlds
@@ -150,6 +189,7 @@ class ParticleBuffer(private var base: Location) {
         private const val NO_VALUE = Double.NaN
         const val NO_COLOR = -1
         private const val RGB_MASK = 0xFFFFFF
+        const val QUATERNION = 4
     }
 }
 

@@ -1,6 +1,7 @@
 package com.utophii.api
 
 import com.utophii.engine.FXEngine
+import com.utophii.effects.DisplayOrientation
 import com.utophii.effects.ParamRange
 import com.utophii.effects.ParametricEffect
 import com.utophii.math.EasingType
@@ -354,6 +355,7 @@ class ParametricConfig {
     private var valueFormula: String? = null
     private var ageFormula: String? = null
     private var angularSpeed = DEFAULT_ANGULAR_SPEED
+    private var orientation: DisplayOrientation? = null
     private val formulaDefaults = linkedMapOf<String, Double>()
     private val formulaFunctions = linkedMapOf<String, String>()
     private val optionsConfig = EffectConfig()
@@ -411,6 +413,30 @@ class ParametricConfig {
         angularSpeed = value
     }
 
+    // faces each fixed display model's local +Z along this direction, the YAML normalX/normalY/normalZ
+    fun normal(x: String, y: String, z: String) {
+        orient(DisplayOrientation.Normal(x, y, z))
+    }
+
+    // turns each fixed display model by these radians composed like display.rotation, the YAML rotX/rotY/rotZ
+    fun angles(x: String = "0", y: String = "0", z: String = "0") {
+        orient(DisplayOrientation.Angles(x, y, z))
+    }
+
+    // faces each fixed display model along the surface normal dP/du x dP/dv, or the opposite side
+    fun alignToNormal(side: DisplayOrientation.Side = DisplayOrientation.Side.OUTWARD) {
+        orient(DisplayOrientation.AlignToNormal(side))
+    }
+
+    // one orientation mode per geometry, calling the same mode again replaces it
+    private fun orient(value: DisplayOrientation) {
+        val current = orientation
+        require(current == null || current::class == value::class) {
+            "A parametric effect uses one orientation: normal, angles or alignToNormal"
+        }
+        orientation = value
+    }
+
     // registers a formula variable default value
     fun default(key: String, value: Double) {
         formulaDefaults[key] = value
@@ -455,6 +481,7 @@ class ParametricConfig {
             functions = ExpressionFunctions(formulaFunctions),
             valueFormula = valueFormula,
             ageFormula = ageFormula,
+            orientation = orientation,
         )
     }
 

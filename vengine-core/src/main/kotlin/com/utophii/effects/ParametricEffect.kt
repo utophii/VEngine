@@ -5,9 +5,12 @@ import com.utophii.api.FollowDefaults
 import com.utophii.math.ExpressionEvaluator
 import com.utophii.math.ExpressionFunctions
 import com.utophii.math.MathUtils
+import com.utophii.math.Orientation
 import org.bukkit.Location
+import org.joml.Quaternionf
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.PI
+import kotlin.math.sqrt
 
 // A user-defined parametric effect expressed purely as math formulas.
 // Supports one or more variables (curve: `t`; surface: `theta`, `phi`) and evaluates `x`, `y`, `z`
@@ -29,12 +32,28 @@ class ParametricEffect(
     functions: ExpressionFunctions = ExpressionFunctions.EMPTY,
     // optional normalized age, independent of the spatial gradient value
     private val ageFormula: String? = null,
+    // optional rotation of each fixed display model
+    private val orientation: DisplayOrientation? = null,
 ) : AbstractParticleEffect(name), ConfiguredPrimitive {
 
+    init {
+        require(orientation !is DisplayOrientation.AlignToNormal || variables.size == 2) {
+            "alignToNormal needs a surface with exactly two variables"
+        }
+    }
+
+    private val orientationFormulas: List<String> = when (orientation) {
+        is DisplayOrientation.Normal -> listOf(orientation.x, orientation.y, orientation.z)
+        is DisplayOrientation.Angles -> listOf(orientation.x, orientation.y, orientation.z)
+        else -> emptyList()
+    }
+
     // compiled once per axis and shared across concurrent plays
-    private val evaluators: List<ExpressionEvaluator> = listOfNotNull(xFormula, yFormula, zFormula, valueFormula, ageFormula)
-        .map { formula -> ExpressionEvaluator.compileOrThrow(formula, functions) }
+    private val evaluators: List<ExpressionEvaluator> =
+        (listOfNotNull(xFormula, yFormula, zFormula, valueFormula, ageFormula) + orientationFormulas)
+            .map { formula -> ExpressionEvaluator.compileOrThrow(formula, functions) }
     private val ageAxis = VALUE_AXIS + if (valueFormula == null) 0 else 1
+    private val orientationAxis = ageAxis + if (ageFormula == null) 0 else 1
 
     // writes the sampled parametric positions into the pooled buffer
     override fun calculateGeometry(buffer: ParticleBuffer, center: Location, opts: EffectOptions, time: Double) {
@@ -46,20 +65,24 @@ class ParametricEffect(
         val state = borrowState(opts)
         try {
             val params = state.params
-            val axes = state.axes
             // expose the current effect time as a formula variable for live animation
             params[TIME_VARIABLE] = time
             when (variables.size) {
-                1 -> calculateCurve(buffer, center, opts, time, phase, params, samplingFor(opts), axes)
-                else -> calculateSurface(buffer, center, opts, time, phase, params, samplingFor(opts), axes)
+                1 -> calculateCurve(buffer, center, opts, time, phase, params, samplingFor(opts), state)
+                else -> calculateSurface(buffer, center, opts, time, phase, params, samplingFor(opts), state)
             }
         } finally {
             releaseState(state)
         }
     }
 
-    // one calculation's scratch state: the formula variables and one fork per axis
-    private class FrameState(val params: HashMap<String, Double>, val axes: List<ExpressionEvaluator.Fork>)
+    // one calculation's scratch state: the formula variables, one fork per axis and orientation scratch
+    private class FrameState(val params: HashMap<String, Double>, val axes: List<ExpressionEvaluator.Fork>) {
+        val geometry = Quaternionf()
+        val point = Quaternionf()
+        // local x y z of every surface sample, kept for numerical normals
+        var grid = DoubleArray(0)
+    }
 
     // concurrent plays of the same effect borrow separate states, the pool is bounded by the calculator threads
     private val states = ConcurrentLinkedQueue<FrameState>()
@@ -110,12 +133,14 @@ class ParametricEffect(
         phase: Double,
         params: MutableMap<String, Double>,
         samples: List<Int>,
-        axes: List<ExpressionEvaluator.Fork>,
+        state: FrameState,
     ) {
+        val axes = state.axes
         val variable = variables[0]
         val range = ranges[0]
         val count = samples[0].coerceAtLeast(MIN_SAMPLES)
         val span = range.last - range.first
+        val oriented = prepareOrientation(state, opts)
         buffer.acquire(count)
         for (index in 0 until count) {
             // t = first + (i / count) * span + phase: advances the parameter across the open range
@@ -126,6 +151,7 @@ class ParametricEffect(
             val z = axes[2].evaluate(params)
             writeParticle(buffer, index, x, y, z, center, opts, time)
             writeAppearance(buffer, index, params, axes)
+            if (oriented) writeExplicitOrientation(buffer, index, params, state)
         }
     }
 
@@ -138,8 +164,9 @@ class ParametricEffect(
         phase: Double,
         params: MutableMap<String, Double>,
         samples: List<Int>,
-        axes: List<ExpressionEvaluator.Fork>,
+        state: FrameState,
     ) {
+        val axes = state.axes
         val variable0 = variables[0]
         val variable1 = variables[1]
         val range0 = ranges[0]
@@ -148,6 +175,11 @@ class ParametricEffect(
         val count1 = samples[1].coerceAtLeast(MIN_SAMPLES)
         val span0 = range0.last - range0.first
         val span1 = range1.last - range1.first
+        val oriented = prepareOrientation(state, opts)
+        val surfaceNormals = oriented && orientation is DisplayOrientation.AlignToNormal
+        if (surfaceNormals && state.grid.size < count0 * count1 * 3) {
+            state.grid = DoubleArray(count0 * count1 * 3)
+        }
 
         buffer.acquire(count0 * count1)
         var index = 0
@@ -164,8 +196,83 @@ class ParametricEffect(
                 val z = axes[2].evaluate(params)
                 writeParticle(buffer, index, x, y, z, center, opts, time)
                 writeAppearance(buffer, index, params, axes)
+                if (surfaceNormals) {
+                    state.grid[index * 3] = x
+                    state.grid[index * 3 + 1] = y
+                    state.grid[index * 3 + 2] = z
+                } else if (oriented) {
+                    writeExplicitOrientation(buffer, index, params, state)
+                }
                 index++
             }
+        }
+        if (surfaceNormals) {
+            // signed parameter steps: a reversed range yields the same dP/du, so the side stays the analytic one
+            writeSurfaceNormals(buffer, state, count0, count1, span0 / count0, span1 / count1)
+        }
+    }
+
+    // orientation is computed only for fixed display models, Q_geometry is constant within one frame
+    private fun prepareOrientation(state: FrameState, opts: EffectOptions): Boolean {
+        if (orientation == null || !opts.display.acceptsPointOrientation) {
+            return false
+        }
+        Orientation.geometry(opts.rotationYaw, opts.rotationPitch, opts.rotationRoll, opts.tiltAxis, opts.tiltAngle, state.geometry)
+        return true
+    }
+
+    // Q_geometry * Q_point from normal or angle formulas, a degenerate value leaves Q_point identity
+    private fun writeExplicitOrientation(buffer: ParticleBuffer, index: Int, params: Map<String, Double>, state: FrameState) {
+        val axes = state.axes
+        val a = axes[orientationAxis].evaluate(params)
+        val b = axes[orientationAxis + 1].evaluate(params)
+        val c = axes[orientationAxis + 2].evaluate(params)
+        val point = state.point
+        val valid = when (orientation) {
+            is DisplayOrientation.Normal -> Orientation.facing(a, b, c, point)
+            else -> Orientation.angles(a, b, c, point)
+        }
+        if (!valid) point.identity()
+        buffer.orientation(index, point.premul(state.geometry))
+    }
+
+    // numerical dP/du x dP/dv on the local grid of this frame, sample (i, j) is at i * count1 + j
+    private fun writeSurfaceNormals(buffer: ParticleBuffer, state: FrameState, count0: Int, count1: Int, step0: Double, step1: Double) {
+        val grid = state.grid
+        val point = state.point
+        val sign = if ((orientation as DisplayOrientation.AlignToNormal).side == DisplayOrientation.Side.INWARD) -1.0 else 1.0
+        for (i in 0 until count0) {
+            for (j in 0 until count1) {
+                val ux = derivative(grid, j, count1, i, count0, step0, 0)
+                val uy = derivative(grid, j, count1, i, count0, step0, 1)
+                val uz = derivative(grid, j, count1, i, count0, step0, 2)
+                val vx = derivative(grid, i * count1, 1, j, count1, step1, 0)
+                val vy = derivative(grid, i * count1, 1, j, count1, step1, 1)
+                val vz = derivative(grid, i * count1, 1, j, count1, step1, 2)
+                val nx = uy * vz - uz * vy
+                val ny = uz * vx - ux * vz
+                val nz = ux * vy - uy * vx
+                val tu = sqrt(ux * ux + uy * uy + uz * uz)
+                val tv = sqrt(vx * vx + vy * vy + vz * vz)
+                val n = sqrt(nx * nx + ny * ny + nz * nz)
+                // collinear or broken tangents have no normal, the relative test does not depend on the size
+                val valid = tu.isFinite() && tv.isFinite() && n.isFinite() && tu > 0.0 && tv > 0.0 &&
+                    n > Orientation.COLLINEAR_TOLERANCE * tu * tv &&
+                    Orientation.facing(sign * nx, sign * ny, sign * nz, point)
+                if (!valid) point.identity()
+                buffer.orientation(i * count1 + j, point.premul(state.geometry))
+            }
+        }
+    }
+
+    // one component of the derivative along a grid line of n samples starting at base with the given stride.
+    // Central difference inside, second-order one-sided (-3 P0 + 4 P1 - P2) / 2h at the ends
+    private fun derivative(grid: DoubleArray, base: Int, stride: Int, at: Int, n: Int, step: Double, axis: Int): Double {
+        fun p(k: Int) = grid[(base + k * stride) * 3 + axis]
+        return when (at) {
+            0 -> (-3.0 * p(0) + 4.0 * p(1) - p(2)) / (2.0 * step)
+            n - 1 -> (3.0 * p(n - 1) - 4.0 * p(n - 2) + p(n - 3)) / (2.0 * step)
+            else -> (p(at + 1) - p(at - 1)) / (2.0 * step)
         }
     }
 

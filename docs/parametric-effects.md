@@ -156,6 +156,9 @@ duration: 200
 | `value` | `String` | drawing order | Per-point position on the spatial `gradient`, in `0…1`. |
 | `age` | `String` | layer age | Per-point normalized age for `colorOverLife` and `sizeOverLife`, clamped to `0…1`. |
 | `parameters` | `Map<String, Double>` | - | Default values for parameter variables. |
+| `normalX` / `normalY` / `normalZ` | number or `String` | - | Direction each fixed display model faces. All three or none. See [orienting display models](#orienting-display-models). |
+| `rotX` / `rotY` / `rotZ` | number or `String` | `0` | Angles of each fixed display model in radians. |
+| `alignToNormal` | `outward` / `inward` | - | `surface` only. Faces each fixed display model along the computed surface normal. |
 
 Common fields (`particle`, `color`, `toColor`, `material`, `count`, `offset`, `speed`, `scale`,
 `rotationYaw`, `tiltAxis`, `tiltAngle`, `duration`, `modifiers`) are set at the top level and work
@@ -199,6 +202,113 @@ attached to the same points. Infinite effects can animate individual ages explic
 Age formulas must produce finite numbers. A NaN or infinite result fails the frame with
 `Particle age must be finite`. Use `if` to guard invalid divisions or square roots.
 
+### Orienting display models
+
+A layer that renders [display entities](display-entities.md) with `billboard: fixed` can turn
+every model on its own. Add one of these to the `curve` or `surface` block:
+
+- `normalX`, `normalY`, `normalZ` - the direction the front of the model faces, in local effect
+  coordinates. All three are required, write `0` for a zero component. The length does not matter.
+- `rotX`, `rotY`, `rotZ` - angles in radians, composed exactly like `display.rotation`. Missing
+  components are `0`.
+- `alignToNormal: outward` or `alignToNormal: inward` - `surface` only. The normal is computed from
+  the surface itself, see [automatic surface normals](#automatic-surface-normals).
+
+Each value is a number or a formula. Formulas see the same variables as the coordinates: the
+sampling variables with the current phase, `time`, parameters and local functions. Every field is
+evaluated on its own, so `normalX: x` only works when `x` is a sampling variable. Reuse a
+coordinate expression through a [local function](#local-functions).
+
+```yaml
+id: outward_letters
+duration: 200
+curve:
+  variables: [t]
+  samples: 12
+  angularSpeed: 0
+  x: '2 * cos(t)'
+  y: 0
+  z: '2 * sin(t)'
+  normalX: 'cos(t)'
+  normalY: 0
+  normalZ: 'sin(t)'
+display:
+  type: text
+  text: 'F'
+  billboard: fixed
+```
+
+The twelve letters stand upright and each one is readable from outside the ring, so a player can
+walk around it. The letter at `(2, 0, 0)` faces `+X`, the one at `(0, 0, 2)` faces `+Z`.
+
+**When it applies.** Orientation only affects point models with `billboard: fixed`. Text and pixels
+default to `center`, so write `billboard: fixed` for them. With `center`, `vertical` or
+`horizontal`, in particle-only layers and on ribbons the fields are ignored and cost nothing. This is
+decided by the layer's final options, so the fields can live in a named atom that one layer renders as
+text and another as particles.
+
+**Which side is the front.** A text model is readable from its local `+Z` side. A normal turns `+Z`
+onto the normal and keeps the top as close to `+Y` as possible. A normal that points almost straight
+up or down (`|normalY| >= 0.9999` after normalizing) takes its top from `+Z` instead, so the top can
+switch direction as a normal passes the pole. Use `rotX`/`rotY`/`rotZ` for a controlled roll.
+
+**How rotations combine.** The model rotation is `follow × layer × point × display`, the rightmost
+acting first:
+
+- `display.rotation` and `display.spin` act in the model's own frame. `display.rotation.z: 1.5708`
+  turns every letter a quarter turn within its plane, and `display.spin.z` spins letters in place
+  while they keep facing along their normals.
+- `rotationRoll`, `rotationPitch`, `rotationYaw` and `tiltAxis`/`tiltAngle` turn oriented models
+  together with the shape. A ring tilted by `rotationPitch` keeps its letters facing outward.
+- An effect that follows an entity with `rotation:` turns its models once more, together with the shape.
+
+Without any orientation field, models keep their earlier behavior: layer rotations move the points
+but leave the models as they were. An explicit `rotZ: 0` already opts in.
+
+Use one orientation per block. Combining `normal*` with `rot*`, or either with `alignToNormal`, is a
+load error. For a correction shared by all models use `display.rotation`. A zero or non-finite normal,
+or a non-finite angle, keeps only the layer rotation for that point in that frame. The point itself,
+its color and its age stay as they are.
+
+#### Automatic surface normals
+
+`alignToNormal: outward` faces each model along `normalize(dP/du × dP/dv)`, where `u` and `v` are
+the first and second names in `variables`. `inward` faces the opposite way. The two words name the
+sides of the parametrization, not of the shape: swapping the variables or mirroring a formula flips
+them, and an open surface may have no inside at all. Reversing a `range` does not flip the side.
+
+```yaml
+id: cylinder_labels
+duration: 200
+surface:
+  variables: [u, v]
+  samples: [24, 4]
+  angularSpeed: 0
+  range:
+    - {min: 0, max: 6.283185307179586}
+    - {min: -1, max: 1}
+  x: '2 * cos(u)'
+  y: 'v'
+  z: '-2 * sin(u)'
+  alignToNormal: outward
+display:
+  type: text
+  text: 'F'
+  billboard: fixed
+```
+
+Here `dP/du × dP/dv = (2 cos(u), 0, -2 sin(u))` points away from the axis, so `outward` shows the
+readable side to players outside and `inward` shows it to a player standing inside. With
+`z: '2 * sin(u)'` the same cylinder would need `inward` to be readable from outside. Positions and
+model counts are the same in both modes. A plane `x: u, y: v, z: 0` faces `+Z` with `outward`.
+
+Normals are finite differences on the grid sampled in the current frame: central differences inside,
+second-order one-sided differences on the edges. Opposite edges are never joined, even for a
+`[0, tau]` range, because the formula is not guaranteed to be periodic. The seam therefore carries a
+small error, about a quarter of a degree for 24 samples around a circle. Normals describe the surface
+before modifiers deform it. Samples whose tangents are collinear or not finite, such as a sphere's
+pole, keep only the layer rotation in that frame.
+
 ## 3. The same effect via the Kotlin DSL
 
 ```kotlin
@@ -226,6 +336,8 @@ The `ParametricConfig` builder:
 - `variables(...)`, `samples(...)`, `range(...)`, `ranges(...)`
 - `x(...)`, `y(...)`, `z(...)`, `angularSpeed(...)`
 - `value(formula)`, `age(formula)` - independent spatial gradient and normalized age expressions
+- `normal(x, y, z)`, `angles(x, y, z)`, `alignToNormal(DisplayOrientation.Side.OUTWARD)` - the
+  [display model orientation](#orienting-display-models). One mode per effect, mixing modes throws
 - `default(key, value)`, `defaults(map)`
 - `function(signature, body)` - local functions, using the same signatures and rules as YAML
 - `render { EffectConfig.() -> Unit }` - the same common settings as in `playEffect`.

@@ -70,6 +70,10 @@ Tips:
   `spin` turns each model in place. Combine them for orbiting, self-rotating pieces.
 - **Mixing.** Use `particles: true` to draw particles on top of the same points, or add a separate
   particle layer (as `display` does) for an aura.
+- **Facing each model its own way.** `rotation` and `spin` are shared by all points. To turn models
+  individually, for example letters that face away from the center of a ring, give the `curve`,
+  `surface` or `points` block a normal, per-point angles or `alignToNormal` and set
+  `billboard: fixed`. See [orienting display models](parametric-effects.md#orienting-display-models).
 
 ## Ribbons along curves
 

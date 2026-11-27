@@ -21,7 +21,10 @@ internal class DisplayFrame(
     private val frameRotation: Quaternionf?,
     private val colors: IntArray?,
     private val sizes: FloatArray?,
+    // x y z w model rotation per point from the geometry, NaN x marks a point without one
+    orientations: FloatArray? = null,
 ) {
+    private val orientations = orientations?.takeIf { display.acceptsPointOrientation }
     private val baseColor = if (display.usesPixelBackground) display.pixelColor(opts) else 0
     var maxSegmentRadius = 0.0
         private set
@@ -31,7 +34,15 @@ internal class DisplayFrame(
     fun position(index: Int): Location = segments?.get(index)?.midpoint ?: points[index]
     fun color(index: Int): Int = segments?.get(index)?.color ?: colors?.get(index) ?: baseColor
     fun transform(index: Int): Transformation = segments?.get(index)?.transform
-        ?: DisplayEntityPool.modelTransformation(display, opts, index, time, frameRotation, sizes?.get(index) ?: 1f)
+        ?: DisplayEntityPool.modelTransformation(display, opts, index, time, frameRotation, sizes?.get(index) ?: 1f,
+            pointRotation(index))
+
+    private fun pointRotation(index: Int): Quaternionf? {
+        val data = orientations ?: return null
+        val base = index * ParticleBuffer.QUATERNION
+        if (base + ParticleBuffer.QUATERNION > data.size || data[base].isNaN()) return null
+        return Quaternionf(data[base], data[base + 1], data[base + 2], data[base + 3])
+    }
 
     private data class Segment(val midpoint: Location, val transform: Transformation, val color: Int)
 

@@ -32,14 +32,15 @@ class FrameRenderer(private val origin: Location) {
         val sizes = if (opts.sizeOverLife.isNotEmpty()) gradient.sizes() else null
         val hasColors = buffer.hasColors() || opts.gradient.isNotEmpty() || opts.colorOverLife.isNotEmpty()
         val colors = if (colored && hasColors) gradient.argb() else null
+        val orientations = buffer.orientations()
         // with PacketEvents the models exist only on the clients
         val clientPool = client ?: PacketDisplays.create(origin)?.also { client = it }
         if (clientPool != null) {
             displays?.clear()
-            clientPool.sync(positions, opts, display, time, anchor, colors, sizes)
+            clientPool.sync(positions, opts, display, time, anchor, colors, sizes, orientations)
         } else {
             val pool = displays ?: DisplayEntityPool(FXEngine.scheduler()).also { displays = it }
-            pool.sync(positions, opts, display, time, anchor?.frameRotation(), colors, sizes)
+            pool.sync(positions, opts, display, time, anchor?.frameRotation(), colors, sizes, orientations)
         }
         if (display.withParticles) {
             spawnParticles(positions, opts, colored)

@@ -155,11 +155,29 @@
     },
     "curve": {
       "$ref": "#/$defs/parametric",
-      "description": "Parametric curve, by default sampled over t."
+      "description": "Parametric curve, by default sampled over t.",
+      "not": {
+        "required": [
+          "alignToNormal"
+        ]
+      }
     },
     "surface": {
       "$ref": "#/$defs/parametric",
-      "description": "Parametric surface, by default sampled over u and v."
+      "description": "Parametric surface, by default sampled over u and v.",
+      "if": {
+        "required": [
+          "alignToNormal"
+        ]
+      },
+      "then": {
+        "properties": {
+          "variables": {
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      }
     },
     "sdf": {
       "$ref": "#/$defs/sdf",
@@ -881,9 +899,48 @@
         },
         "angularSpeed": {
           "$ref": "#/$defs/number"
+        },
+        "normalX": {
+          "$ref": "#/$defs/formula",
+          "description": "X component of the direction a fixed display model faces, in local geometry coordinates. Needs all of normalX, normalY and normalZ."
+        },
+        "normalY": {
+          "$ref": "#/$defs/formula",
+          "description": "Y component of the direction a fixed display model faces, in local geometry coordinates. Needs all of normalX, normalY and normalZ."
+        },
+        "normalZ": {
+          "$ref": "#/$defs/formula",
+          "description": "Z component of the direction a fixed display model faces, in local geometry coordinates. Needs all of normalX, normalY and normalZ."
+        },
+        "rotX": {
+          "$ref": "#/$defs/formula",
+          "description": "Rotation of each fixed display model around X in radians, composed like display.rotation. Missing components are 0."
+        },
+        "rotY": {
+          "$ref": "#/$defs/formula",
+          "description": "Rotation of each fixed display model around Y in radians, composed like display.rotation. Missing components are 0."
+        },
+        "rotZ": {
+          "$ref": "#/$defs/formula",
+          "description": "Rotation of each fixed display model around Z in radians, composed like display.rotation. Missing components are 0."
+        },
+        "alignToNormal": {
+          "type": "string",
+          "enum": [
+            "outward",
+            "inward",
+            "OUTWARD",
+            "INWARD"
+          ],
+          "description": "Surface only: faces each fixed display model along normalize(dP/du x dP/dv), or the opposite side with inward."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/orientationRules"
+        }
+      ]
     },
     "sdf": {
       "type": "object",
@@ -1161,6 +1218,42 @@
                 "minLength": 1
               }
             ]
+          },
+          "properties": {
+            "normalX": {
+              "$ref": "#/$defs/formula",
+              "description": "X component of the direction a fixed display model faces, in local geometry coordinates. Needs all of normalX, normalY and normalZ."
+            },
+            "normalY": {
+              "$ref": "#/$defs/formula",
+              "description": "Y component of the direction a fixed display model faces, in local geometry coordinates. Needs all of normalX, normalY and normalZ."
+            },
+            "normalZ": {
+              "$ref": "#/$defs/formula",
+              "description": "Z component of the direction a fixed display model faces, in local geometry coordinates. Needs all of normalX, normalY and normalZ."
+            },
+            "rotX": {
+              "$ref": "#/$defs/formula",
+              "description": "Rotation of each fixed display model around X in radians, composed like display.rotation. Missing components are 0."
+            },
+            "rotY": {
+              "$ref": "#/$defs/formula",
+              "description": "Rotation of each fixed display model around Y in radians, composed like display.rotation. Missing components are 0."
+            },
+            "rotZ": {
+              "$ref": "#/$defs/formula",
+              "description": "Rotation of each fixed display model around Z in radians, composed like display.rotation. Missing components are 0."
+            }
+          },
+          "allOf": [
+            {
+              "$ref": "#/$defs/orientationRules"
+            }
+          ],
+          "propertyNames": {
+            "not": {
+              "const": "alignToNormal"
+            }
           }
         }
       },
@@ -1202,6 +1295,18 @@
                 "minLength": 1
               }
             ]
+          },
+          "propertyNames": {
+            "not": {
+              "enum": [
+                "normalX",
+                "normalY",
+                "normalZ",
+                "rotX",
+                "rotY",
+                "rotZ"
+              ]
+            }
           }
         },
         "initial": {
@@ -1326,6 +1431,18 @@
                 "minLength": 1
               }
             ]
+          },
+          "propertyNames": {
+            "not": {
+              "enum": [
+                "normalX",
+                "normalY",
+                "normalZ",
+                "rotX",
+                "rotY",
+                "rotZ"
+              ]
+            }
           }
         },
         "initial": {
@@ -1422,6 +1539,18 @@
                 "minLength": 1
               }
             ]
+          },
+          "propertyNames": {
+            "not": {
+              "enum": [
+                "normalX",
+                "normalY",
+                "normalZ",
+                "rotX",
+                "rotY",
+                "rotZ"
+              ]
+            }
           }
         },
         "f": {
@@ -1607,11 +1736,29 @@
         },
         "curve": {
           "$ref": "#/$defs/parametric",
-          "description": "Parametric curve, by default sampled over t."
+          "description": "Parametric curve, by default sampled over t.",
+          "not": {
+            "required": [
+              "alignToNormal"
+            ]
+          }
         },
         "surface": {
           "$ref": "#/$defs/parametric",
-          "description": "Parametric surface, by default sampled over u and v."
+          "description": "Parametric surface, by default sampled over u and v.",
+          "if": {
+            "required": [
+              "alignToNormal"
+            ]
+          },
+          "then": {
+            "properties": {
+              "variables": {
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          }
         },
         "sdf": {
           "$ref": "#/$defs/sdf",
@@ -1695,6 +1842,112 @@
           ]
         }
       ]
+    },
+    "orientationRules": {
+      "$comment": "One orientation per geometry block. A normal needs all three components.",
+      "dependentRequired": {
+        "normalX": [
+          "normalY",
+          "normalZ"
+        ],
+        "normalY": [
+          "normalX",
+          "normalZ"
+        ],
+        "normalZ": [
+          "normalX",
+          "normalY"
+        ]
+      },
+      "not": {
+        "anyOf": [
+          {
+            "allOf": [
+              {
+                "anyOf": [
+                  {
+                    "required": [
+                      "normalX"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "normalY"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "normalZ"
+                    ]
+                  }
+                ]
+              },
+              {
+                "anyOf": [
+                  {
+                    "required": [
+                      "rotX"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "rotY"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "rotZ"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "required": [
+                  "alignToNormal"
+                ]
+              },
+              {
+                "anyOf": [
+                  {
+                    "required": [
+                      "normalX"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "normalY"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "normalZ"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "rotX"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "rotY"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "rotZ"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
     }
   }
 }

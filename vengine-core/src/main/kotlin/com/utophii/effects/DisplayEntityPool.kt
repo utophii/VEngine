@@ -40,6 +40,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         frameRotation: Quaternionf? = null,
         colors: IntArray? = null,
         sizes: FloatArray? = null,
+        orientations: FloatArray? = null,
     ) {
         val previous = look
         if (previous != null && previous.type != display.type) {
@@ -48,7 +49,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         val lookChanged = look?.let { !sameLook(it, display) } ?: false
         look = display
 
-        val frame = DisplayFrame(positions, opts, display, time, frameRotation, colors, sizes)
+        val frame = DisplayFrame(positions, opts, display, time, frameRotation, colors, sizes, orientations)
         val target = frame.count
         shrinkTo(target)
         ensurePositionCapacity(target)
@@ -238,8 +239,9 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
         const val PIXEL_TEXT = " "
         private val MINI_MESSAGE = MiniMessage.miniMessage()
 
-        // model transform for point index, shared by the server-side and the packet-based pools
-        // frameRotation (when following an entity) is applied on top of the model's own rotation
+        // model transform for point index, shared by the server-side and the packet-based pools.
+        // The rotation is frameRotation * pointRotation * display rotation, the rightmost acting first.
+        // pointRotation is the geometry and per-point orientation of a fixed model, null keeps the legacy transform
         fun modelTransformation(
             display: DisplayOptions,
             opts: EffectOptions,
@@ -247,6 +249,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
             time: Double,
             frameRotation: Quaternionf? = null,
             sizeMultiplier: Float = 1f,
+            pointRotation: Quaternionf? = null,
         ): Transformation {
             // angleTime = t + i * phase: offsets each piece along the spin so the set does not rotate in lockstep
             val angleTime = time + index * display.phase
@@ -255,6 +258,7 @@ class DisplayEntityPool(private val scheduler: EffectScheduler) {
                 (display.rotation.y + display.spin.y * angleTime).toFloat(),
                 (display.rotation.z + display.spin.z * angleTime).toFloat(),
             )
+            pointRotation?.let { point -> rotation.premul(point) }
             frameRotation?.let { frame -> rotation.premul(frame) }
             val size = Vector3f(
                 (display.size.x * opts.scale * sizeMultiplier).toFloat(),

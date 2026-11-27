@@ -11,7 +11,17 @@ import java.util.concurrent.ConcurrentHashMap
 // A followed effect's models ride its entity as passengers
 interface ClientDisplays {
     // colors, when given, holds one ARGB color per position for PIXEL models
-    fun sync(positions: List<Location>, opts: EffectOptions, display: DisplayOptions, time: Double, anchor: FollowAnchor?, colors: IntArray? = null, sizes: FloatArray? = null)
+    // orientations, when given, holds x y z w of each fixed model's rotation
+    fun sync(
+        positions: List<Location>,
+        opts: EffectOptions,
+        display: DisplayOptions,
+        time: Double,
+        anchor: FollowAnchor?,
+        colors: IntArray? = null,
+        sizes: FloatArray? = null,
+        orientations: FloatArray? = null,
+    )
 
     fun clear()
 

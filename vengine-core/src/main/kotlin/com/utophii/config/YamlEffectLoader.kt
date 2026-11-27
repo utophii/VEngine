@@ -15,6 +15,7 @@ import com.utophii.effects.FieldEffect
 import com.utophii.effects.FormulaEffect
 import com.utophii.math.OdeIntegrator
 import com.utophii.effects.AbstractParticleEffect
+import com.utophii.effects.DisplayOrientation
 import com.utophii.effects.EffectEmitter
 import com.utophii.effects.FourierEffect
 import com.utophii.effects.ImplicitEffect
@@ -59,6 +60,7 @@ import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.error.YAMLException
 import java.awt.Shape
 import java.io.File
+import java.math.BigDecimal
 import java.util.logging.Logger
 
 // loads effect descriptions from YAML without recompilation
@@ -212,19 +214,19 @@ class YamlEffectLoader internal constructor(
         )
     }
 
-    // builds a formula atom
-    private fun parseAtom(id: String, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions): AbstractParticleEffect? {
+    // builds a formula atom, path is the YAML location of the block in messages, such as "layers[1]."
+    private fun parseAtom(id: String, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions, path: String = ""): AbstractParticleEffect? {
         val blocks = (PROCEDURAL_KEYS + setOf(CURVE_KEY, SURFACE_KEY, SDF_KEY, LSYSTEM_KEY, SHAPE_KEY)).count(raw::containsKey)
         if (blocks > 1) {
             logger.warning("Skipping effect '$fileName': use exactly one geometry block per atom or layer.")
             return null
         }
         return when {
-            PROCEDURAL_KEYS.any(raw::containsKey) -> parseProcedural(id, raw, fileName, functions)
+            PROCEDURAL_KEYS.any(raw::containsKey) -> parseProcedural(id, raw, fileName, functions, path)
             raw.containsKey(SDF_KEY) -> parseImplicit(id, raw, fileName, functions)
             raw.containsKey(LSYSTEM_KEY) -> parseLSystem(id, raw, fileName)
             raw.containsKey(SHAPE_KEY) -> parseShape(id, raw, fileName)
-            else -> parseParametric(id, raw, fileName, functions)
+            else -> parseParametric(id, raw, fileName, functions, path)
         }
     }
 
@@ -234,11 +236,12 @@ class YamlEffectLoader internal constructor(
         return value
     }
 
-    private fun parseProcedural(id: String, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions): AbstractParticleEffect? = try {
+    private fun parseProcedural(id: String, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions, path: String): AbstractParticleEffect? = try {
         val keys = PROCEDURAL_KEYS.filter(raw::containsKey)
         require(keys.size == 1) { "Expected exactly one procedural generator" }
         val key = keys.single()
         val block = raw[key] as? Map<*, *> ?: error("'$key' must be a block")
+        checkProceduralOrientation(key, block, "$path$key", functions)
         fun formula(name: String, default: String): String = block[name]?.toString() ?: default
         fun formulas(value: Any?, label: String): Map<String, String> {
             require(value is Map<*, *> && value.isNotEmpty()) { "'$label' must be a nonempty formula map" }
@@ -547,8 +550,9 @@ class YamlEffectLoader internal constructor(
     }
 
     // builds a parametric formula effect from a `curve`/`surface` YAML block
-    private fun parseParametric(id: String, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions): ParametricEffect? {
-        val block = (raw[curveOrSurfaceKey(raw)] as? Map<*, *>) ?: run {
+    private fun parseParametric(id: String, raw: Map<String, Any?>, fileName: String, functions: ExpressionFunctions, path: String): ParametricEffect? {
+        val blockKey = curveOrSurfaceKey(raw)
+        val block = (raw[blockKey] as? Map<*, *>) ?: run {
             logger.warning("Skipping parametric effect '${fileName}': missing 'curve' or 'surface' block.")
             return null
         }
@@ -570,6 +574,12 @@ class YamlEffectLoader internal constructor(
 
         // fail fast on a malformed formula so the user sees a clear message instead of a silent no-op
         if (!validateFormulas(listOfNotNull(x, y, z, value, age), fileName, functions)) return null
+        val orientation = try {
+            parseParametricOrientation(block, blockKey, "$path$blockKey", variables.size, functions)
+        } catch (error: IllegalArgumentException) {
+            logger.warning("Skipping effect '$fileName': ${error.message}")
+            return null
+        }
         return ParametricEffect(
             name = id,
             variables = variables,
@@ -584,7 +594,67 @@ class YamlEffectLoader internal constructor(
             valueFormula = value,
             functions = functions,
             ageFormula = age,
+            orientation = orientation,
         )
+    }
+
+    // normal*, rot* or alignToNormal of a curve or surface block, blockPath names it in messages
+    private fun parseParametricOrientation(
+        block: Map<*, *>,
+        blockKey: String,
+        blockPath: String,
+        variableCount: Int,
+        functions: ExpressionFunctions,
+    ): DisplayOrientation? {
+        val explicit = DisplayOrientation.fromFields(orientationFormulas(block, blockPath, functions), blockPath)
+        if (!block.containsKey(DisplayOrientation.ALIGN_KEY)) {
+            return explicit
+        }
+        val alignPath = "$blockPath.${DisplayOrientation.ALIGN_KEY}"
+        require(blockKey == SURFACE_KEY) {
+            "$alignPath is not supported. Automatic normals need a surface block with two variables, " +
+                "a curve sets normalX/normalY/normalZ or rotX/rotY/rotZ"
+        }
+        require(variableCount == 2) { "$alignPath needs exactly two surface variables, found $variableCount" }
+        require(explicit == null) {
+            DisplayOrientation.conflict(blockPath, DisplayOrientation.FORMULA_KEYS.filter(block::containsKey) + DisplayOrientation.ALIGN_KEY)
+        }
+        val mode = block[DisplayOrientation.ALIGN_KEY]
+        val side = DisplayOrientation.Side.entries.firstOrNull { mode is String && it.name.equals(mode.trim(), ignoreCase = true) }
+        return DisplayOrientation.AlignToNormal(side ?: throw IllegalArgumentException("$alignPath must be outward or inward, found '$mode'"))
+    }
+
+    // normal and rot fields of a block as compiled-checked formula strings
+    private fun orientationFormulas(block: Map<*, *>, blockPath: String, functions: ExpressionFunctions): Map<String, String> =
+        DisplayOrientation.FORMULA_KEYS.filter(block::containsKey).associateWith { key ->
+            val formula = when (val value = block[key]) {
+                is Number -> BigDecimal(value.toString()).toPlainString()
+                is String -> value.takeIf(String::isNotBlank)
+                else -> null
+            } ?: throw IllegalArgumentException("$blockPath.$key must be a number or a nonempty formula, found '${block[key]}'")
+            try {
+                ExpressionEvaluator.compileOrThrow(formula, functions)
+            } catch (error: RuntimeException) {
+                throw IllegalArgumentException("$blockPath.$key has an invalid formula '$formula': ${error.message}")
+            }
+            formula
+        }
+
+    // points accepts normal and rot outputs, other generators and automatic normals are rejected with their path
+    private fun checkProceduralOrientation(key: String, block: Map<*, *>, blockPath: String, functions: ExpressionFunctions) {
+        require(!block.containsKey(DisplayOrientation.ALIGN_KEY)) {
+            "$blockPath.${DisplayOrientation.ALIGN_KEY} is not supported. Automatic normals need a surface block, " +
+                "$blockPath.output sets normalX/normalY/normalZ or rotX/rotY/rotZ"
+        }
+        val output = block["output"] as? Map<*, *> ?: return
+        val outputPath = "$blockPath.output"
+        if (key != POINTS_KEY) {
+            DisplayOrientation.FORMULA_KEYS.firstOrNull(output::containsKey)?.let { field ->
+                throw IllegalArgumentException("$outputPath.$field is not supported, only points.output sets an orientation")
+            }
+            return
+        }
+        DisplayOrientation.fromFields(orientationFormulas(output, outputPath, functions), outputPath)
     }
 
     // builds a layered scripted effect from `layers` or a legacy single layer
@@ -732,10 +802,14 @@ class YamlEffectLoader internal constructor(
     private fun parseLayers(raw: Map<String, Any?>, effectDuration: Long, file: EffectFile, functions: ExpressionFunctions): List<ScriptedLayer> {
         val configuredLayers = raw[LAYERS_KEY]
         if (configuredLayers is List<*>) {
-            val nodes = configuredLayers.filterIsInstance<Map<*, *>>()
+            // positions in the original list name layers in messages, entries that are not blocks keep their index
+            val indexed = configuredLayers.withIndex().mapNotNull { (index, node) -> (node as? Map<*, *>)?.let { index to it } }
+            val nodes = indexed.map { it.second }
             val timeline = LayerTimeline.resolve(nodes.map(::parseTiming), effectDuration)
             timeline.problems.forEach { problem -> logger.warning("In '${file.relativePath}': $problem.") }
-            return nodes.zip(timeline.starts).mapNotNull { (node, start) -> start?.let { parseLayer(node, it, file, functions) } }
+            return indexed.zip(timeline.starts).mapNotNull { (entry, start) ->
+                start?.let { parseLayer(entry.second, it, file, functions, "$LAYERS_KEY[${entry.first}].") }
+            }
         }
 
         // backward-compatible single-layer format
@@ -751,14 +825,14 @@ class YamlEffectLoader internal constructor(
         delay = raw[DELAY_KEY].number()?.toLong()?.coerceAtLeast(MIN_START_TICKS) ?: DEFAULT_START_TICKS,
     )
 
-    private fun parseLayer(raw: Map<*, *>, startTick: Long, file: EffectFile, functions: ExpressionFunctions): ScriptedLayer? {
+    private fun parseLayer(raw: Map<*, *>, startTick: Long, file: EffectFile, functions: ExpressionFunctions, path: String = ""): ScriptedLayer? {
         val atomSource = raw.entries.associate { it.key.toString() to it.value }
         val embedded = isAtom(atomSource)
         if (embedded && raw.containsKey(EFFECT_KEY)) {
             logger.warning("In '${file.relativePath}': a layer must use either 'effect' or inline geometry.")
             return null
         }
-        val inline = if (embedded) parseAtom("${file.relativePath}:${raw[ID_KEY] ?: startTick}", atomSource, file.relativePath, functions) ?: return null else null
+        val inline = if (embedded) parseAtom("${file.relativePath}:${raw[ID_KEY] ?: startTick}", atomSource, file.relativePath, functions, path) ?: return null else null
         val effectName = inline?.name ?: raw[EFFECT_KEY]?.toString()?.lowercase()?.takeIf(String::isNotBlank)?.let(file::reference) ?: return null
         if (inline == null && primitiveResolver(effectName) == null) {
             logger.warning("Skipping layer for unknown primitive effect '$effectName'.")
